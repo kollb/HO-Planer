@@ -1,0 +1,6 @@
+version: 2
+updates:
+  - package-ecosystem: "pip"  # WICHTIG: Hier muss "pip" stehen, nicht "python"
+    directory: "/"            # Sucht im Hauptordner nach requirements.txt
+    schedule:
+      interval: "weekly"      # Prüft einmal pro Woche auf Updates
