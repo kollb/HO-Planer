@@ -1,0 +1,949 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <title>Home Office Planer Standalone</title>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, minimal-ui">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22%231976D2%22><path d=%22M10,20V14H14V20H19V12H22L12,3L2,12H5V20H10Z%22/></svg>">
+  <link href="https://fonts.googleapis.com/css?family=Roboto:100,300,400,500,700,900" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/@mdi/font@6.x/css/materialdesignicons.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/vuetify@3.x/dist/vuetify.min.css" rel="stylesheet">
+  
+  <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/vuetify@3.x/dist/vuetify.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+  
+  <script>
+    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+  </script>
+
+  <style>
+    [v-cloak] { display: none !important; }
+    body { font-family: 'Roboto', sans-serif; background-color: #121212; }
+    .v-field__input { padding-top: 6px !important; padding-bottom: 6px !important; min-height: 32px !important; }
+    
+    /* Sticky Header & Status Bar */
+    .status-bar { position: sticky; top: 48px; z-index: 10; border-bottom: 1px solid rgba(128,128,128, 0.2); background: rgb(var(--v-theme-surface)); box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
+    .stat-label { font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.5px; opacity: 0.7; font-weight: 600; margin-bottom: 2px; display: flex; align-items: center; justify-content: center; }
+    .stat-value { font-weight: 700; font-size: 0.95rem; line-height: 1.2; }
+
+    /* Tabellen Styling */
+    .day-row { transition: background-color 0.2s; border-bottom: 1px solid rgba(128,128,128, 0.1); }
+    .day-row:hover { background-color: rgba(128,128,128, 0.1) !important; }
+    .weekend, .holiday-row { background-color: rgba(128,128,128, 0.05); opacity: 0.8; }
+    .is-today { border-left: 4px solid #1976D2; background-color: rgba(25, 118, 210, 0.1) !important; }
+    .short-day-row { background-color: rgba(255, 152, 0, 0.05); } 
+    .off-day-row { background-color: rgba(0, 0, 0, 0.02); opacity: 0.6; text-decoration: line-through; text-decoration-color: #aaa; }
+    .week-summary-row { background-color: rgba(128,128,128, 0.1); height: 36px !important; }
+    .week-summary-row td { font-weight: bold; font-size: 0.85rem; padding-top: 0 !important; padding-bottom: 0 !important; }
+
+    /* Kalender Grid */
+    .calendar-wrapper { display: grid; grid-template-columns: repeat(7, 1fr) 60px; gap: 6px; padding: 10px; }
+    .cal-header { text-align: center; font-weight: bold; font-size: 0.85rem; padding-bottom: 5px; text-transform: uppercase; opacity: 0.7; }
+    .cal-cell { border: 1px solid rgba(128,128,128, 0.2); border-radius: 8px; min-height: 110px; padding: 6px; display: flex; flex-direction: column; justify-content: space-between; cursor: pointer; transition: all 0.2s; position: relative; }
+    .cal-cell:hover { border-color: #1976D2; box-shadow: 0 2px 8px rgba(0,0,0,0.2); z-index: 2; transform: translateY(-2px); }
+    
+    .cal-cell.is-holiday { background-color: rgba(244, 67, 54, 0.05); border-color: rgba(244, 67, 54, 0.2); }
+    .cal-cell.is-short-day { background-color: rgba(255, 152, 0, 0.05); border-color: rgba(255, 152, 0, 0.3); }
+    .cal-cell.is-weekend { background-color: rgba(128,128,128, 0.03); }
+    .cal-cell.is-off-day { background-color: rgba(0,0,0,0.02); opacity: 0.5; } 
+    .cal-cell.is-today { border: 2px solid #1976D2; background-color: rgba(25, 118, 210, 0.1); }
+    
+    .status-home { background-color: rgba(76, 175, 80, 0.15); border-color: rgba(76, 175, 80, 0.5); }
+    .status-office { background-color: rgba(255, 193, 7, 0.15); border-color: rgba(255, 193, 7, 0.5); }
+    .status-sick { background-color: rgba(244, 67, 54, 0.15); }
+    .status-vacation { background-color: rgba(156, 39, 176, 0.15); }
+    .status-dr { background-color: rgba(33, 150, 243, 0.15); border-color: rgba(33, 150, 243, 0.5); }
+    .status-planned { background-color: rgba(33, 150, 243, 0.08) !important; border: 1px dashed rgba(33, 150, 243, 0.6) !important; opacity: 0.9; }
+
+    .cal-date { font-weight: bold; font-size: 1rem; margin-bottom: 4px; }
+    .cal-holiday-name { font-size: 0.7rem; color: #ef5350; line-height: 1.1; margin-bottom: 4px; font-weight: 500;}
+    .cal-short-info { font-size: 0.7rem; color: #f57c00; font-weight: bold; margin-bottom: 4px; }
+    .cal-content { flex-grow: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; }
+    .cal-week-sum { display: flex; align-items: center; justify-content: center; text-align: center; font-size: 0.75rem; opacity: 0.7; writing-mode: vertical-rl; transform: rotate(180deg); background: rgba(128,128,128, 0.1); border-radius: 4px; }
+    
+    .file-status { font-size: 0.75rem; margin-right: 10px; color: #aaa; display: flex; align-items: center; gap: 5px; }
+    .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+    .dot.green { background-color: #4caf50; box-shadow: 0 0 4px #4caf50; }
+    .dot.red { background-color: #f44336; }
+    .dot.orange { background-color: #ff9800; }
+    
+    .split-entry-box { background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 4px; margin-top: 8px; }
+
+    @media (max-width: 600px) {
+        .calendar-wrapper { gap: 2px; padding: 2px; grid-template-columns: repeat(7, 1fr) 25px; }
+        .cal-cell { min-height: 50px; padding: 2px; border-radius: 4px; }
+        .cal-holiday-name, .cal-short-info, .cal-content { display: none !important; }
+        .cal-date { font-size: 0.8rem; margin: 0; }
+        .stat-label { font-size: 0.55rem; }
+        .stat-value { font-size: 0.85rem; }
+    }
+  </style>
+</head>
+<body>
+  
+  <div id="app" v-cloak>
+    <v-app>
+      <v-snackbar v-model="snackbar.show" :color="snackbar.color" :timeout="4000" location="top">
+         [[ snackbar.text ]]
+         <template v-slot:actions><v-btn variant="text" @click="snackbar.show = false">OK</v-btn></template>
+      </v-snackbar>
+
+      <v-dialog v-model="importDialog.show" max-width="450">
+          <v-card>
+              <v-card-title class="bg-primary text-white">PDF Import (Lokal)</v-card-title>
+              <v-card-text class="pt-4">
+                  <p class="text-body-2 mb-2">Verarbeitet den Zeitnachweis lokal im Browser.</p>
+                  <v-checkbox v-model="importDialog.overwrite" label="Existierende Einträge überschreiben" density="compact" hide-details color="primary"></v-checkbox>
+                  <div class="text-caption text-grey mt-2">
+                      <v-icon size="small" class="mr-1">mdi-alert-circle-outline</v-icon>
+                      Optimiert für BBK Zeitnachweise (v2.4)
+                  </div>
+              </v-card-text>
+              <v-card-actions>
+                  <v-spacer></v-spacer>
+                  <v-btn variant="text" @click="importDialog.show = false">Abbrechen</v-btn>
+                  <v-btn color="primary" @click="processPdfImport">Import starten</v-btn>
+              </v-card-actions>
+          </v-card>
+      </v-dialog>
+      
+      <v-dialog v-model="seriesDialog.show" max-width="500">
+        <v-card>
+            <v-card-title class="bg-primary text-white"><v-icon start>mdi-calendar-multiple</v-icon> Serien-Planer</v-card-title>
+            <v-card-text class="pt-4">
+                <v-row density="compact">
+                    <v-col cols="6"><v-text-field v-model="seriesDialog.start" label="Von" type="date" variant="outlined" density="compact"></v-text-field></v-col>
+                    <v-col cols="6"><v-text-field v-model="seriesDialog.end" label="Bis" type="date" variant="outlined" density="compact"></v-text-field></v-col>
+                </v-row>
+                <div class="mb-3 d-flex justify-space-between"><v-checkbox v-for="(day, idx) in ['Mo','Di','Mi','Do','Fr']" :key="idx" v-model="seriesDialog.weekdays" :value="idx" :label="day" density="compact" hide-details></v-checkbox></div>
+                <v-select v-model="seriesDialog.type" :items="types" label="Status setzen auf" item-title="title" item-value="value" variant="outlined" density="comfortable"></v-select>
+                <v-checkbox v-model="seriesDialog.overwrite" label="Überschreiben" density="compact" color="warning"></v-checkbox>
+            </v-card-text>
+            <v-card-actions><v-spacer></v-spacer><v-btn variant="text" @click="seriesDialog.show = false">Abbrechen</v-btn><v-btn color="primary" @click="saveSeriesPlan">Ausführen</v-btn></v-card-actions>
+        </v-card>
+      </v-dialog>
+
+      <input type="file" ref="pdfInput" style="display: none" accept=".pdf" @change="onPdfFileChange">
+
+      <v-app-bar color="primary" density="compact" elevation="1">
+        <v-app-bar-title class="font-weight-bold" style="cursor: pointer" @click="goHome">HO Planer <span class="text-caption opacity-70 ml-2">Standalone</span></v-app-bar-title>
+        <v-spacer></v-spacer>
+        
+        <div class="file-status" v-if="fileHandle"><span class="dot green"></span><span class="d-none d-sm-inline">[[ fileName ]]</span></div>
+        <div v-else-if="storedHandleName" class="file-status"><span class="dot orange"></span><span class="d-none d-sm-inline">Letzte: [[ storedHandleName ]]</span><v-btn icon="mdi-link-variant" size="x-small" variant="text" @click="restoreFileConnection"></v-btn></div>
+        <div class="file-status" v-else><span class="dot red"></span><span class="d-none d-sm-inline">Lokal</span></div>
+
+        <v-btn icon="mdi-folder-open" size="small" @click="openFile" class="mr-1"></v-btn>
+        <v-btn icon="mdi-content-save" size="small" @click="saveToFile" :disabled="!fileHandle" :color="unsavedChanges ? 'warning' : 'white'" class="mr-1"></v-btn>
+        
+        <v-tooltip text="Serien-Planer" location="bottom"><template v-slot:activator="{ props }"><v-btn v-bind="props" icon="mdi-calendar-multiple" size="small" @click="openSeriesDialog" class="mr-1"></v-btn></template></v-tooltip>
+        <v-tooltip text="PDF Import" location="bottom"><template v-slot:activator="{ props }"><v-btn v-bind="props" icon="mdi-file-pdf-box" size="small" @click="triggerPdfImport" class="mr-3"></v-btn></template></v-tooltip>
+
+        <v-divider vertical class="mx-2 my-3" color="white" thickness="2"></v-divider>
+        <v-btn icon @click="toggleTheme" class="mr-2"><v-icon>[[ theme.global.current.dark ? 'mdi-weather-sunny' : 'mdi-weather-night' ]]</v-icon></v-btn>
+
+        <v-btn-toggle v-model="viewMode" density="compact" mandatory class="mr-3" variant="outlined" color="white" divided>
+            <v-btn value="list" icon="mdi-format-list-bulleted" @click="loadMonthData"></v-btn>
+            <v-btn value="calendar" icon="mdi-calendar-month" @click="loadMonthData"></v-btn>
+            <v-btn value="year" icon="mdi-chart-bar" @click="loadYearData"></v-btn>
+        </v-btn-toggle>
+        <v-btn icon @click="dialogSettings = true"><v-icon>mdi-cog</v-icon></v-btn>
+      </v-app-bar>
+
+      <v-main>
+        <v-container fluid class="status-bar py-2 px-4 mb-3" v-if="viewMode !== 'year'">
+            <div class="mx-auto" style="max-width: 1200px; width: 100%;">
+                <v-row align="center" no-gutters>
+                    <v-col cols="3" class="d-flex align-center">
+                        <v-btn icon variant="text" size="small" @click="changeMonth(-1)"><v-icon>mdi-chevron-left</v-icon></v-btn>
+                        <div class="font-weight-bold mx-1 text-center" style="line-height: 1.1;">
+                            <div class="text-uppercase" style="font-size: 0.9rem;">[[ currentMonthName ]]</div>
+                            <div class="text-caption opacity-60" style="font-size: 0.7rem;">[[ currentYear ]]</div>
+                        </div>
+                        <v-btn icon variant="text" size="small" @click="changeMonth(1)"><v-icon>mdi-chevron-right</v-icon></v-btn>
+                    </v-col>
+                    <v-col cols="5" class="d-flex justify-center px-2">
+                        <div class="d-flex justify-space-around w-100" style="max-width: 380px;">
+                            <div class="text-center"><div class="stat-label"><v-icon size="x-small" class="mr-1">mdi-calendar-check</v-icon>Arbeitstage</div><div class="stat-value">[[ stats.workdays_month ]]</div></div>
+                            <div class="text-center"><div class="stat-label"><v-icon size="x-small" class="mr-1">mdi-office-building</v-icon>Bürostd.</div><div class="stat-value text-amber-darken-2">[[ formatNum(stats.total_office_made) ]] <span class="text-caption opacity-60">h</span></div></div>
+                        </div>
+                    </v-col>
+                    <v-col cols="4" class="pl-2">
+                        <div class="d-flex flex-column align-end justify-center h-100">
+                            <div class="text-caption text-uppercase font-weight-bold opacity-50 mb-0" style="font-size: 0.6rem !important;">Budget</div>
+                            <div class="d-flex align-center mb-1">
+                                 <span class="text-subtitle-1 font-weight-bold" :class="budgetStateColor" style="line-height: 1.1;"><span v-if="budgetRemainingDays > 0">+</span>[[ formatOneDecimal(budgetRemainingDays) ]] Tage</span>
+                            </div>
+                            <v-progress-linear :model-value="quotaPercentage" :color="getQuotaColor" height="6" rounded class="mb-1" style="width: 100%;" bg-color="grey-darken-3" bg-opacity="0.3"></v-progress-linear>
+                            <div class="d-flex align-center mt-0"><span class="text-caption opacity-80 font-weight-medium" style="font-size: 0.75rem;">[[ formatNum(stats.total_ho_made) ]] / [[ formatNum(stats.total_ho_allowed) ]] h</span></div>
+                        </div>
+                    </v-col>
+                </v-row>
+            </div>
+        </v-container>
+
+        <v-container fluid class="status-bar py-3 px-4 mb-3" v-else>
+            <div class="mx-auto" style="max-width: 1200px; width: 100%;">
+                <v-row align="center" no-gutters>
+                    <v-col cols="3" class="d-flex align-center">
+                        <v-btn icon variant="text" size="small" @click="changeYear(-1)"><v-icon>mdi-chevron-left</v-icon></v-btn>
+                        <div class="font-weight-bold mx-2 text-center" style="min-width: 120px;">Jahr [[ currentYear ]]</div>
+                        <v-btn icon variant="text" size="small" @click="changeYear(1)"><v-icon>mdi-chevron-right</v-icon></v-btn>
+                    </v-col>
+                    <v-col cols="9" class="text-right"><span class="stat-label">Jahresübersicht</span></v-col>
+                </v-row>
+            </div>
+        </v-container>
+
+        <v-container class="mx-auto" style="max-width: 1200px;">
+            <v-card elevation="0" border min-height="500">
+                
+                <v-table density="compact" v-if="viewMode === 'list'" class="d-none d-md-block" style="width: 100%;">
+                    <template v-slot:default>
+                        <thead><tr style="background-color: rgba(128,128,128,0.05);"><th class="text-left font-weight-bold">Datum</th><th class="text-left font-weight-bold" style="width:200px">Status</th><th class="text-left font-weight-bold">Start</th><th class="text-left font-weight-bold">Ende</th><th class="text-left font-weight-bold">Notiz</th><th style="width: 50px;"></th></tr></thead>
+                        <tbody>
+                            <template v-for="item in items" :key="item ? item.date : 'list-desk'">
+                                <template v-if="item && item.row_type === 'day' && (!settings.hide_weekends || !isWeekend(item))">
+                                    <tr v-for="(entry, index) in item.entries" :key="index"
+                                        :class="{'weekend': isWeekend(item), 'off-day-row': item.is_off_day, 'holiday-row': item.is_holiday, 'is-today': isToday(item.date), 'day-row': true}">
+                                        
+                                        <td class="py-2" style="width: 180px; vertical-align: top;">
+                                            <div v-if="index === 0">
+                                                <div class="font-weight-medium">[[ item.day_num ]]. [[ getGermanDay(item.weekday_index) ]]</div>
+                                                <div v-if="item.is_holiday" class="text-caption text-red-lighten-1 font-weight-bold">[[ item.holiday_name ]]</div>
+                                            </div>
+                                        </td>
+                                        <td class="py-1">
+                                            <v-select v-model="entry.type" :items="types" item-title="title" item-value="value" variant="plain" density="compact" hide-details class="mt-0 pt-0" @update:model-value="onEntryChange(item, entry)"></v-select>
+                                        </td>
+                                        <td><v-text-field v-if="needsTimeInput(entry.type)" v-model="entry.start" placeholder="08:00" variant="underlined" density="compact" hide-details @change="saveEntry(item)"></v-text-field></td>
+                                        <td><v-text-field v-if="needsTimeInput(entry.type)" v-model="entry.end" placeholder="16:00" variant="underlined" density="compact" hide-details @change="saveEntry(item)"></v-text-field></td>
+                                        <td><v-text-field v-model="entry.comment" placeholder="..." variant="plain" density="compact" hide-details @change="saveEntry(item)"></v-text-field></td>
+                                        <td style="vertical-align: top; padding-top: 5px;">
+                                            <v-btn v-if="index === 0" icon size="small" variant="text" @click="openEditDialog(item)"><v-icon size="small">mdi-pencil</v-icon></v-btn>
+                                            <v-btn v-else icon size="x-small" color="error" variant="text" @click="deleteEntry(item, index)"><v-icon>mdi-close</v-icon></v-btn>
+                                        </td>
+                                    </tr>
+                                </template>
+                                <tr v-else-if="item && item.row_type === 'summary'" class="week-summary-row"><td colspan="2" class="text-right pr-4">KW [[ item.iso_week ]] GESAMT:</td><td colspan="4"><span :class="getWeeklyColor(item.sum, item.target)">[[ formatNum(item.sum) ]] / [[ formatNum(item.target) ]] h</span></td></tr>
+                            </template>
+                        </tbody>
+                    </template>
+                </v-table>
+
+                <div v-if="viewMode === 'list'" class="d-md-none pa-2">
+                    <template v-for="item in items" :key="item ? 'mob-'+item.date : 'mob-unk'">
+                        <v-card v-if="item && item.row_type === 'day' && (!settings.hide_weekends || !isWeekend(item))" class="mb-2" elevation="1" :class="{'is-today': isToday(item.date)}" @click="openEditDialog(item)">
+                            <div class="d-flex justify-space-between align-center pa-2 pb-0">
+                                <div><span class="font-weight-bold text-subtitle-1">[[ item.day_num ]]. [[ getGermanDay(item.weekday_index) ]]</span><span v-if="item.is_holiday" class="text-caption text-red ml-2">[[ item.holiday_name ]]</span></div>
+                                <v-chip v-if="item.total_net > 0" size="small" color="primary" variant="flat" class="font-weight-bold">[[ formatNum(item.total_net) ]] h</v-chip>
+                            </div>
+                            <div class="pa-2">
+                                <div v-for="(entry, i) in item.entries" :key="i" class="text-caption d-flex align-center mt-1">
+                                    <v-icon size="x-small" :color="getStatusIconColor(entry.type)" class="mr-1">[[ getStatusIcon(entry.type) ]]</v-icon>
+                                    <span class="mr-2">[[ getTypeName(entry.type) ]]</span>
+                                    <span v-if="entry.start">[[ entry.start ]]-[[ entry.end ]]</span>
+                                    <span v-if="entry.comment" class="ml-2 text-grey">([[ entry.comment ]])</span>
+                                </div>
+                                <div v-if="item.entries[0].type === ''" class="text-caption text-grey">Kein Eintrag</div>
+                            </div>
+                        </v-card>
+                        <div v-else-if="item && item.row_type === 'summary'" class="text-center py-2 mb-2 text-caption font-weight-bold text-uppercase" style="background: rgba(128,128,128,0.1); border-radius: 4px;">
+                            KW [[ item.iso_week ]]: <span :class="getWeeklyColor(item.sum, item.target)" class="text-body-2 ml-1">[[ formatNum(item.sum) ]] / [[ formatNum(item.target) ]] h</span>
+                        </div>
+                    </template>
+                </div>
+
+                <div v-if="viewMode === 'calendar'" class="pa-2">
+                    <div class="calendar-wrapper">
+                        <div class="cal-header">Mo</div><div class="cal-header">Di</div><div class="cal-header">Mi</div><div class="cal-header">Do</div><div class="cal-header">Fr</div><div class="cal-header text-red">Sa</div><div class="cal-header text-red">So</div><div class="cal-header" style="font-size: 0.7rem">KW</div>
+                        <div v-for="n in paddingDays" :key="'pad-'+n"></div>
+                        <template v-for="item in items" :key="item ? item.date : 'cal-unk'">
+                            <div v-if="item && item.row_type === 'day'" class="cal-cell"
+                                 :class="{'is-holiday': item.is_holiday, 'is-weekend': isWeekend(item), 'is-today': isToday(item.date), 'is-short-day': item.is_short_day, 'is-off-day': item.is_off_day, 
+                                          'status-home': item.main_type === 'home', 'status-office': item.main_type === 'office', 'status-planned': item.main_type === 'planned', 'status-sick': item.main_type === 'sick', 'status-vacation': item.main_type === 'vacation', 'status-dr': item.main_type === 'dr'}"
+                                 @click="openEditDialog(item)">
+                                <div class="d-flex justify-space-between align-start">
+                                    <span class="cal-date" :class="{'opacity-50': item.is_off_day}">[[ item.day_num ]]</span>
+                                </div>
+                                <div v-if="item.is_holiday" class="cal-holiday-name">[[ item.holiday_name ]]</div>
+                                <div class="cal-content">
+                                    <div v-if="item.main_type" class="font-weight-bold text-caption text-uppercase" :style="{color: getStatusIconColor(item.main_type)}">[[ getTypeName(item.main_type) ]]</div>
+                                    <div v-if="item.total_net > 0 || item.main_type === 'planned'" class="text-caption font-weight-bold">[[ formatNum(item.total_net) ]] h</div>
+                                </div>
+                            </div>
+                            <div v-else-if="item && item.row_type === 'summary'" class="cal-week-sum" :title="'KW ' + item.iso_week"><span :class="getWeeklyColor(item.sum, item.target)" class="font-weight-bold">[[ formatNum(item.sum) ]]</span></div>
+                        </template>
+                    </div>
+                </div>
+
+                <v-table v-if="viewMode === 'year'" density="comfortable">
+                    <template v-slot:default>
+                        <thead><tr style="background-color: rgba(128,128,128,0.05);"><th class="text-left">Monat</th><th class="text-center">Home Office</th><th class="text-center">Büro / Reise</th><th class="text-center">Urlaub</th><th class="text-center">Budget Nutzung</th></tr></thead>
+                        <tbody>
+                            <tr v-for="stat in yearData" :key="stat.month">
+                                <td class="font-weight-medium">[[ getGermanMonthName(stat.month) ]]</td>
+                                <td class="text-center"><v-chip size="small" color="green" variant="flat" v-if="stat.days_ho > 0">[[ stat.days_ho ]] Tage</v-chip><span v-else class="opacity-50">-</span></td>
+                                <td class="text-center"><v-chip size="small" color="amber-darken-2" variant="flat" v-if="stat.days_office > 0">[[ stat.days_office ]] Tage</v-chip><span v-else class="opacity-50">-</span></td>
+                                <td class="text-center"><v-chip size="small" color="purple" variant="flat" v-if="stat.days_vacation > 0">[[ stat.days_vacation ]] Tage</v-chip><span v-else class="opacity-50">-</span></td>
+                                <td class="text-center"><div class="d-flex align-center justify-center"><div style="width: 120px" class="mr-2"><v-progress-linear :model-value="stat.ho_hours_allowed ? (stat.ho_hours_made / stat.ho_hours_allowed)*100 : 0" color="blue" height="6" rounded></v-progress-linear></div><span class="text-caption">[[ formatNum(stat.ho_hours_made) ]] / [[ formatNum(stat.ho_hours_allowed) ]] h</span></div></td>
+                            </tr>
+                        </tbody>
+                    </template>
+                </v-table>
+            </v-card>
+        </v-container>
+      </v-main>
+
+      <v-dialog v-model="dialogEditDay" max-width="500">
+        <v-card v-if="editingDay">
+            <v-card-title class="bg-primary text-white d-flex justify-space-between align-center"><span>[[ editingDay.day_num ]]. [[ currentMonthName ]]</span><span class="text-caption text-uppercase">[[ getGermanDay(editingDay.weekday_index) ]]</span></v-card-title>
+            <v-card-text class="pt-4 pb-2">
+                <div class="quick-btn-group d-flex justify-center mb-4" style="gap: 8px; flex-wrap: wrap;">
+                    <v-btn v-for="t in ['home', 'office', 'planned', 'sick', 'vacation']" :key="t" size="small" variant="tonal"
+                           :color="editingDay.entries[0] && editingDay.entries[0].type === t ? getStatusIconColor(t) : 'grey'"
+                           @click="setPrimaryType(editingDay, t)">[[ getTypeName(t) ]]
+                    </v-btn>
+                </div>
+                
+                <div v-if="editingDay.entries.length > 0" class="mb-2">
+                    <v-row dense>
+                        <v-col cols="6"><v-text-field v-if="needsTimeInput(editingDay.entries[0].type)" v-model="editingDay.entries[0].start" label="Start" placeholder="08:00" variant="outlined" density="compact" hide-details :type="$vuetify.display.mobile ? 'time' : 'text'" @change="saveEntry(editingDay)"></v-text-field></v-col>
+                        <v-col cols="6"><v-text-field v-if="needsTimeInput(editingDay.entries[0].type)" v-model="editingDay.entries[0].end" label="Ende" placeholder="16:00" variant="outlined" density="compact" hide-details :type="$vuetify.display.mobile ? 'time' : 'text'" @change="saveEntry(editingDay)"></v-text-field></v-col>
+                        <v-col cols="12" class="mt-2"><v-text-field v-model="editingDay.entries[0].comment" label="Notiz" variant="outlined" density="compact" hide-details placeholder="..." @change="saveEntry(editingDay)"></v-text-field></v-col>
+                    </v-row>
+                </div>
+
+                <div v-if="editingDay.entries.length > 1">
+                    <v-divider class="my-3"></v-divider>
+                    <div class="text-caption font-weight-bold mb-2">Split-Einträge:</div>
+                    <div v-for="(entry, index) in editingDay.entries" :key="index">
+                        <div v-if="index > 0" class="mb-3 pa-2 split-entry-box position-relative">
+                            <v-btn icon size="x-small" color="error" variant="text" style="position: absolute; top: 0; right: 0;" @click="deleteEntry(editingDay, index)"><v-icon>mdi-close</v-icon></v-btn>
+                            <v-row dense align="center">
+                                <v-col cols="12"><v-select v-model="entry.type" :items="types" label="Status" variant="underlined" density="compact" hide-details @update:model-value="saveEntry(editingDay)"></v-select></v-col>
+                                <v-col cols="6"><v-text-field v-if="needsTimeInput(entry.type)" v-model="entry.start" label="Start" placeholder="08:00" variant="underlined" density="compact" hide-details :type="$vuetify.display.mobile ? 'time' : 'text'" @change="saveEntry(editingDay)"></v-text-field></v-col>
+                                <v-col cols="6"><v-text-field v-if="needsTimeInput(entry.type)" v-model="entry.end" label="Ende" placeholder="16:00" variant="underlined" density="compact" hide-details :type="$vuetify.display.mobile ? 'time' : 'text'" @change="saveEntry(editingDay)"></v-text-field></v-col>
+                                <v-col cols="12"><v-text-field v-model="entry.comment" label="Notiz" variant="plain" density="compact" hide-details @change="saveEntry(editingDay)"></v-text-field></v-col>
+                            </v-row>
+                        </div>
+                    </div>
+                </div>
+
+                <v-btn variant="text" size="small" color="primary" @click="addEntryToDay(editingDay)" class="mt-1"><v-icon start>mdi-plus</v-icon> Split hinzufügen</v-btn>
+            </v-card-text>
+            <v-card-actions><v-spacer></v-spacer><v-btn color="primary" @click="dialogEditDay = false">Fertig</v-btn></v-card-actions>
+        </v-card>
+      </v-dialog>
+
+      <v-dialog v-model="dialogSettings" max-width="700">
+        <v-card>
+          <v-card-title>Einstellungen</v-card-title>
+          <v-card-text>
+            <v-row>
+              <v-col cols="12"><h3 class="text-subtitle-1 font-weight-bold mb-2">Allgemein</h3></v-col>
+              <v-col cols="6"><v-text-field v-model.number="settings.weekly_hours" label="Wochenstunden (Vertrag)" type="number" density="compact" variant="outlined"></v-text-field></v-col>
+              <v-col cols="6"><v-text-field v-model.number="settings.ho_quota_percent" label="HO Quote %" type="number" density="compact" variant="outlined"></v-text-field></v-col>
+              
+              <v-col cols="12" class="mt-0 pt-0">
+                  <div class="text-caption mb-2 font-weight-bold">Reguläre Arbeitstage</div>
+                  <div class="d-flex justify-space-between" style="max-width: 400px">
+                      <v-checkbox v-model="settings.active_weekdays" :value="0" label="Mo" density="compact" hide-details></v-checkbox>
+                      <v-checkbox v-model="settings.active_weekdays" :value="1" label="Di" density="compact" hide-details></v-checkbox>
+                      <v-checkbox v-model="settings.active_weekdays" :value="2" label="Mi" density="compact" hide-details></v-checkbox>
+                      <v-checkbox v-model="settings.active_weekdays" :value="3" label="Do" density="compact" hide-details></v-checkbox>
+                      <v-checkbox v-model="settings.active_weekdays" :value="4" label="Fr" density="compact" hide-details></v-checkbox>
+                  </div>
+                  <v-divider class="my-2"></v-divider>
+                  <v-switch v-model="settings.hide_weekends" label="Wochenenden ausblenden" color="primary" density="compact" hide-details></v-switch>
+
+                  <v-divider class="my-2"></v-divider>
+                  <h3 class="text-subtitle-1 font-weight-bold mb-2">Automatisierung</h3>
+                  <v-row align="center">
+                      <v-col cols="6">
+                        <v-text-field v-model="settings.default_start_time" label="Standard Startzeit" type="time" density="compact" variant="outlined" hide-details></v-text-field>
+                      </v-col>
+                      <v-col cols="6">
+                          <v-switch v-model="settings.auto_convert_planned" label="Planung auto-umwandeln" color="primary" density="compact" hide-details></v-switch>
+                      </v-col>
+                  </v-row>
+              </v-col>
+            </v-row>
+            <v-divider class="my-3"></v-divider>
+            <div class="d-flex justify-space-between align-center mb-2"><h3 class="text-subtitle-1 font-weight-bold">Eigene Feiertage</h3><v-btn size="small" variant="tonal" color="primary" @click="addWaeldchestag"><v-icon start>mdi-calendar-plus</v-icon> Wäldchestag [[ currentYear ]]</v-btn></div>
+            <div v-for="(h, date) in customHolidays" :key="date" class="d-flex align-center mb-1"><div style="width:90px" class="text-caption">[[ h.date ]]</div><div class="text-caption font-weight-bold mr-2">[[ h.name ]]</div><v-icon size="x-small" color="red" @click="deleteCustomHoliday(date)">mdi-delete</v-icon></div>
+            <div class="d-flex mt-1"><v-text-field v-model="newCustomHoliday.date" type="date" density="compact" variant="outlined" hide-details class="mr-2"></v-text-field><v-text-field v-model="newCustomHoliday.name" label="Bez." density="compact" variant="outlined" hide-details class="mr-2"></v-text-field><v-btn color="primary" icon size="small" @click="addCustomHoliday"><v-icon>mdi-plus</v-icon></v-btn></div>
+          </v-card-text>
+          <v-card-actions><v-spacer></v-spacer><v-btn color="primary" @click="saveSettings">Schließen</v-btn></v-card-actions>
+        </v-card>
+      </v-dialog>
+    </v-app>
+  </div>
+
+  <script>
+    const { createApp } = Vue
+    const { createVuetify } = Vuetify
+    const vuetify = createVuetify({ theme: { defaultTheme: 'dark' } })
+
+    const IDB_NAME = 'bbk_tracker_db';
+    const IDB_STORE = 'handles';
+    async function idbSet(key, val) { return new Promise((resolve, reject) => { const req = indexedDB.open(IDB_NAME, 1); req.onupgradeneeded = e => e.target.result.createObjectStore(IDB_STORE); req.onsuccess = e => { const db = e.target.result; const tx = db.transaction(IDB_STORE, 'readwrite'); tx.objectStore(IDB_STORE).put(val, key); tx.oncomplete = () => resolve(); }; }); }
+    async function idbGet(key) { return new Promise((resolve, reject) => { const req = indexedDB.open(IDB_NAME, 1); req.onupgradeneeded = e => e.target.result.createObjectStore(IDB_STORE); req.onsuccess = e => { const db = e.target.result; const tx = db.transaction(IDB_STORE, 'readonly'); const getReq = tx.objectStore(IDB_STORE).get(key); getReq.onsuccess = () => resolve(getReq.result); }; }); }
+
+    // --- DATA STORE ---
+    const Store = {
+        data: { settings:{}, entries:{}, customHolidays:{} },
+        init() {
+            const ls = localStorage.getItem('bbk_data');
+            if(ls) try { this.data = JSON.parse(ls); } catch(e){}
+            if(!this.data.settings) this.data.settings = {};
+            if(!this.data.entries) this.data.entries = {};
+            if(!this.data.customHolidays) this.data.customHolidays = {};
+            
+            // MIGRATION: 1:1 Einträge zu Array (1:n)
+            let migrated = false;
+            for(const date in this.data.entries) {
+                if(!Array.isArray(this.data.entries[date])) {
+                    this.data.entries[date] = [this.data.entries[date]];
+                    migrated = true;
+                }
+            }
+            if(migrated) this.persist();
+        },
+        get() { return this.data; },
+        set(newData) { this.data = newData; this.init(); localStorage.setItem('bbk_data', JSON.stringify(this.data)); },
+        getSettings() { 
+            return { 
+                weekly_hours: 39, active_weekdays: [0,1,2,3,4], ho_quota_percent: 60, hide_weekends: false,
+                default_start_time: '08:00', auto_convert_planned: true, ...this.data.settings 
+            }; 
+        },
+        saveSettings(s) { this.data.settings = s; this.persist(); },
+        getEntries() { return this.data.entries || {}; },
+        saveDayEntries(date, entriesArray) { 
+             // Leere Einträge entfernen, wenn sie nicht der einzige sind
+             if(entriesArray.length > 0) {
+                 const clean = entriesArray.filter(e => e.type && e.type !== '');
+                 if(clean.length === 0) delete this.data.entries[date];
+                 else this.data.entries[date] = clean;
+             } else {
+                 delete this.data.entries[date];
+             }
+             this.persist(); 
+        },
+        getCustomHolidays() { return this.data.customHolidays || {}; },
+        saveCustomHolidays(mapObj) { this.data.customHolidays = mapObj; this.persist(); },
+        onPersist: null,
+        persist() { localStorage.setItem('bbk_data', JSON.stringify(this.data)); if(this.onPersist) this.onPersist(); }
+    };
+    Store.init();
+
+    // --- LOGIC PORT (Python -> JS) ---
+    function normalizeTimeInput(t) {
+        if(!t) return ""; t = t.toString().trim().replace('.', ':');
+        let h=0, m=0;
+        if (t.includes(':')) { const p = t.split(':'); h = parseInt(p[0]); m = parseInt(p[1]); } 
+        else if (t.length === 4 && !isNaN(t)) { h = parseInt(t.substring(0, 2)); m = parseInt(t.substring(2, 4)); } 
+        else if (t.length <= 2 && !isNaN(t)) { h = parseInt(t); m = 0; } else { return null; }
+        if(isNaN(h)) h = 0; if(isNaN(m)) m = 0; 
+        if(h > 23 || m > 59) return null;
+        return `${(h<10?'0':'')+h}:${(m<10?'0':'')+m}`;
+    }
+
+    function calculateNetHours(start, end) {
+        if(!start || !end) return 0.0;
+        const s = normalizeTimeInput(start), e = normalizeTimeInput(end);
+        if(!s || !e) return 0.0;
+        const [sh, sm] = s.split(':').map(Number); const [eh, em] = e.split(':').map(Number);
+        let startMin = sh*60 + sm; let endMin = eh*60 + em;
+        if (endMin < startMin) endMin += 24*60;
+        return Math.max(0.0, (endMin - startMin) / 60.0);
+    }
+    
+    function calculateTotalDailyNet(entries) {
+        let totalGrossSeconds = 0;
+        entries.forEach(e => {
+            if(['home','office','dr','planned'].includes(e.type) && e.start && e.end) {
+                 const s = normalizeTimeInput(e.start), end = normalizeTimeInput(e.end);
+                 if(s && end) {
+                     const [sh, sm] = s.split(':').map(Number); const [eh, em] = end.split(':').map(Number);
+                     let startMin = sh*60 + sm; let endMin = eh*60 + em;
+                     if (endMin < startMin) endMin += 24*60;
+                     totalGrossSeconds += (endMin - startMin) * 60;
+                 }
+            }
+        });
+        
+        const hoursWorked = totalGrossSeconds / 3600;
+        let net = 0;
+        // Exakte Python Logic Portierung
+        if (hoursWorked <= 6.0) net = hoursWorked;
+        else if (hoursWorked <= 6.5) net = 6.0; // Kappung
+        else if (hoursWorked <= 9.0) net = hoursWorked - 0.5;
+        else if (hoursWorked <= 9.5) net = Math.max(8.5, hoursWorked - 0.5); // Soft
+        else net = hoursWorked - 0.70; // 0.70 statt 0.75 laut Bundesbank Anpassung
+
+        return parseFloat(net.toFixed(2));
+    }
+    
+    function getHolidayName(dateObj, customHolidays) {
+        const ymd = new Date(dateObj.getTime() - (dateObj.getTimezoneOffset() * 60000)).toISOString().split('T')[0];
+        if(customHolidays[ymd]) return customHolidays[ymd].name;
+        
+        const d = dateObj.getDate(), m = dateObj.getMonth() + 1, y = dateObj.getFullYear();
+        if(m===12 && d===24) return "Heiligabend"; if(m===12 && d===31) return "Silvester"; if(m===1 && d===1) return "Neujahr"; if(m===5 && d===1) return "Tag der Arbeit"; if(m===10 && d===3) return "Tag der Deutschen Einheit"; if(m===12 && d===25) return "1. Weihnachtstag"; if(m===12 && d===26) return "2. Weihnachtstag";
+        
+        const a=y%19, b=Math.floor(y/100), c=y%100, dd=Math.floor(b/4), e=b%4, f=Math.floor((b+8)/25), g=Math.floor((b-f+1)/3), h=(19*a+b-dd-g+15)%30, i=Math.floor(c/4), k=c%4, l=(32+2*e+2*i-h-k)%7, m_easter=Math.floor((a+11*h+22*l)/451);
+        const monthE = Math.floor((h+l-7*m_easter+114)/31), dayE = ((h+l-7*m_easter+114)%31)+1; const easterDate = new Date(y, monthE-1, dayE);
+        const addDays = (base, days) => { const n = new Date(base); n.setDate(n.getDate() + days); return n; }; 
+        const isSame = (d1, d2) => d1.getDate()===d2.getDate() && d1.getMonth()===d2.getMonth();
+        if(isSame(dateObj, addDays(easterDate, -2))) return "Karfreitag"; if(isSame(dateObj, addDays(easterDate, 1))) return "Ostermontag"; if(isSame(dateObj, addDays(easterDate, 39))) return "Christi Himmelfahrt"; if(isSame(dateObj, addDays(easterDate, 50))) return "Pfingstmontag"; if(isSame(dateObj, addDays(easterDate, 60))) return "Fronleichnam"; 
+        return "";
+    }
+    
+    function getISOWeek(d) { const date = new Date(d.getTime()); date.setHours(0, 0, 0, 0); date.setDate(date.getDate() + 3 - (date.getDay() + 6) % 7); const week1 = new Date(date.getFullYear(), 0, 4); return 1 + Math.round(((date.getTime() - week1.getTime()) / 86400000 - 3 + (week1.getDay() + 6) % 7) / 7); }
+
+    // --- VUE APP ---
+    const app = createApp({
+      data() {
+        return {
+          viewMode: 'list', currentDate: new Date(), items: [], yearData: [],
+          stats: { total_ho_made: 0, total_ho_allowed: 1, total_office_made: 0, total_work_made: 0, avg_per_week: 0, workdays_month: 0 }, 
+          settings: { weekly_hours: 39, active_weekdays: [0,1,2,3,4], ho_quota_percent: 60, hide_weekends: false, default_start_time: '08:00', auto_convert_planned: true },
+          dialogSettings: false, dialogEditDay: false, editingDay: null, 
+          importDialog: { show: false, overwrite: false, file: null },
+          seriesDialog: { show: false, start: '', end: '', weekdays: [4], type: 'planned', overwrite: false },
+          customHolidays: {}, newCustomHoliday: { date: '', name: '', hours: 0 },
+          fileHandle: null, fileName: '', storedHandleName: '', unsavedChanges: false, snackbar: { show: false, text: '', color: 'success' },
+          types: [{ title: 'Home Office', value: 'home' }, { title: 'Büro', value: 'office' }, { title: 'Geplanter HO-Tag', value: 'planned' }, { title: 'Krank', value: 'sick' }, { title: 'Urlaub', value: 'vacation' }, { title: 'Gleitzeit', value: 'glz' }, { title: 'Dienstreise', value: 'dr' }, { title: 'Leer', value: '' }]
+        }
+      },
+      computed: {
+        currentYear() { return this.currentDate.getFullYear() },
+        currentMonth() { return this.currentDate.getMonth() + 1 }, 
+        currentMonthName() { return this.currentDate.toLocaleString('de-DE', { month: 'long' }) },
+        quotaPercentage() { if(!this.stats.total_ho_allowed) return 0; return (this.stats.total_ho_made / this.stats.total_ho_allowed) * 100; },
+        getQuotaColor() { return this.quotaPercentage > 100 ? 'red' : (this.quotaPercentage > 85 ? 'orange' : 'green-accent-3'); },
+        paddingDays() { if(!this.items || this.items.length === 0) return 0; const firstDay = this.items.find(i => i.row_type === 'day'); return firstDay ? firstDay.weekday_index : 0; },
+        theme() { return this.$vuetify.theme },
+        calcDailyTarget() { const activeCount = this.settings.active_weekdays ? this.settings.active_weekdays.length : 5; if (activeCount === 0) return 0; return this.settings.weekly_hours / activeCount; },
+        budgetRemainingHours() { return this.stats.total_ho_allowed - this.stats.total_ho_made; },
+        budgetRemainingDays() { const daily = this.calcDailyTarget || 7.8; if(daily === 0) return 0; return this.budgetRemainingHours / daily; },
+        budgetStateColor() { return this.budgetRemainingHours >= 0 ? 'text-green-accent-3' : 'text-red-accent-2'; }
+      },
+      watch: { viewMode(newVal) { if(newVal === 'year') this.loadYearData(); else this.loadMonthData(); } },
+      mounted() { 
+          Store.onPersist = () => { if(this.viewMode==='year') this.loadYearData(); else this.loadMonthData(); if(this.fileHandle) this.saveToFile(); else this.unsavedChanges = true; };
+          this.loadData();
+          this.checkForStoredHandle();
+      },
+      methods: {
+        goHome() { window.location.reload(); },
+        toggleTheme() { this.theme.global.name = this.theme.global.current.dark ? 'light' : 'dark'; },
+        formatNum(val) { return val ? val.toFixed(2).replace('.', ',') : '0,00'; },
+        formatOneDecimal(val) { return val ? val.toFixed(1).replace('.', ',') : '0,0'; },
+        showMsg(text, color='success') { this.snackbar.text = text; this.snackbar.color = color; this.snackbar.show = true; },
+        
+        // --- PDF IMPORT (CLIENT SIDE - FIX v2.4 Block-Parsing) ---
+        triggerPdfImport() { this.$refs.pdfInput.click(); },
+        onPdfFileChange(event) { const file = event.target.files[0]; if (!file) return; this.importDialog.file = file; this.importDialog.show = true; event.target.value = ''; },
+        async processPdfImport() {
+            this.importDialog.show = false;
+            const file = this.importDialog.file; if (!file) return;
+            try {
+                this.showMsg("Lese PDF...", "info");
+                const arrayBuffer = await file.arrayBuffer();
+                const pdf = await pdfjsLib.getDocument(arrayBuffer).promise;
+                let cnt = 0;
+                
+                // Mappings
+                const germanMonths = {'Januar':1,'Februar':2,'März':3,'April':4,'Mai':5,'Juni':6,'Juli':7,'August':8,'September':9,'Oktober':10,'November':11,'Dezember':12};
+                const TYPE_MAP = { 
+                    "Mobil": "home", "Telearb.": "home", 
+                    "anwesend": "office", 
+                    "Krank": "sick", 
+                    "Urlaub": "vacation", "Erholungs": "vacation", "Zusatz": "vacation", "Sonder": "vacation",
+                    "Gleitzeit": "glz", "GLZ": "glz",
+                    "Dienstreise": "dr", "Reise": "dr"
+                };
+
+                // Get Month/Year
+                const page1 = await pdf.getPage(1);
+                const txt1 = (await page1.getTextContent()).items.map(i=>i.str).join(' ');
+                const mMatch = txt1.match(/Monat:?\s*([a-zA-ZäöüÄÖÜ]+)\s*[-_]?\s*(\d{4})/);
+                if(!mMatch) { this.showMsg("Monat nicht gefunden", "error"); return; }
+                const month = germanMonths[mMatch[1]], year = parseInt(mMatch[2]);
+                
+                const dailyData = {};
+                
+                // Parse Pages (Strategy: Collect all text between two dates)
+                for(let i=1; i<=pdf.numPages; i++){
+                    const page = await pdf.getPage(i);
+                    const items = (await page.getTextContent()).items;
+                    
+                    // Sort items spatially (top to bottom, left to right)
+                    items.sort((a,b) => {
+                        const yDiff = b.transform[5] - a.transform[5];
+                        return Math.abs(yDiff) < 5 ? (a.transform[4] - b.transform[4]) : yDiff;
+                    });
+                    
+                    // Linearize text content
+                    const fullText = items.map(item => item.str).join(" ");
+                    
+                    // Regex to find all dates like "01 DO", "02 FR"
+                    const datePattern = /(\d{2})\s+(MO|DI|MI|DO|FR|SA|SO)/g;
+                    let match;
+                    let lastIndex = 0;
+                    let lastDay = null;
+
+                    // Iterate matches
+                    while ((match = datePattern.exec(fullText)) !== null) {
+                        // If we had a previous day, capture text from its start until this match
+                        if (lastDay !== null) {
+                            const segment = fullText.substring(lastIndex, match.index);
+                            processDaySegment(lastDay, segment, dailyData, TYPE_MAP);
+                        }
+                        
+                        // Start new day
+                        lastDay = parseInt(match[1]);
+                        lastIndex = match.index;
+                    }
+                    
+                    // Process last segment
+                    if (lastDay !== null) {
+                         const segment = fullText.substring(lastIndex);
+                         processDaySegment(lastDay, segment, dailyData, TYPE_MAP);
+                    }
+                }
+                
+                // Helper to process a text segment for a specific day
+                function processDaySegment(day, text, dataStore, map) {
+                    if(!dataStore[day]) dataStore[day] = [];
+                    
+                    // Find Type
+                    let foundType = null;
+                    for(const [k,v] of Object.entries(map)) { 
+                        if(text.includes(k)) foundType = v; 
+                    }
+                    
+                    // Find Times
+                    const times = [...text.matchAll(/(\d{2}:\d{2})/g)].map(m=>m[1]);
+                    
+                    // Logic: Ignore empty times (00:00)
+                    const validTimes = times.filter(t => t !== "00:00");
+                    
+                    if (foundType) {
+                        // Prevent duplicates for full day events if mostly duplicates in text
+                        const isDuplicate = dataStore[day].some(e => e.type === foundType);
+                        if (!isDuplicate || validTimes.length >= 2) {
+                            // If we have times, use them. If not (Urlaub/Sick), use empty strings
+                            const start = validTimes.length >= 2 ? validTimes[0] : "";
+                            const end = validTimes.length >= 2 ? validTimes[1] : "";
+                            dataStore[day].push({ type: foundType, start, end });
+                        }
+                    } else if (validTimes.length >= 2 && !text.includes("Wochensumme") && !text.includes("Soll")) {
+                        // Only fallback to Office if we actually have NON-ZERO times
+                        dataStore[day].push({ type: 'office', start: validTimes[0], end: validTimes[1] });
+                    }
+                }
+                
+                // Save to Store
+                for(const [d, blocks] of Object.entries(dailyData)) {
+                     const dateIso = `${year}-${String(month).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+                     
+                     // Clear if overwrite is true
+                     if(this.importDialog.overwrite) Store.saveDayEntries(dateIso, []);
+                     
+                     const existing = Store.getEntries()[dateIso] || [];
+                     if(this.importDialog.overwrite || existing.length === 0) {
+                         // Sort blocks by start time just in case
+                         blocks.sort((a,b) => (a.start||"").localeCompare(b.start||""));
+                         Store.saveDayEntries(dateIso, blocks);
+                         cnt++;
+                     }
+                }
+                this.showMsg(`${cnt} Tage importiert (Optimiert).`);
+                this.loadData();
+            } catch(e) { console.error(e); this.showMsg("Import Fehler: " + e.message, "error"); }
+        },
+
+        // --- CORE LOGIC ---
+        getDayInfo(dateObj) {
+            const ymd = new Date(dateObj.getTime() - (dateObj.getTimezoneOffset() * 60000)).toISOString().split('T')[0];
+            const cust = this.customHolidays[ymd];
+            const activeDays = this.settings.active_weekdays || [];
+            const dayIdx = (dateObj.getDay() + 6) % 7; 
+            const is_active = activeDays.includes(dayIdx);
+            
+            let is_workday = false, target = 0.0, hName = "", is_short = false, is_off = false;
+            
+            if(cust) {
+                hName = cust.name;
+                if(cust.hours > 0) { is_workday = true; target = cust.hours; is_short = true; }
+            } else {
+                hName = getHolidayName(dateObj, this.customHolidays);
+                if(!hName && is_active) {
+                    is_workday = true;
+                    target = activeDays.length > 0 ? (this.settings.weekly_hours / activeDays.length) : 0;
+                }
+                if(!is_active) is_off = true;
+            }
+            return { is_workday, target, holiday_name: hName, is_short_day: is_short, is_off_day: is_off };
+        },
+
+        autoConvertExpiredEntries() {
+            if(!this.settings.auto_convert_planned) return;
+            const today = new Date().toISOString().split('T')[0];
+            const allEntries = Store.getEntries();
+            let changed = false;
+            
+            for(const [date, entries] of Object.entries(allEntries)) {
+                if(date < today) {
+                    entries.forEach(e => {
+                        if(e.type === 'planned') {
+                            e.type = 'home';
+                            if(!e.start) {
+                                const info = this.getDayInfo(new Date(date));
+                                if(info.target > 0) {
+                                    e.start = this.settings.default_start_time || '08:00';
+                                    let gross = info.target <= 6 ? info.target : (info.target <= 9 ? info.target+0.5 : info.target+0.70);
+                                    let [h,m] = e.start.split(':').map(Number);
+                                    let min = h*60+m + (gross*60);
+                                    e.end = `${Math.floor(min/60).toString().padStart(2,'0')}:${Math.round(min%60).toString().padStart(2,'0')}`;
+                                }
+                            }
+                            changed = true;
+                        }
+                    });
+                    if(changed) Store.saveDayEntries(date, entries);
+                }
+            }
+            if(changed && this.viewMode==='list') this.loadMonthData();
+        },
+
+        loadData() {
+            this.settings = Store.getSettings();
+            this.customHolidays = Store.getCustomHolidays();
+            this.autoConvertExpiredEntries();
+            if(this.viewMode === 'year') this.loadYearData(); else this.loadMonthData();
+        },
+
+        loadMonthData() {
+            const allEntries = Store.getEntries();
+            const year = this.currentYear, month = this.currentMonth;
+            const daysInMonth = new Date(year, month, 0).getDate();
+            let total_ho=0, total_office=0, workdays=0, current_week_sum=0;
+            let total_target_hours_month = 0.0;
+            
+            this.items = [];
+
+            for(let d=1; d<=daysInMonth; d++) {
+                const dateObj = new Date(year, month-1, d);
+                const dateStr = new Date(dateObj.getTime() - (dateObj.getTimezoneOffset() * 60000)).toISOString().split('T')[0];
+                const info = this.getDayInfo(dateObj);
+                
+                if (info.is_workday) { workdays++; total_target_hours_month += info.target; }
+
+                // Clone entries to avoid mutations on store directly
+                const dayEntries = JSON.parse(JSON.stringify(allEntries[dateStr] || []));
+                
+                // Calculate Net
+                const dayNet = calculateTotalDailyNet(dayEntries);
+                
+                let dayHoPart = 0, dayOffPart = 0;
+                dayEntries.forEach(e => {
+                    let h = 0;
+                    if(e.type === 'planned') h = info.target;
+                    else if(['home','office','dr'].includes(e.type)) h = calculateNetHours(e.start, e.end);
+                    e.net = parseFloat(h.toFixed(2)); // Display Net
+                    
+                    if(['home','planned'].includes(e.type)) dayHoPart += h;
+                    else if(['office','dr'].includes(e.type)) dayOffPart += h;
+                });
+                
+                // Distribute Total Net based on ratio
+                if(dayHoPart + dayOffPart > 0) {
+                    const ratio = dayNet / (dayHoPart + dayOffPart);
+                    total_ho += dayHoPart * ratio; total_office += dayOffPart * ratio;
+                } else if(dayEntries.some(e=>e.type==='planned')) {
+                    if(dayNet===0 && info.target>0) total_ho += info.target; 
+                }
+
+                current_week_sum += dayNet;
+                
+                // Determine Main Type for Calendar
+                let mainType = "";
+                if(dayEntries.length > 0) {
+                     if(dayOffPart > dayHoPart) mainType = "office";
+                     else if(dayHoPart > 0) mainType = "home";
+                     else mainType = dayEntries[0].type;
+                }
+
+                // Empty entry for UI if none exists
+                if(dayEntries.length === 0) dayEntries.push({type:'', start:'', end:'', comment:''});
+
+                this.items.push({ 
+                    row_type: 'day', date: dateStr, day_num: d, weekday_index: (dateObj.getDay()+6)%7, iso_week: getISOWeek(dateObj), 
+                    is_holiday: (info.holiday_name && !info.is_workday), holiday_name: info.holiday_name, is_short_day: info.is_short_day, is_off_day: info.is_off_day,
+                    daily_target: info.target, entries: dayEntries, total_net: dayNet, main_type: mainType
+                });
+                
+                if((dateObj.getDay()+6)%7 === 6 || d === daysInMonth) {
+                    this.items.push({ row_type: 'summary', iso_week: getISOWeek(dateObj), sum: parseFloat(current_week_sum.toFixed(2)), target: this.settings.weekly_hours });
+                    current_week_sum = 0;
+                }
+            }
+            
+            const max_ho = total_target_hours_month * (this.settings.ho_quota_percent / 100);
+            this.stats = { total_ho_made: total_ho, total_ho_allowed: max_ho, total_office_made: total_office, total_work_made: total_ho+total_office, workdays_month: workdays };
+        },
+        
+        loadYearData() {
+            const allEntries = Store.getEntries();
+            const year = this.currentYear;
+            this.yearData = [];
+            
+            for(let m=1; m<=12; m++) {
+                const daysInMonth = new Date(year, m, 0).getDate();
+                let ho_h=0, off_h=0, wd=0, total_target_month=0.0;
+                let days_ho=0, days_off=0, days_vac=0;
+                
+                for(let d=1; d<=daysInMonth; d++) {
+                    const dateObj = new Date(year, m-1, d);
+                    const dateStr = new Date(dateObj.getTime() - (dateObj.getTimezoneOffset() * 60000)).toISOString().split('T')[0];
+                    const info = this.getDayInfo(dateObj);
+                    if(info.is_workday) { wd++; total_target_month += info.target; }
+                    
+                    const entries = allEntries[dateStr] || [];
+                    if(entries.length > 0) {
+                        const dayNet = calculateTotalDailyNet(entries);
+                        
+                        let hasHo=false, hasOff=false, hasVac=false;
+                        let rawHo=0, rawOff=0;
+
+                        entries.forEach(e => {
+                            if(['home','planned'].includes(e.type)) { hasHo=true; rawHo += calculateNetHours(e.start, e.end); }
+                            if(['office','dr'].includes(e.type)) { hasOff=true; rawOff += calculateNetHours(e.start, e.end); }
+                            if(e.type === 'vacation') hasVac=true;
+                        });
+                        
+                        if(hasHo) days_ho++; if(hasOff) days_off++; if(hasVac) days_vac++;
+                        
+                        if(rawHo+rawOff > 0) {
+                            const ratio = dayNet / (rawHo+rawOff);
+                            ho_h += rawHo * ratio; off_h += rawOff * ratio;
+                        }
+                    }
+                }
+                this.yearData.push({ month: m, days_ho, days_office: days_off, days_vacation: days_vac, ho_hours_made: parseFloat(ho_h.toFixed(2)), ho_hours_allowed: parseFloat((total_target_month * (this.settings.ho_quota_percent/100)).toFixed(2)), office_hours_made: parseFloat(off_h.toFixed(2)) });
+            }
+        },
+
+        // --- ENTRY MANAGEMENT ---
+        openEditDialog(day) { this.editingDay = day; this.dialogEditDay = true; },
+        quickSetStatus(day, type) { 
+             if(type==='') { Store.saveDayEntries(day.date, []); this.loadMonthData(); return; }
+             if(day.entries.length === 0 || day.entries[0].type === '') day.entries = [{type, start:'', end:'', comment:''}];
+             else day.entries[0].type = type;
+             this.onEntryChange(day, day.entries[0]);
+        },
+        setPrimaryType(day, type) { 
+            if(day.entries.length === 0 || day.entries[0].type === '') day.entries = [{type, start:'', end:'', comment:''}];
+            day.entries[0].type = type; 
+            this.onEntryChange(day, day.entries[0]); 
+        },
+        addEntryToDay(day) { day.entries.push({type:'home', start:'', end:'', comment:''}); },
+        deleteEntry(day, idx) { 
+            day.entries.splice(idx, 1); 
+            if(day.entries.length===0) day.entries.push({type:'', start:'', end:'', comment:''});
+            this.saveSingleEntry(day.date, null); // Trigger save via reload
+        },
+        onEntryChange(day, entry) {
+            if(['home', 'office', 'dr'].includes(entry.type) && !entry.start) {
+                entry.start = this.settings.default_start_time || '08:00';
+                if(day.entries.length === 1) {
+                     const dailyTarget = this.calcDailyTarget;
+                     let startMin = 480; try { let p = entry.start.split(':'); startMin = parseInt(p[0])*60 + parseInt(p[1]); } catch(e){}
+                     let grossHours = dailyTarget; if(dailyTarget > 9) grossHours += 0.75; else if(dailyTarget > 6) grossHours += 0.5;
+                     const endMin = startMin + (grossHours * 60);
+                     const h = Math.floor(endMin / 60); const m = Math.round(endMin % 60);
+                     entry.end = `${(h<10?'0':'')+h}:${(m<10?'0':'')+m}`;
+                }
+             }
+             this.saveSingleEntry(day.date);
+        },
+        saveEntry(day) { this.saveSingleEntry(day.date); },
+        saveSingleEntry(date, entry) {
+             const dayObj = this.items.find(i=>i.date === date);
+             if(dayObj) {
+                 // Clean up times
+                 dayObj.entries.forEach(e => {
+                     if(e.start) e.start = normalizeTimeInput(e.start) || e.start;
+                     if(e.end) e.end = normalizeTimeInput(e.end) || e.end;
+                 });
+                 Store.saveDayEntries(date, dayObj.entries);
+                 if(this.viewMode==='list') this.loadMonthData();
+             }
+        },
+        
+        // --- SERIES PLANER ---
+        openSeriesDialog() { const nextM = new Date(); nextM.setMonth(nextM.getMonth() + 1); const y = nextM.getFullYear(), m = nextM.getMonth(); const lastDay = new Date(y, m + 1, 0).getDate(); this.seriesDialog.start = `${y}-${(m+1).toString().padStart(2,'0')}-01`; this.seriesDialog.end = `${y}-${(m+1).toString().padStart(2,'0')}-${lastDay}`; this.seriesDialog.show = true; },
+        saveSeriesPlan() {
+            this.seriesDialog.show = false;
+            let curr = new Date(this.seriesDialog.start); const end = new Date(this.seriesDialog.end);
+            let cnt = 0;
+            while(curr <= end) {
+                const dayIdx = (curr.getDay()+6)%7;
+                if(this.seriesDialog.weekdays.includes(dayIdx)) {
+                    const dStr = new Date(curr.getTime() - (curr.getTimezoneOffset() * 60000)).toISOString().split('T')[0];
+                    const info = this.getDayInfo(curr);
+                    // Skip Holidays
+                    if(info.holiday_name && !info.is_workday) { curr.setDate(curr.getDate()+1); continue; }
+                    
+                    const existing = Store.getEntries()[dStr] || [];
+                    if(this.seriesDialog.overwrite || existing.length === 0) {
+                        Store.saveDayEntries(dStr, [{type: this.seriesDialog.type, start:'', end:'', comment:''}]);
+                        cnt++;
+                    }
+                }
+                curr.setDate(curr.getDate()+1);
+            }
+            this.showMsg(`${cnt} Tage geplant.`);
+            this.loadMonthData();
+        },
+
+        // --- COMMON ---
+        getGermanDay(index) { return ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'][index] || ''; },
+        getGermanMonthName(m) { if(!m) return ""; const d = new Date(); d.setMonth(m-1); return d.toLocaleString('de-DE', { month: 'long' }); },
+        isWeekend(day) { return day.weekday_index >= 5; },
+        isToday(dateStr) { return dateStr === new Date().toISOString().split('T')[0]; },
+        needsTimeInput(type) { return ['home', 'office', 'dr', '', null].includes(type); },
+        getStatusIcon(type) { const map = { 'home': 'mdi-home', 'office': 'mdi-office-building', 'planned': 'mdi-calendar-clock', 'sick': 'mdi-emoticon-sick', 'vacation': 'mdi-beach', 'dr': 'mdi-car' }; return map[type] || ''; },
+        getStatusIconColor(type) { const map = { 'home': 'green', 'office': 'amber-darken-4', 'planned': 'blue', 'sick': 'red', 'vacation': 'purple', 'dr': 'blue' }; return map[type] || 'grey'; },
+        getTypeName(val) { const found = this.types.find(t => t.value === val); return found ? found.title : ''; },
+        getWeeklyColor(current, target) { if (!current) return 'text-grey'; return current >= target ? 'text-green-darken-2' : 'text-orange-darken-2'; },
+
+        // --- HELPERS ---
+        changeMonth(delta) { this.currentDate = new Date(this.currentDate.setMonth(this.currentDate.getMonth() + delta)); this.loadMonthData(); },
+        changeYear(delta) { this.currentDate = new Date(this.currentDate.setFullYear(this.currentDate.getFullYear() + delta)); if(this.viewMode === 'year') this.loadYearData(); else this.loadMonthData(); },
+        saveSettings() { Store.saveSettings(this.settings); Store.saveCustomHolidays(this.customHolidays); this.dialogSettings = false; if(this.viewMode==='year') this.loadYearData(); else this.loadMonthData(); },
+        addCustomHoliday() { if(!this.newCustomHoliday.date || !this.newCustomHoliday.name) return; this.customHolidays[this.newCustomHoliday.date] = {...this.newCustomHoliday}; this.newCustomHoliday = {date:'', name:''}; },
+        deleteCustomHoliday(dateKey) { delete this.customHolidays[dateKey]; },
+        addWaeldchestag() { const y = this.currentYear; const a=y%19, b=Math.floor(y/100), c=y%100, dd=Math.floor(b/4), e=b%4, f=Math.floor((b+8)/25), g=Math.floor((b-f+1)/3), h=(19*a+b-dd-g+15)%30, i=Math.floor(c/4), k=c%4, l=(32+2*e+2*i-h-k)%7, m_easter=Math.floor((a+11*h+22*l)/451); const monthE = Math.floor((h+l-7*m_easter+114)/31); const dayE = ((h+l-7*m_easter+114)%31)+1; const easterDate = new Date(y, monthE - 1, dayE); const waeldchestag = new Date(easterDate); waeldchestag.setDate(easterDate.getDate() + 51); const dateStr = new Date(waeldchestag.getTime() - (waeldchestag.getTimezoneOffset() * 60000)).toISOString().split('T')[0]; this.newCustomHoliday.date = dateStr; this.newCustomHoliday.name = 'Wäldchestag'; this.newCustomHoliday.hours = 6.0; this.addCustomHoliday(); this.showMsg("Wäldchestag hinzugefügt"); },
+        
+        // --- FILE SYSTEM API ---
+        async checkForStoredHandle() { try { const handle = await idbGet('fileHandle'); if(handle) { this.storedHandleName = handle.name; } } catch(e) { console.error(e); } },
+        async restoreFileConnection() { try { const handle = await idbGet('fileHandle'); if(!handle) return; const opts = { mode: 'readwrite' }; if ((await handle.queryPermission(opts)) === 'granted' || (await handle.requestPermission(opts)) === 'granted') { this.fileHandle = handle; this.fileName = handle.name; await this.loadFileContent(); } } catch(e) { console.error("Restore failed", e); alert("Konnte Verbindung nicht wiederherstellen."); } },
+        async openFile() { try { if (!window.showOpenFilePicker) { alert("Browser unterstützt FileSystemAccess nicht."); return; } const [handle] = await window.showOpenFilePicker({ types: [{ description: 'JSON', accept: {'application/json': ['.json']} }], multiple: false }); this.fileHandle = handle; this.fileName = handle.name; await idbSet('fileHandle', handle); this.storedHandleName = handle.name; await this.loadFileContent(); } catch(e) {} },
+        async loadFileContent() { const file = await this.fileHandle.getFile(); const text = await file.text(); try { const json = JSON.parse(text); Store.set(json); this.loadData(); } catch(e) { Store.init(); this.saveToFile(); } },
+        async saveToFile() { if(!this.fileHandle) return; try { const writable = await this.fileHandle.createWritable(); await writable.write(JSON.stringify(Store.get(), null, 2)); await writable.close(); this.unsavedChanges = false; this.showMsg("Datei gespeichert"); } catch(e) { alert("Fehler beim Speichern"); } }
+      }
+    });
+
+    app.config.compilerOptions.delimiters = ['[[', ']]'];
+    app.use(vuetify);
+    app.mount('#app');
+  </script>
+</body>
+</html>
