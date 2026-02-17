@@ -4,3 +4,4 @@ flask-sqlalchemy
 holidays
 pdfplumber
 pytest
+gunicorn
