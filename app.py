@@ -328,7 +328,8 @@ def plan_series():
         db.session.commit()
         return jsonify({"success": True})
     except Exception as e:
-        return jsonify({"success": False, "message": str(e)}), 400
+        print(f"ERROR [custom-holidays]: {e}")
+        return jsonify({"success": False, "message": "Ein Fehler ist beim Speichern aufgetreten."}), 400
 
 @app.route('/api/custom-holidays', methods=['GET', 'POST'])
 def handle_custom_holidays():
@@ -459,7 +460,7 @@ def import_pdf():
             
     except Exception as e: 
         print(f"IMPORT ERROR: {e}")
-        return jsonify({"success": False, "message": str(e)}), 500
+        return jsonify({"success": False, "message": "Fehler beim Verarbeiten der PDF-Datei."}), 500
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=False)
