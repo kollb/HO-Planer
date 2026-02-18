@@ -37,7 +37,16 @@ jobs:
 
       # --- NEU: Tests ausführen ---
       - name: Run Tests
-        run: python -m pytest
+        run: |
+          # 1. Flask App im Hintergrund starten (& am Ende ist wichtig!)
+          python app.py &
+          
+          # 2. Kurz warten, bis der Server auf Port 5000 hochgefahren ist
+          echo "Warte auf Server-Start..."
+          sleep 5
+          
+          # 3. Jetzt die Tests starten (Server läuft nun unter localhost:5000)
+          python -m pytest
 
       # --- Ab hier geht es normal weiter wie vorher ---
       - name: Login to Docker Hub
