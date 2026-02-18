@@ -3,7 +3,7 @@ from flask_cors import CORS
 from models import db, Settings, CustomHoliday, WorkEntry
 from logic import calculate_net_hours, get_day_info, normalize_time_str, calculate_gross_time_needed
 import os
-from datetime import datetime, timedelta
+from datetime import datetime, date, timedelta
 import holidays
 import calendar
 from sqlalchemy import text, inspect
@@ -86,6 +86,104 @@ with app.app_context():
         db.session.commit()
     migrate_x_to_planned()
 
+# --- REFACTORED LOGIC (Testable) ---
+def parse_pdf_content(file_obj):
+    """
+    Liest ein PDF (file-like object) und extrahiert die Buchungen.
+    FIX: Unterstützt jetzt auch mehrzeilige Einträge pro Tag (z.B. Reisezeit in neuer Zeile).
+    """
+    TYPE_MAP = {
+        "Mobil": "home", "Telearb": "home", "anwesend": "office", 
+        "Krank": "sick", "Urlaub": "vacation", "Erholungs": "vacation", "Gleitzeit": "glz", 
+        "Dienstreise": "dr", "Fortbildung": "dr", "Reisezeit": "dr",
+        "BUCHUNG FEHLT": "missing"
+    }
+    
+    extracted_entries = []
+    
+    with pdfplumber.open(file_obj) as pdf:
+        # Monat/Jahr ermitteln
+        first_page_text = pdf.pages[0].extract_text()
+        match_my = re.search(r'Monat:?\s*([a-zA-ZäöüÄÖÜ]+)\s*[-_]?\s*(\d{4})', first_page_text)
+        if not match_my:
+            raise ValueError("Monat/Jahr im PDF nicht erkannt")
+            
+        m_dict = {'Januar':1,'Februar':2,'März':3,'April':4,'Mai':5,'Juni':6,'Juli':7,'August':8,'September':9,'Oktober':10,'November':11,'Dezember':12}
+        month = m_dict.get(match_my.group(1))
+        year = int(match_my.group(2))
+        
+        daily_data = {}
+        curr_day = None  # WICHTIG: Zustand merken für Folgezeilen
+
+        # Seiten iterieren
+        for page in pdf.pages:
+            tables = page.extract_tables()
+            for table in tables:
+                for row in table:
+                    if not row or len(row) < 2: continue
+                    col0 = str(row[0] or "")
+                    
+                    # 1. Prüfen: Ist das eine neue Tages-Zeile? (z.B. "09 FR")
+                    dm = re.search(r'(\d{2})\s+(MO|DI|MI|DO|FR|SA|SO)', col0)
+                    
+                    if dm:
+                        curr_day = int(dm.group(1)) # Neuer Tag gefunden
+                    elif curr_day is None:
+                        # Wir haben noch keinen Tag gefunden (Header-Zeilen etc.), überspringen
+                        continue
+                    # Wenn dm False ist, aber curr_day existiert -> Es ist eine Folgezeile zum gleichen Tag!
+
+                    if curr_day not in daily_data: daily_data[curr_day] = []
+                    
+                    # Ganze Zeile als Text für Regex
+                    full_row_text = " ".join([str(c) for c in row if c])
+                    
+                    # Typ erkennen
+                    found_type = None
+                    for k, v in TYPE_MAP.items():
+                        if k in full_row_text: found_type = v
+                    
+                    # Zeiten erkennen
+                    times = re.findall(r'(\d{2}:\d{2})', full_row_text)
+                    if times and all(t == "00:00" for t in times): times = []
+
+                    # Logik: Eintrag erstellen
+                    entry = {'type': None, 'times': []}
+                    
+                    if found_type == "missing":
+                        entry['type'] = '' # Kein Typ
+                        entry['comment'] = "Buchung fehlt (PDF)"
+                    elif times and len(times) >= 2:
+                        # WICHTIG: Wenn wir Zeiten haben, aber keinen Typ, nehmen wir Office
+                        # Außer es ist eine reine Zeitbuchung ohne Text (selten), 
+                        # aber "Reisezeit" hat ja einen Typ gefunden.
+                        entry['type'] = found_type if found_type else "office"
+                        entry['times'] = times
+                    elif found_type in ["vacation", "sick", "glz"]:
+                        entry['type'] = found_type
+                    
+                    # Nur speichern, wenn wir was sinnvolles gefunden haben
+                    if entry['type'] is not None or entry.get('comment'):
+                        daily_data[curr_day].append(entry)
+
+        # Daten flachklopfen und Datumsobjekte erzeugen
+        for d, blocks in daily_data.items():
+            try:
+                date_obj = date(year, month, d)
+                for b in blocks:
+                    final_entry = {
+                        'date': date_obj,
+                        'type': b['type'] or '',
+                        'start': b['times'][0] if b['times'] else '',
+                        'end': b['times'][1] if b['times'] and len(b['times']) > 1 else '',
+                        'comment': b.get('comment', '')
+                    }
+                    extracted_entries.append(final_entry)
+            except ValueError:
+                # Schutz gegen ungültige Tage (z.B. 31. Februar falls Parsing spinnt)
+                continue
+                
+    return extracted_entries
 # --- API ROUTEN ---
 
 @app.route('/')
@@ -254,7 +352,6 @@ def get_year_data(year):
                 off_h += h
                 d_off.add(e.date)
             elif e.type == 'vacation':
-                # Zählen wenn Arbeitstag
                 d_obj = datetime.strptime(e.date, "%Y-%m-%d").date()
                 if get_day_info(d_obj, settings, he_holidays, custom_map)["is_workday"]:
                     d_vac.add(e.date)
@@ -359,108 +456,81 @@ def import_pdf():
     
     print(f"--- START IMPORT (Overwrite: {overwrite}) ---")
 
-    TYPE_MAP = {
-        "Mobil": "home", "Telearb": "home", "anwesend": "office", 
-        "Krank": "sick", "Urlaub": "vacation", "Erholungs": "vacation", "Gleitzeit": "glz", 
-        "Dienstreise": "dr", "Fortbildung": "dr", "Reisezeit": "dr"
-    }
-
     try:
+        # DB-Settings & Helper laden (für Filterung)
         settings = Settings.query.first()
         
-        with pdfplumber.open(file) as pdf:
-            txt = pdf.pages[0].extract_text()
-            match_my = re.search(r'Monat:?\s*([a-zA-ZäöüÄÖÜ]+)\s*[-_]?\s*(\d{4})', txt)
-            if not match_my: return jsonify({"success": False, "message": "Monat/Jahr nicht erkannt"}), 400
-            m_dict = {'Januar':1,'Februar':2,'März':3,'April':4,'Mai':5,'Juni':6,'Juli':7,'August':8,'September':9,'Oktober':10,'November':11,'Dezember':12}
-            m, y = m_dict.get(match_my.group(1)), int(match_my.group(2))
+        # 1. Parsing Logik (DB-Unabhängig!)
+        # Ruft die neue testbare Funktion auf
+        extracted_entries = parse_pdf_content(file)
+        
+        # Helper für Feiertage (Jahr aus erstem Eintrag nehmen)
+        if not extracted_entries:
+             return jsonify({"success": True, "message": "Keine Einträge gefunden."})
+             
+        y = extracted_entries[0]['date'].year
+        he_holidays = holidays.DE(state='HE', years=y)
+        he_holidays[datetime(y, 12, 24).date()] = "Heiligabend"
+        he_holidays[datetime(y, 12, 31).date()] = "Silvester"
+        custom_map = {datetime.strptime(c.date, "%Y-%m-%d").date(): c for c in CustomHoliday.query.all()}
+
+        # 2. Speichern in DB
+        cnt = 0
+        
+        # Gruppieren nach Datum für Überschreiben
+        entries_by_date = {}
+        for e in extracted_entries:
+            d = e['date']
+            if d not in entries_by_date: entries_by_date[d] = []
+            entries_by_date[d].append(e)
             
-            he_holidays = holidays.DE(state='HE', years=y)
-            he_holidays[datetime(y, 12, 24).date()] = "Heiligabend"
-            he_holidays[datetime(y, 12, 31).date()] = "Silvester"
-            custom_map = {datetime.strptime(c.date, "%Y-%m-%d").date(): c for c in CustomHoliday.query.all()}
+        for date_obj, entries in entries_by_date.items():
+            date_iso = str(date_obj)
             
-            daily_data = {}
+            # Prüfen ob Arbeitstag (nur filtern wenn keine Zeiten da sind)
+            day_info = get_day_info(date_obj, settings, he_holidays, custom_map)
+            is_free_day = not day_info["is_workday"]
             
-            for page in pdf.pages:
-                tables = page.extract_tables()
-                for table in tables:
-                    for row in table:
-                        if not row or len(row) < 2: continue
-                        col0 = str(row[0] or "")
-                        dm = re.search(r'(\d{2})\s+(MO|DI|MI|DO|FR|SA|SO)', col0)
-                        if not dm: continue     
-                        curr_day = int(dm.group(1))
-                        if curr_day not in daily_data: daily_data[curr_day] = []
-                        full_row_text = " ".join([str(c) for c in row if c])
-                        
-                        found_type = None
-                        for k, v in TYPE_MAP.items():
-                            if k in full_row_text: found_type = v
-                        
-                        times = re.findall(r'(\d{2}:\d{2})', full_row_text)
-                        
-                        if times and all(t == "00:00" for t in times):
-                            times = []
+            valid_entries = []
+            for e in entries:
+                # Behalte Eintrag wenn:
+                # 1. Er Zeiten hat (z.B. Arbeit am Sonntag)
+                # 2. Es ein Arbeitstag ist
+                # 3. Es ein expliziter "missing" Eintrag ist (hat Kommentar)
+                has_times = bool(e['start'] and e['end'])
+                has_comment = bool(e['comment'])
+                
+                if has_times or not is_free_day or has_comment:
+                    valid_entries.append(e)
+            
+            if not valid_entries: continue
+            
+            # Löschen bei Overwrite
+            if overwrite:
+                WorkEntry.query.filter_by(date=date_iso).delete()
+            
+            # Einfügen
+            for e in valid_entries:
+                # Dubletten-Check (nur wenn nicht Overwrite)
+                if not overwrite:
+                    # Einfacher Check: Existiert Typ an diesem Tag?
+                    if e['type'] and WorkEntry.query.filter_by(date=date_iso, type=e['type']).first():
+                        continue
+                
+                en = WorkEntry(date=date_iso, type=e['type'])
+                en.start_time = e['start']
+                en.end_time = e['end']
+                en.comment = e['comment']
+                db.session.add(en)
+                cnt += 1
 
-                        if times and len(times) >= 2:
-                            t = found_type if found_type else "office"
-                            daily_data[curr_day].append({"type": t, "times": times})
-                        elif found_type in ["vacation", "sick", "glz"]:
-                            daily_data[curr_day].append({"type": found_type, "times": []})
-
-            cnt = 0
-            for d, blocks in daily_data.items():
-                date_iso = f"{y}-{m:02d}-{d:02d}"
-                dt_obj = datetime(y, m, d).date()
-                
-                day_info = get_day_info(dt_obj, settings, he_holidays, custom_map)
-                is_free_day = not day_info["is_workday"]
-                
-                if d == 1:
-                    print(f"DEBUG {date_iso}: is_workday={day_info['is_workday']}, times={[b['times'] for b in blocks]}")
-
-                filtered_blocks = []
-                for b in blocks:
-                    if len(b['times']) >= 2:
-                        filtered_blocks.append(b)
-                    elif not is_free_day:
-                        filtered_blocks.append(b)
-                    else:
-                        if d == 1: print(f"DEBUG {date_iso}: Ignoriere '{b['type']}' weil freier Tag.")
-                
-                blocks = filtered_blocks
-                
-                if overwrite:
-                    WorkEntry.query.filter_by(date=date_iso).delete()
-                
-                if not blocks:
-                    continue
-
-                has_prio = any(b['type'] in ['vacation', 'sick', 'glz'] for b in blocks)
-                if has_prio:
-                    blocks = [b for b in blocks if b['type'] in ['vacation', 'sick', 'glz']]
-                
-                for b in blocks:
-                    if b['type'] in ['vacation', 'sick', 'glz']:
-                        if not overwrite and WorkEntry.query.filter_by(date=date_iso, type=b['type']).first(): continue
-                        db.session.add(WorkEntry(date=date_iso, type=b['type']))
-                        cnt += 1
-                    else:
-                        if len(b['times']) >= 2:
-                            en = WorkEntry(date=date_iso, type=b['type'])
-                            en.start_time = b['times'][0]
-                            en.end_time = b['times'][1]
-                            db.session.add(en)
-                            cnt += 1
-
-            db.session.commit()
-            print(f"--- IMPORT FERTIG: {cnt} Einträge ---")
-            return jsonify({"success": True, "message": f"{cnt} Einträge importiert."})
+        db.session.commit()
+        print(f"--- IMPORT FERTIG: {cnt} Einträge ---")
+        return jsonify({"success": True, "message": f"{cnt} Einträge importiert."})
             
     except Exception as e: 
         print(f"IMPORT ERROR: {e}")
-        return jsonify({"success": False, "message": "Fehler beim Verarbeiten der PDF-Datei."}), 500
+        return jsonify({"success": False, "message": f"Fehler: {str(e)}"}), 500
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=False)

@@ -6,3 +6,4 @@ instance/
 env/
 *.db
 data/database.db
+tests/testfiles/
