@@ -49,7 +49,7 @@ def auto_convert_expired_planned_days():
             return 
 
         year = datetime.now().year
-        he_holidays = holidays.DE(state='HE', years=year)
+        he_holidays = holidays.DE(subdiv='HE', years=year)
         he_holidays[datetime(year, 12, 24).date()] = "Heiligabend"
         he_holidays[datetime(year, 12, 31).date()] = "Silvester"
 
@@ -123,7 +123,7 @@ def get_month_data(year, month):
     auto_convert_expired_planned_days()
     settings = db.session.query(Settings).first()
     
-    he_holidays = holidays.DE(state='HE', years=year)
+    he_holidays = holidays.DE(subdiv='HE', years=year)
     he_holidays[datetime(year, 12, 24).date()] = "Heiligabend"
     he_holidays[datetime(year, 12, 31).date()] = "Silvester"
     custom_map = {datetime.strptime(c.date, "%Y-%m-%d").date(): c for c in CustomHoliday.query.all()}

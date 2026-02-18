@@ -5,3 +5,7 @@ holidays
 pdfplumber
 pytest
 gunicorn
+pytest 
+pytest-flask 
+playwright
+requests
