@@ -39,7 +39,7 @@
     .status-dr { background-color: rgba(33, 150, 243, 0.15); border-color: rgba(33, 150, 243, 0.5); }
     .status-planned { background-color: rgba(33, 150, 243, 0.08) !important; border: 1px dashed rgba(33, 150, 243, 0.6) !important; opacity: 0.9; }
     
-    .cal-date { font-weight: bold; font-size: 1rem; margin-bottom: 4px; }
+    .cal-date { font-weight: bold; font-size: 1rem; margin-bottom: 4px; display: flex; align-items: center; }
     .cal-holiday-name { font-size: 0.7rem; color: #ef5350; line-height: 1.1; margin-bottom: 4px; font-weight: 500;}
     .cal-short-info { font-size: 0.7rem; color: #f57c00; font-weight: bold; margin-bottom: 4px; }
     .cal-content { flex-grow: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; }
@@ -78,7 +78,7 @@
               <v-card-text class="pt-4">
                   <p class="text-body-2 mb-2">Lädt den Zeitnachweis auf den Server und importiert die Zeiten.</p>
                   <v-checkbox v-model="importDialog.overwrite" label="Existierende Einträge überschreiben" hide-details class="mt-2" color="primary"></v-checkbox>
-                  <div class="text-caption text-grey mt-2"><v-icon size="small" class="mr-1">mdi-alert-circle-outline</v-icon>Erkennt automatisch Monat & Jahr. Unterstützt Pausenabzug und Split-Buchungen.</div>
+                  <div class="text-caption text-grey mt-2"><v-icon size="small" class="mr-1">mdi-alert-circle-outline</v-icon>Erkennt Monat, Jahr & den GLZ-Saldo automatisch. Unterstützt Pausenabzug und Split-Buchungen.</div>
               </v-card-text>
               <v-card-actions><v-spacer></v-spacer><v-btn variant="text" @click="importDialog.show = false">Abbrechen</v-btn><v-btn color="primary" @click="proceedWithUpload">Import starten</v-btn></v-card-actions>
           </v-card>
@@ -131,13 +131,27 @@
                         </div>
                         <v-btn icon variant="text" size="small" @click="changeMonth(1)"><v-icon>mdi-chevron-right</v-icon></v-btn>
                     </v-col>
-                    <v-col cols="6" md="5" class="d-flex justify-center align-center">
-                        <div class="d-flex" style="gap: 30px;">
-                            <div class="text-center"><div class="stat-label"><v-icon size="x-small" class="mr-1">mdi-calendar-check</v-icon>Arbeitstage</div><div class="stat-value">[[ stats.workdays_month ]]</div></div>
+                    
+                    <v-col cols="12" md="2" class="d-flex justify-center align-center">
+                        <div class="d-flex" style="gap: 20px;">
+                            <div class="text-center"><div class="stat-label"><v-icon size="x-small" class="mr-1">mdi-calendar-check</v-icon>Tage</div><div class="stat-value">[[ stats.workdays_month ]]</div></div>
                             <div class="text-center"><div class="stat-label"><v-icon size="x-small" class="mr-1">mdi-office-building</v-icon>Bürostd.</div><div class="stat-value text-amber-darken-2">[[ formatNum(stats.total_office_made) ]] <span class="text-caption opacity-60">h</span></div></div>
                         </div>
                     </v-col>
-                    <v-col cols="6" md="4" class="pl-2">
+
+                    <v-col cols="6" md="3" class="d-flex justify-center align-center border-right">
+                        <div class="d-flex flex-column align-center justify-center h-100">
+                            <div class="text-caption text-uppercase font-weight-bold opacity-50 mb-0" style="font-size: 0.6rem !important;">Gleitzeit Saldo</div>
+                            <div class="d-flex align-center mb-1">
+                                 <span class="text-h6 font-weight-bold" :class="stats.current_glz >= 0 ? 'text-green-accent-3' : 'text-red-accent-2'" style="line-height: 1.1;">
+                                     <span v-if="stats.current_glz > 0">+</span>[[ formatNum(stats.current_glz) ]] <span class="text-body-2 ml-1">h</span>
+                                 </span>
+                            </div>
+                            <div class="d-flex align-center mt-0"><span class="text-caption opacity-60 font-weight-medium">Aktueller Monat</span></div>
+                        </div>
+                    </v-col>
+
+                    <v-col cols="6" md="4" class="pl-4">
                         <div class="d-flex flex-column align-end justify-center h-100">
                             <div class="text-caption text-uppercase font-weight-bold opacity-50 mb-0" style="font-size: 0.6rem !important;">Home Office Budget</div>
                             <div class="d-flex align-center mb-1">
@@ -170,7 +184,17 @@
                 
                 <v-table density="compact" v-if="viewMode === 'list'" class="d-none d-md-block" style="width: 100%;">
                     <template v-slot:default>
-                        <thead><tr style="background-color: rgba(128,128,128,0.05);"><th class="text-left font-weight-bold">Datum</th><th class="text-left font-weight-bold" style="width:200px">Status</th><th class="text-left font-weight-bold">Start</th><th class="text-left font-weight-bold">Ende</th><th class="text-left font-weight-bold">Notiz</th><th style="width: 50px;"></th></tr></thead>
+                        <thead>
+                            <tr style="background-color: rgba(128,128,128,0.05);">
+                                <th class="text-left font-weight-bold">Datum</th>
+                                <th class="text-left font-weight-bold" style="width:180px">Status</th>
+                                <th class="text-left font-weight-bold" style="width:100px">Start</th>
+                                <th class="text-left font-weight-bold" style="width:100px">Ende</th>
+                                <th class="text-center font-weight-bold" style="width:140px">GLZ Saldo</th>
+                                <th class="text-left font-weight-bold">Notiz</th>
+                                <th style="width: 50px;"></th>
+                            </tr>
+                        </thead>
                         <tbody>
                             <template v-for="item in items" :key="item ? item.date : 'list-desk'">
                                 <template v-if="item && item.row_type === 'day' && (!settings.hide_weekends || !isWeekend(item))">
@@ -193,6 +217,14 @@
                                         <td>
                                             <v-text-field v-if="needsTimeInput(entry.type)" v-model="entry.end" placeholder="16:00" variant="underlined" density="compact" hide-details :type="$vuetify.display.mobile ? 'time' : 'text'" @change="saveSingleEntry(item.date, entry)"></v-text-field>
                                         </td>
+                                        
+                                        <td class="text-center" style="vertical-align: top; padding-top: 10px;">
+                                            <div v-if="index === 0" class="font-weight-bold" :class="item.glz_saldo >= 0 ? 'text-green' : 'text-red'">
+                                                <span v-if="item.glz_saldo > 0">+</span>[[ formatNum(item.glz_saldo) ]] h
+                                                <v-icon v-if="item.glz_override !== null" size="x-small" color="blue" class="ml-1" title="Offizieller GLZ Anker">mdi-anchor</v-icon>
+                                            </div>
+                                        </td>
+
                                         <td>
                                             <v-text-field v-model="entry.comment" placeholder="..." variant="plain" density="compact" hide-details @change="saveSingleEntry(item.date, entry)"></v-text-field>
                                         </td>
@@ -202,7 +234,7 @@
                                         </td>
                                     </tr>
                                 </template>
-                                <tr v-else-if="item && item.row_type === 'summary'" class="week-summary-row"><td colspan="2" class="text-right pr-4">KW [[ item.iso_week ]] GESAMT:</td><td colspan="4"><span :class="getWeeklyColor(item.sum, item.target)">[[ formatNum(item.sum) ]] / [[ formatNum(item.target) ]] h</span></td></tr>
+                                <tr v-else-if="item && item.row_type === 'summary'" class="week-summary-row"><td colspan="2" class="text-right pr-4">KW [[ item.iso_week ]] GESAMT:</td><td colspan="5"><span :class="getWeeklyColor(item.sum, item.target)">[[ formatNum(item.sum) ]] / [[ formatNum(item.target) ]] h</span></td></tr>
                             </template>
                         </tbody>
                     </template>
@@ -212,8 +244,17 @@
                     <template v-for="item in items" :key="item ? 'mob-'+item.date : 'mob-unk'">
                         <v-card v-if="item && item.row_type === 'day' && (!settings.hide_weekends || !isWeekend(item))" class="mb-2" elevation="1" :class="{'is-today': isToday(item.date)}" @click="openEditDialog(item)">
                             <div class="d-flex justify-space-between align-center pa-2 pb-0">
-                                <div><span class="font-weight-bold text-subtitle-1">[[ item.day_num ]]. [[ getGermanDay(item.weekday_index) ]]</span><span v-if="item.is_holiday" class="text-caption text-red ml-2">[[ item.holiday_name ]]</span></div>
-                                <v-chip v-if="item.total_net > 0" size="small" color="primary" variant="flat" class="font-weight-bold">[[ formatNum(item.total_net) ]] h</v-chip>
+                                <div>
+                                    <span class="font-weight-bold text-subtitle-1">[[ item.day_num ]]. [[ getGermanDay(item.weekday_index) ]]</span>
+                                    <span v-if="item.is_holiday" class="text-caption text-red ml-2">[[ item.holiday_name ]]</span>
+                                </div>
+                                <div>
+                                    <span class="text-caption font-weight-bold mr-2" :class="item.glz_saldo >= 0 ? 'text-green' : 'text-red'">
+                                        <v-icon v-if="item.glz_override !== null" size="x-small" color="blue" class="mr-1">mdi-anchor</v-icon>
+                                        GLZ: <span v-if="item.glz_saldo > 0">+</span>[[ formatNum(item.glz_saldo) ]]
+                                    </span>
+                                    <v-chip v-if="item.total_net > 0" size="small" color="primary" variant="flat" class="font-weight-bold">[[ formatNum(item.total_net) ]] h</v-chip>
+                                </div>
                             </div>
                             <div class="pa-2">
                                 <div v-for="(entry, i) in item.entries" :key="i" class="text-caption d-flex align-center mt-1">
@@ -241,7 +282,10 @@
                                           'status-home': item.main_type === 'home', 'status-office': item.main_type === 'office', 'status-planned': item.main_type === 'planned', 'status-sick': item.main_type === 'sick', 'status-vacation': item.main_type === 'vacation', 'status-dr': item.main_type === 'dr'}"
                                  @click="openEditDialog(item)">
                                 <div class="d-flex justify-space-between align-start">
-                                    <span class="cal-date" :class="{'opacity-50': item.is_off_day}">[[ item.day_num ]]</span>
+                                    <span class="cal-date" :class="{'opacity-50': item.is_off_day}">
+                                        [[ item.day_num ]]
+                                        <v-icon v-if="item.glz_override !== null" size="x-small" color="blue" class="ml-1" title="Offizieller GLZ Anker">mdi-anchor</v-icon>
+                                    </span>
                                     <v-menu location="bottom end">
                                         <template v-slot:activator="{ props }"><v-btn icon="mdi-dots-vertical" variant="text" size="x-small" density="compact" v-bind="props" @click.stop class="opacity-50"></v-btn></template>
                                         <v-list density="compact">
@@ -274,6 +318,15 @@
                                 <td class="text-center"><div class="d-flex align-center justify-center"><div style="width: 120px" class="mr-2"><v-progress-linear :model-value="stat.ho_hours_allowed ? (stat.ho_hours_made / stat.ho_hours_allowed)*100 : 0" color="blue" height="6" rounded></v-progress-linear></div><span class="text-caption">[[ formatNum(stat.ho_hours_made) ]] / [[ formatNum(stat.ho_hours_allowed) ]] h</span></div></td>
                             </tr>
                         </tbody>
+                        <tfoot class="bg-grey-darken-4 font-weight-bold" style="border-top: 4px solid rgba(255,255,255,0.2);">
+                            <tr>
+                                <td class="text-left py-3">GESAMT</td>
+                                <td class="text-center"><v-chip size="small" color="green" variant="elevated">[[ yearTotalHo ]] Tage</v-chip></td>
+                                <td class="text-center"><v-chip size="small" color="amber-darken-2" variant="elevated">[[ yearTotalOffice ]] Tage</v-chip></td>
+                                <td class="text-center"><v-chip size="small" color="purple" variant="elevated">[[ yearTotalVacation ]] Tage</v-chip></td>
+                                <td class="text-center"><!-- [[ formatNum(yearTotalHoHours) ]] / [[ formatNum(yearTotalAllowed) ]] h--></td>
+                            </tr>
+                        </tfoot>
                     </template>
                 </v-table>
             </v-card>
@@ -316,6 +369,20 @@
                 </div>
 
                 <v-btn variant="text" size="small" color="primary" @click="addEntryToDay(editingDay)" class="mt-1"><v-icon start>mdi-plus</v-icon> Split hinzufügen</v-btn>
+                
+                <v-divider class="my-3"></v-divider>
+                <div class="bg-surface-variant pa-3 rounded">
+                    <div class="text-caption font-weight-bold mb-1"><v-icon size="small" class="mr-1" color="blue">mdi-anchor</v-icon>GLZ-Korrektur (Override)</div>
+                    <div class="text-caption opacity-70 mb-2">Berechneter Stand an diesem Tag: <strong>[[ formatNum(editingDay.glz_saldo) ]] h</strong></div>
+                    <v-text-field 
+                        v-if="editingDay.entries && editingDay.entries.length > 0"
+                        v-model.number="editingDay.entries[0].glz_override" 
+                        label="Offiziellen Stand eintragen (überschreibt Berechnung)" 
+                        placeholder="z.B. 12.5" 
+                        variant="outlined" density="compact" hide-details type="number" step="0.01" 
+                        @change="saveSingleEntry(editingDay.date, editingDay.entries[0])">
+                    </v-text-field>
+                </div>
             </v-card-text>
             <v-card-actions><v-spacer></v-spacer><v-btn color="primary" @click="dialogEditDay = false">Fertig</v-btn></v-card-actions>
         </v-card>
@@ -348,7 +415,7 @@
     const app = createApp({
       data() { return {
           viewMode: 'list', currentDate: new Date(), items: [], yearData: [],
-          stats: { total_ho_made: 0, total_ho_allowed: 1, total_office_made: 0, total_work_made: 0, avg_per_week: 0, workdays_month: 0 }, 
+          stats: { total_ho_made: 0, total_ho_allowed: 1, total_office_made: 0, total_work_made: 0, avg_per_week: 0, workdays_month: 0, current_glz: 0 }, 
           settings: { weekly_hours: 39, active_weekdays: [0,1,2,3,4], ho_quota_percent: 60, hide_weekends: false, default_start_time: '08:00', auto_convert_planned: true },
           dialogSettings: false, dialogEditDay: false, editingDay: null, 
           importDialog: { show: false, overwrite: false, file: null },
@@ -368,15 +435,21 @@
         calcDailyTarget() { const activeCount = this.settings.active_weekdays ? this.settings.active_weekdays.length : 5; if (activeCount === 0) return 0; return this.settings.weekly_hours / activeCount; },
         budgetRemainingHours() { return this.stats.total_ho_allowed - this.stats.total_ho_made; },
         budgetRemainingDays() { const daily = this.calcDailyTarget || 7.8; if(daily === 0) return 0; return this.budgetRemainingHours / daily; },
-        budgetStateColor() { return this.budgetRemainingHours >= 0 ? 'text-green-accent-3' : 'text-red-accent-2'; }
+        budgetStateColor() { return this.budgetRemainingHours >= 0 ? 'text-green-accent-3' : 'text-red-accent-2'; },
+        
+        yearTotalHo() { return this.yearData.reduce((sum, item) => sum + item.days_ho, 0); },
+        yearTotalOffice() { return this.yearData.reduce((sum, item) => sum + item.days_office, 0); },
+        yearTotalVacation() { return this.yearData.reduce((sum, item) => sum + item.days_vacation, 0); },
+        yearTotalHoHours() { return this.yearData.reduce((sum, item) => sum + item.ho_hours_made, 0); },
+        yearTotalAllowed() { return this.yearData.reduce((sum, item) => sum + item.ho_hours_allowed, 0); }
       },
       watch: { viewMode(newVal) { if(newVal === 'year') this.loadYearData(); else this.loadMonthData(); } },
       mounted() { this.loadSettings(); this.loadCustomHolidays(); this.loadMonthData(); },
       methods: {
         goHome() { window.location.reload(); },
         toggleTheme() { this.theme.global.name = this.theme.global.current.dark ? 'light' : 'dark'; },
-        formatNum(val) { return val ? val.toFixed(2).replace('.', ',') : '0,00'; },
-        formatOneDecimal(val) { return val ? val.toFixed(1).replace('.', ',') : '0,0'; },
+        formatNum(val) { return val || val === 0 ? val.toFixed(2).replace('.', ',') : '0,00'; },
+        formatOneDecimal(val) { return val || val === 0 ? val.toFixed(1).replace('.', ',') : '0,0'; },
         showMsg(text, color='success') { this.snackbar.text = text; this.snackbar.color = color; this.snackbar.show = true; },
         
         // --- API & Import Logic ---
@@ -402,7 +475,7 @@
         // --- Entry Management ---
         openEditDialog(day) { 
             this.editingDay = day; 
-            if(!this.editingDay.entries || this.editingDay.entries.length === 0) { this.editingDay.entries = [{type: 'home', start: '', end: '', net: 0, comment: ''}]; } 
+            if(!this.editingDay.entries || this.editingDay.entries.length === 0) { this.editingDay.entries = [{type: 'home', start: '', end: '', net: 0, comment: '', glz_override: null}]; } 
             this.dialogEditDay = true; 
         },
         quickSetStatus(day, newType) {
@@ -411,13 +484,13 @@
             const entry = day.entries[0]; entry.type = newType; this.onEntryChange(day, entry); 
         },
         setPrimaryType(day, type) { if(day.entries.length === 0) this.addEntryToDay(day); const entry = day.entries[0]; entry.type = type; this.onEntryChange(day, entry); },
-        addEntryToDay(day) { day.entries.push({type: 'home', start: '', end: '', net: 0, comment: ''}); },
+        addEntryToDay(day) { day.entries.push({type: 'home', start: '', end: '', net: 0, comment: '', glz_override: null}); },
         
         async deleteEntry(day, index) { 
             const entry = day.entries[index]; 
             if(entry.id) { try { await fetch(`/api/entry/${entry.id}`, { method: 'DELETE' }); } catch(e) {} } 
             day.entries.splice(index, 1); 
-            if(day.entries.length === 0) { day.entries = [{type: '', start: '', end: '', net: 0}]; } 
+            if(day.entries.length === 0) { day.entries = [{type: '', start: '', end: '', net: 0, glz_override: null}]; } 
             this.loadMonthData(); 
         },
         
@@ -456,7 +529,7 @@
             try { 
                 const res = await fetch(`/api/month/${this.currentYear}/${this.currentMonth}`); const data = await res.json(); 
                 this.items = data.items || []; this.stats = data.stats || {}; 
-                this.items.forEach(item => { if (item.row_type === 'day' && item.entries.length === 0) { item.entries.push({type: '', start: '', end: '', net: 0, comment: ''}); } });
+                this.items.forEach(item => { if (item.row_type === 'day' && item.entries.length === 0) { item.entries.push({type: '', start: '', end: '', net: 0, comment: '', glz_override: null}); } });
             } catch(e){} 
         },
         async loadYearData() { try { const res = await fetch(`/api/year/${this.currentYear}`); if(res.ok) this.yearData = await res.json(); } catch(e) { console.error(e); } },

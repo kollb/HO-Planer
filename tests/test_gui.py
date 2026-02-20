@@ -5,7 +5,6 @@ from playwright.sync_api import Page, expect
 
 BASE_URL = "http://localhost:5000"
 
-# --- Bestehende Tests (unverändert) ---
 def test_initial_elements_present(page: Page):
     page.goto(BASE_URL)
     expect(page.locator(".v-toolbar-title")).to_contain_text("HO Planer")
@@ -25,9 +24,7 @@ def test_switch_views(page: Page):
     page.locator("button").filter(has=page.locator(".mdi-calendar-month")).click()
     expect(page.locator(".calendar-wrapper")).to_be_visible()
     
-    # FIX: count() wartet nicht auf das Rendering der Liste.
-    # Wir müssen warten, bis die erste Zelle (.cal-cell) tatsächlich im DOM erscheint.
-    # expect(...) wartet automatisch bis zu 5 Sekunden.
+    # Warten, bis die erste Zelle (.cal-cell) tatsächlich im DOM erscheint
     expect(page.locator(".cal-cell").first).to_be_visible()
 
     # Jetzt können wir sicher zählen
@@ -53,10 +50,19 @@ def test_status_bar_content(page: Page):
     page.goto(BASE_URL)
     status_bar = page.locator(".status-bar")
     expect(status_bar).to_be_visible()
-    expect(status_bar.locator(".stat-label").filter(has_text="Arbeitstage")).to_be_visible()
+    
+    # GEFIXT: Sucht jetzt nach "Tage" statt "Arbeitstage"
+    expect(status_bar.locator(".stat-label").filter(has_text="Tage")).to_be_visible()
     expect(status_bar.locator(".stat-label").filter(has_text="Bürostd.")).to_be_visible()
+    
+    # NEU: Prüfen ob das GLZ-Widget in der Statusleiste existiert
+    expect(page.get_by_text("Gleitzeit Saldo")).to_be_visible()
+    expect(page.get_by_text("Home Office Budget").first).to_be_visible()
 
-# --- GEFIXTE TESTS ---
+def test_list_view_new_columns(page: Page):
+    """NEU: Prüft ob die neue 'GLZ Saldo' Spalte in der Tabelle vorhanden ist."""
+    page.goto(BASE_URL)
+    expect(page.locator("th").filter(has_text="GLZ Saldo")).to_be_visible()
 
 def test_edit_day_dialog_buttons(page: Page):
     page.goto(BASE_URL)
@@ -70,16 +76,17 @@ def test_edit_day_dialog_buttons(page: Page):
     expect(dialog.locator("button").filter(has_text="Home Office")).to_be_visible()
     expect(dialog.locator("button").filter(has_text="Büro")).to_be_visible()
 
-    # FIX: Vuetify Double-Label Problem.
-    # Wir filtern nach 'visible=True', um das versteckte Label zu ignorieren.
-    # Alternativ nehmen wir das erste, das Playwright findet, falls visible nicht reicht.
+    # Vuetify Double-Label Problem filtern
     start_label = dialog.locator("label").filter(has_text="Start").first
     expect(start_label).to_be_visible()
+    
+    # NEU: Prüfen ob das GLZ-Override Eingabefeld im Dialog ist
+    expect(dialog.get_by_text("GLZ-Korrektur (Override)")).to_be_visible()
 
 def test_pdf_import_element_exists(page: Page):
     """
     Prüft, ob der PDF-Input vorhanden ist.
-    (Der Dialog öffnet sich erst NACH Datei-Auswahl, das ist schwer zu testen ohne Datei).
+    (Der Dialog öffnet sich erst NACH Datei-Auswahl).
     """
     page.goto(BASE_URL)
     
@@ -88,7 +95,6 @@ def test_pdf_import_element_exists(page: Page):
     expect(pdf_btn).to_be_visible()
     
     # Das Input-Feld ist hidden (display: none), aber im DOM
-    # Wir prüfen, ob es existiert und angehängt ist
     pdf_input = page.locator("input[type='file']")
     expect(pdf_input).to_be_attached()
 
@@ -99,7 +105,7 @@ def test_series_planner_dialog(page: Page):
     dialog_title = page.locator(".v-card-title").filter(has_text="Serien-Planer")
     expect(dialog_title).to_be_visible()
     
-    # FIX: Auch hier Double-Label bei "Mo", "Di" etc. möglich
+    # Auch hier Double-Label bei "Mo", "Di" etc. möglich
     expect(page.locator("label").filter(has_text="Mo").first).to_be_visible()
     
     # Schließen

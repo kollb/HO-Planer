@@ -7,3 +7,4 @@ env/
 *.db
 data/database.db
 tests/testfiles/
+data/
