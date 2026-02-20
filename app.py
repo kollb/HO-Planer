@@ -599,7 +599,7 @@ def import_pdf():
             
     except Exception as e: 
         app.logger.error(f"IMPORT ERROR: {e}", exc_info=True)
-        return jsonify({"success": False, "message": f"Fehler: {str(e)}"}), 500
+        return jsonify({"success": False, "message": "Ein interner Fehler ist beim Import aufgetreten. Bitte prüfen Sie die Logs."}), 500
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=False)
