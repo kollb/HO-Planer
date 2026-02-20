@@ -3,25 +3,74 @@ from flask_cors import CORS
 from models import db, Settings, CustomHoliday, WorkEntry
 from logic import calculate_net_hours, get_day_info, normalize_time_str, calculate_gross_time_needed
 import os
+import shutil
+import time
 from datetime import datetime, date, timedelta
 import holidays
 import calendar
 from sqlalchemy import text, inspect
 import pdfplumber
 import re
+import logging
+from logging.handlers import TimedRotatingFileHandler
 
 app = Flask(__name__)
 CORS(app)
 
-# --- DB KONFIGURATION ---
+# --- PFADE & ORDNER (DOCKER OPTIMIERT) ---
 basedir = os.path.abspath(os.path.dirname(__file__))
-db_path = os.path.join(basedir, 'data', 'database.db')
-os.makedirs(os.path.dirname(db_path), exist_ok=True)
+data_dir = os.path.join(basedir, 'data')
+db_path = os.path.join(data_dir, 'database.db')
+log_dir = os.path.join(data_dir, 'logs')
+backup_dir = os.path.join(data_dir, 'backups')
 
+# Stelle sicher, dass alle Ordner existieren
+for directory in [data_dir, log_dir, backup_dir]:
+    os.makedirs(directory, exist_ok=True)
+
+# --- 1. LOGGING KONFIGURATION (Log-Rotation) ---
+# Rotiert alle 30 Tage, behält max. 6 alte Dateien (180 Tage)
+log_file = os.path.join(log_dir, 'tracker.log')
+log_handler = TimedRotatingFileHandler(log_file, when='D', interval=30, backupCount=6)
+log_handler.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s - %(message)s'))
+app.logger.addHandler(log_handler)
+app.logger.setLevel(logging.INFO)
+
+# --- DB KONFIGURATION ---
 app.config['SQLALCHEMY_DATABASE_URI'] = f'sqlite:///{db_path}'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-
 db.init_app(app)
+
+
+# --- 2. DATENBANK BACKUPS (Backup-Rotation) ---
+def perform_daily_backup():
+    """Erstellt einmal am Tag ein Backup der SQLite Datenbank und löscht alte Backups (>180 Tage)"""
+    today_str = datetime.now().strftime('%Y-%m-%d')
+    backup_file = os.path.join(backup_dir, f'db_backup_{today_str}.db')
+    
+    # Prüfe ob heute schon ein Backup gemacht wurde und ob die DB existiert
+    if not os.path.exists(backup_file) and os.path.exists(db_path):
+        try:
+            shutil.copy2(db_path, backup_file)
+            app.logger.info(f"Tägliches Datenbank-Backup erstellt: {backup_file}")
+            
+            # Aufräumen: Backups älter als 180 Tage löschen
+            now = time.time()
+            for f in os.listdir(backup_dir):
+                f_path = os.path.join(backup_dir, f)
+                if os.path.isfile(f_path):
+                    # st_mtime = Letztes Änderungsdatum (in Sekunden)
+                    if os.stat(f_path).st_mtime < now - (180 * 86400):
+                        os.remove(f_path)
+                        app.logger.info(f"Altes Backup gelöscht (>180 Tage): {f}")
+        except Exception as e:
+            app.logger.error(f"Fehler beim DB-Backup: {e}", exc_info=True)
+
+@app.before_request
+def before_request_hook():
+    # Dieser Check ist extrem schnell und bremst Anfragen nicht aus
+    perform_daily_backup()
+
 
 # --- MIGRATION & HELPER ---
 def migrate_x_to_planned():
@@ -29,12 +78,12 @@ def migrate_x_to_planned():
         with app.app_context():
             old_entries = WorkEntry.query.filter_by(type='x').all()
             if old_entries:
-                print(f"INFO: Migriere {len(old_entries)} alte 'X'-Einträge zu 'planned'...")
+                app.logger.info(f"Migriere {len(old_entries)} alte 'X'-Einträge zu 'planned'...")
                 for entry in old_entries:
                     entry.type = 'planned'
                 db.session.commit()
     except Exception as e:
-        print(f"WARNUNG: Migrations-Fehler (X->Planned): {e}")
+        app.logger.error(f"Migrations-Fehler (X->Planned): {e}")
 
 def auto_convert_expired_planned_days():
     try:
@@ -76,7 +125,19 @@ def auto_convert_expired_planned_days():
                     pass
         db.session.commit()
     except Exception as e:
-        print(f"Auto-Convert Fehler: {e}")
+        app.logger.error(f"Auto-Convert Fehler: {e}", exc_info=True)
+
+
+# --- VALIDIERUNGS-HELPER (3. API Sicherheit) ---
+def is_valid_date(date_str):
+    return bool(re.match(r'^\d{4}-\d{2}-\d{2}$', str(date_str)))
+
+def is_valid_time(time_str):
+    if not time_str: return True
+    return bool(re.match(r'^([01]\d|2[0-3]):([0-5]\d)$', str(time_str)))
+
+VALID_TYPES = ['home', 'office', 'dr', 'planned', 'sick', 'vacation', 'glz', '']
+
 
 # --- APP STARTUP ---
 with app.app_context():
@@ -85,24 +146,20 @@ with app.app_context():
         db.session.add(Settings())
         db.session.commit()
     migrate_x_to_planned()
+    app.logger.info("Anwendung erfolgreich gestartet.")
 
-# --- REFACTORED LOGIC (Testable) ---
+
+# --- REFACTORED LOGIC ---
 def parse_pdf_content(file_obj):
-    """
-    Liest ein PDF (file-like object) und extrahiert die Buchungen.
-    FIX: Unterstützt jetzt auch mehrzeilige Einträge pro Tag (z.B. Reisezeit in neuer Zeile).
-    """
     TYPE_MAP = {
         "Mobil": "home", "Telearb": "home", "anwesend": "office", 
         "Krank": "sick", "Urlaub": "vacation", "Erholungs": "vacation", "Gleitzeit": "glz", 
         "Dienstreise": "dr", "Fortbildung": "dr", "Reisezeit": "dr",
         "BUCHUNG FEHLT": "missing"
     }
-    
     extracted_entries = []
     
     with pdfplumber.open(file_obj) as pdf:
-        # Monat/Jahr ermitteln
         first_page_text = pdf.pages[0].extract_text()
         match_my = re.search(r'Monat:?\s*([a-zA-ZäöüÄÖÜ]+)\s*[-_]?\s*(\d{4})', first_page_text)
         if not match_my:
@@ -113,9 +170,8 @@ def parse_pdf_content(file_obj):
         year = int(match_my.group(2))
         
         daily_data = {}
-        curr_day = None  # WICHTIG: Zustand merken für Folgezeilen
+        curr_day = None
 
-        # Seiten iterieren
         for page in pdf.pages:
             tables = page.extract_tables()
             for table in tables:
@@ -123,50 +179,36 @@ def parse_pdf_content(file_obj):
                     if not row or len(row) < 2: continue
                     col0 = str(row[0] or "")
                     
-                    # 1. Prüfen: Ist das eine neue Tages-Zeile? (z.B. "09 FR")
                     dm = re.search(r'(\d{2})\s+(MO|DI|MI|DO|FR|SA|SO)', col0)
-                    
                     if dm:
-                        curr_day = int(dm.group(1)) # Neuer Tag gefunden
+                        curr_day = int(dm.group(1))
                     elif curr_day is None:
-                        # Wir haben noch keinen Tag gefunden (Header-Zeilen etc.), überspringen
                         continue
-                    # Wenn dm False ist, aber curr_day existiert -> Es ist eine Folgezeile zum gleichen Tag!
 
                     if curr_day not in daily_data: daily_data[curr_day] = []
                     
-                    # Ganze Zeile als Text für Regex
                     full_row_text = " ".join([str(c) for c in row if c])
                     
-                    # Typ erkennen
                     found_type = None
                     for k, v in TYPE_MAP.items():
                         if k in full_row_text: found_type = v
                     
-                    # Zeiten erkennen
                     times = re.findall(r'(\d{2}:\d{2})', full_row_text)
                     if times and all(t == "00:00" for t in times): times = []
 
-                    # Logik: Eintrag erstellen
                     entry = {'type': None, 'times': []}
-                    
                     if found_type == "missing":
-                        entry['type'] = '' # Kein Typ
+                        entry['type'] = ''
                         entry['comment'] = "Buchung fehlt (PDF)"
                     elif times and len(times) >= 2:
-                        # WICHTIG: Wenn wir Zeiten haben, aber keinen Typ, nehmen wir Office
-                        # Außer es ist eine reine Zeitbuchung ohne Text (selten), 
-                        # aber "Reisezeit" hat ja einen Typ gefunden.
                         entry['type'] = found_type if found_type else "office"
                         entry['times'] = times
                     elif found_type in ["vacation", "sick", "glz"]:
                         entry['type'] = found_type
                     
-                    # Nur speichern, wenn wir was sinnvolles gefunden haben
                     if entry['type'] is not None or entry.get('comment'):
                         daily_data[curr_day].append(entry)
 
-        # Daten flachklopfen und Datumsobjekte erzeugen
         for d, blocks in daily_data.items():
             try:
                 date_obj = date(year, month, d)
@@ -180,10 +222,11 @@ def parse_pdf_content(file_obj):
                     }
                     extracted_entries.append(final_entry)
             except ValueError:
-                # Schutz gegen ungültige Tage (z.B. 31. Februar falls Parsing spinnt)
                 continue
                 
     return extracted_entries
+
+
 # --- API ROUTEN ---
 
 @app.route('/')
@@ -195,16 +238,24 @@ def handle_settings():
     settings = db.session.query(Settings).first()
     if request.method == 'POST':
         data = request.json
-        settings.weekly_hours = float(data.get('weekly_hours', 39))
-        active_list = data.get('active_weekdays', [0,1,2,3,4])
-        clean_list = [str(i) for i in active_list if isinstance(i, int) and 0 <= i <= 6]
-        settings.active_weekdays = ",".join(clean_list)
-        settings.ho_quota_percent = int(data.get('ho_quota_percent', 60))
-        settings.hide_weekends = bool(data.get('hide_weekends', True))
-        settings.default_start_time = normalize_time_str(data.get('default_start_time', '08:00'))
-        settings.auto_convert_planned = bool(data.get('auto_convert_planned', True))
-        db.session.commit()
-        return jsonify({"success": True})
+        if not data: return jsonify({"success": False, "message": "Keine Daten"}), 400
+        
+        try:
+            settings.weekly_hours = float(data.get('weekly_hours', 39))
+            active_list = data.get('active_weekdays', [0,1,2,3,4])
+            clean_list = [str(i) for i in active_list if isinstance(i, int) and 0 <= i <= 6]
+            settings.active_weekdays = ",".join(clean_list)
+            settings.ho_quota_percent = int(data.get('ho_quota_percent', 60))
+            settings.hide_weekends = bool(data.get('hide_weekends', True))
+            
+            def_start = data.get('default_start_time', '08:00')
+            settings.default_start_time = normalize_time_str(def_start) if def_start else '08:00'
+            
+            settings.auto_convert_planned = bool(data.get('auto_convert_planned', True))
+            db.session.commit()
+            return jsonify({"success": True})
+        except ValueError:
+            return jsonify({"success": False, "message": "Ungültiges Datenformat"}), 400
     
     active_list = [int(x) for x in settings.active_weekdays.split(',')] if settings.active_weekdays else [0,1,2,3,4]
     return jsonify({ 
@@ -367,6 +418,14 @@ def get_year_data(year):
 @app.route('/api/entry', methods=['POST'])
 def save_entry():
     d = request.json
+    if not d: return jsonify({"success": False, "message": "Keine Daten empfangen"}), 400
+    
+    # Validierung
+    if not is_valid_date(d.get('date')):
+        return jsonify({"success": False, "message": "Ungültiges Datum"}), 400
+    if d.get('type') not in VALID_TYPES:
+        return jsonify({"success": False, "message": "Ungültiger Typ"}), 400
+    
     if d.get('id'):
         entry = db.session.get(WorkEntry, d.get('id'))
         if not entry: return jsonify({"success": False, "message": "Nicht gefunden"}), 404
@@ -379,7 +438,7 @@ def save_entry():
     entry.end_time = normalize_time_str(d.get('end'))
     entry.comment = d.get('comment')
     
-    if not entry.type and not entry.start_time:
+    if not entry.type and not entry.start_time and not entry.comment:
          db.session.delete(entry)
          db.session.commit()
          return jsonify({"success": True, "id": None})
@@ -399,33 +458,56 @@ def delete_entry(id):
 def plan_series():
     d = request.json
     try:
+        if not is_valid_date(d.get('start')) or not is_valid_date(d.get('end')):
+            return jsonify({"success": False, "message": "Ungültiger Zeitraum"}), 400
+            
         start_date = datetime.strptime(d['start'], '%Y-%m-%d').date()
         end_date = datetime.strptime(d['end'], '%Y-%m-%d').date()
         weekdays = [int(x) for x in d['weekdays']]
-        target_type = d['type']
+        target_type = d.get('type')
         overwrite = d.get('overwrite', False)
+        
+        if target_type not in VALID_TYPES:
+            return jsonify({"success": False, "message": "Ungültiger Typ"}), 400
+        
+        # --- 4. PERFORMANCE OPTIMIERUNG (N+1 Query fix) ---
+        # Hole alle existierenden Einträge in diesem Zeitraum mit EINER Datenbank-Anfrage
+        all_existing = WorkEntry.query.filter(WorkEntry.date >= str(start_date), WorkEntry.date <= str(end_date)).all()
+        existing_by_date = {}
+        for entry in all_existing:
+            if entry.date not in existing_by_date:
+                existing_by_date[entry.date] = []
+            existing_by_date[entry.date].append(entry)
         
         curr = start_date
         while curr <= end_date:
             if curr.weekday() in weekdays:
                 s_date = str(curr)
                 he_hols = holidays.DE(state='HE', years=curr.year)
+                
                 if curr in he_hols and not (curr.month==12 and curr.day in [24,31]):
                     curr += timedelta(days=1)
                     continue
 
-                existing = WorkEntry.query.filter_by(date=s_date).all()
-                if overwrite and existing:
-                    for e in existing: db.session.delete(e)
-                    existing = []
+                # Suche im RAM statt in der Datenbank
+                existing_entries_for_day = existing_by_date.get(s_date, [])
                 
-                if not existing:
+                if overwrite and existing_entries_for_day:
+                    for e in existing_entries_for_day: 
+                        db.session.delete(e)
+                    existing_entries_for_day = []
+                
+                if not existing_entries_for_day:
                     db.session.add(WorkEntry(date=s_date, type=target_type))
+            
             curr += timedelta(days=1)
+            
         db.session.commit()
+        app.logger.info(f"Serienplaner ausgeführt: {start_date} bis {end_date}")
         return jsonify({"success": True})
+        
     except Exception as e:
-        print(f"ERROR [custom-holidays]: {e}")
+        app.logger.error(f"Fehler im Serienplaner: {e}", exc_info=True)
         return jsonify({"success": False, "message": "Ein Fehler ist beim Speichern aufgetreten."}), 400
 
 @app.route('/api/custom-holidays', methods=['GET', 'POST'])
@@ -435,6 +517,9 @@ def handle_custom_holidays():
         return jsonify(sorted([{'id': h.id, 'date': h.date, 'name': h.name, 'hours': h.hours or 0} for h in hols], key=lambda x: x['date']))
     
     data = request.json
+    if not is_valid_date(data.get('date')):
+        return jsonify({"success": False, "message": "Ungültiges Datum"}), 400
+        
     if not CustomHoliday.query.filter_by(date=data['date']).first():
         db.session.add(CustomHoliday(date=data['date'], name=data['name'], hours=float(data.get('hours', 0))))
         db.session.commit()
@@ -450,22 +535,20 @@ def delete_custom_holiday(id):
 
 @app.route('/api/import/pdf', methods=['POST'])
 def import_pdf():
-    if 'file' not in request.files: return jsonify({"success": False, "message": "Keine Datei"}), 400
+    if 'file' not in request.files: 
+        return jsonify({"success": False, "message": "Keine Datei"}), 400
+        
     file = request.files['file']
     overwrite = request.form.get('overwrite') == 'true'
     
-    print(f"--- START IMPORT (Overwrite: {overwrite}) ---")
+    app.logger.info(f"--- START IMPORT (Overwrite: {overwrite}) ---")
 
     try:
-        # DB-Settings & Helper laden (für Filterung)
         settings = Settings.query.first()
-        
-        # 1. Parsing Logik (DB-Unabhängig!)
-        # Ruft die neue testbare Funktion auf
         extracted_entries = parse_pdf_content(file)
         
-        # Helper für Feiertage (Jahr aus erstem Eintrag nehmen)
         if not extracted_entries:
+             app.logger.info("PDF Import: Keine Einträge gefunden.")
              return jsonify({"success": True, "message": "Keine Einträge gefunden."})
              
         y = extracted_entries[0]['date'].year
@@ -474,10 +557,7 @@ def import_pdf():
         he_holidays[datetime(y, 12, 31).date()] = "Silvester"
         custom_map = {datetime.strptime(c.date, "%Y-%m-%d").date(): c for c in CustomHoliday.query.all()}
 
-        # 2. Speichern in DB
         cnt = 0
-        
-        # Gruppieren nach Datum für Überschreiben
         entries_by_date = {}
         for e in extracted_entries:
             d = e['date']
@@ -486,34 +566,23 @@ def import_pdf():
             
         for date_obj, entries in entries_by_date.items():
             date_iso = str(date_obj)
-            
-            # Prüfen ob Arbeitstag (nur filtern wenn keine Zeiten da sind)
             day_info = get_day_info(date_obj, settings, he_holidays, custom_map)
             is_free_day = not day_info["is_workday"]
             
             valid_entries = []
             for e in entries:
-                # Behalte Eintrag wenn:
-                # 1. Er Zeiten hat (z.B. Arbeit am Sonntag)
-                # 2. Es ein Arbeitstag ist
-                # 3. Es ein expliziter "missing" Eintrag ist (hat Kommentar)
                 has_times = bool(e['start'] and e['end'])
                 has_comment = bool(e['comment'])
-                
                 if has_times or not is_free_day or has_comment:
                     valid_entries.append(e)
             
             if not valid_entries: continue
             
-            # Löschen bei Overwrite
             if overwrite:
                 WorkEntry.query.filter_by(date=date_iso).delete()
             
-            # Einfügen
             for e in valid_entries:
-                # Dubletten-Check (nur wenn nicht Overwrite)
                 if not overwrite:
-                    # Einfacher Check: Existiert Typ an diesem Tag?
                     if e['type'] and WorkEntry.query.filter_by(date=date_iso, type=e['type']).first():
                         continue
                 
@@ -525,11 +594,11 @@ def import_pdf():
                 cnt += 1
 
         db.session.commit()
-        print(f"--- IMPORT FERTIG: {cnt} Einträge ---")
+        app.logger.info(f"--- IMPORT FERTIG: {cnt} Einträge ---")
         return jsonify({"success": True, "message": f"{cnt} Einträge importiert."})
             
     except Exception as e: 
-        print(f"IMPORT ERROR: {e}")
+        app.logger.error(f"IMPORT ERROR: {e}", exc_info=True)
         return jsonify({"success": False, "message": f"Fehler: {str(e)}"}), 500
 
 if __name__ == '__main__':
