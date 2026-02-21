@@ -74,33 +74,35 @@ def test_edit_custom_holiday(client):
     initial_holidays = client.get('/api/custom-holidays').get_json()
     initial_count = len(initial_holidays)
 
-    # 1. Feiertag anlegen
-    payload_create = {"date": "2025-05-01", "name": "Tag der Arbeit", "hours": 0}
+    # 1. Feiertag anlegen (Datum weit in der Zukunft, um Konflikte zu vermeiden)
+    payload_create = {"date": "2099-05-01", "name": "Tag der Arbeit", "hours": 0}
     client.post('/api/custom-holidays', json=payload_create)
 
-    # ID herausfinden
+    # Prüfen, ob er angelegt wurde
     holidays_after_create = client.get('/api/custom-holidays').get_json()
     assert len(holidays_after_create) == initial_count + 1
-    
-    new_holiday = next(h for h in holidays_after_create if h['name'] == "Tag der Arbeit")
-    h_id = new_holiday['id']
 
-    # 2. Feiertag bearbeiten (Name UND Datum ändern)
-    # Wenn das Backend kaputt ist, wird es diesen Eintrag nicht per ID finden
-    # und stattdessen am 02.05. ein DUPLIKAT anlegen!
-    payload_edit = {"id": h_id, "date": "2025-05-02", "name": "Tag der Arbeit (Geändert)", "hours": 4.0}
-    client.post('/api/custom-holidays', json=payload_edit)
+    # ID des neuen Feiertags herausfinden
+    created_holiday = next(h for h in holidays_after_create if h["date"] == "2099-05-01")
+    holiday_id = created_holiday["id"]
 
-    # 3. Prüfen, ob er sauber überschrieben wurde (und kein Duplikat entstand!)
-    holidays_after_edit = client.get('/api/custom-holidays').get_json()
-    assert len(holidays_after_edit) == initial_count + 1
+    # 2. Feiertag bearbeiten (Datum und Name ändern)
+    payload_update = {
+        "id": holiday_id, 
+        "date": "2099-05-02", 
+        "name": "Geänderter Feiertag", 
+        "hours": 4.0
+    }
+    client.post('/api/custom-holidays', json=payload_update)
+
+    # 3. Überprüfen, ob die Änderung korrekt übernommen wurde
+    holidays_after_update = client.get('/api/custom-holidays').get_json()
     
-    updated_holiday = next(h for h in holidays_after_edit if h['id'] == h_id)
-    assert updated_holiday['name'] == "Tag der Arbeit (Geändert)"
-    assert updated_holiday['date'] == "2025-05-02"
-    assert updated_holiday['hours'] == 4.0
+    # Die Gesamtanzahl darf sich beim Bearbeiten nicht verändern
+    assert len(holidays_after_update) == initial_count + 1
     
-    # 4. Cleanup
-    with app.app_context():
-        CustomHoliday.query.filter_by(id=h_id).delete()
-        db.session.commit()
+    # Den bearbeiteten Feiertag holen und Werte prüfen
+    updated_holiday = next(h for h in holidays_after_update if h["id"] == holiday_id)
+    assert updated_holiday["date"] == "2099-05-02"
+    assert updated_holiday["name"] == "Geänderter Feiertag"
+    assert updated_holiday["hours"] == 4.0

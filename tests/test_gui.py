@@ -75,11 +75,10 @@ def test_edit_day_dialog_buttons(page: Page):
     dialog = page.locator(".v-overlay__content").filter(has=page.locator(".v-card-title"))
     expect(dialog).to_be_visible()
     
-    # Buttons der Schnellauswahl prüfen
-    expect(dialog.locator("button").filter(has_text="Home Office")).to_be_visible()
-    expect(dialog.locator("button").filter(has_text="Büro")).to_be_visible()
+    # FIX: exact=True zwingt Playwright, exakt "Home Office" zu matchen (nicht "Home Office ⏳")
+    expect(dialog.get_by_role("button", name="Home Office", exact=True)).to_be_visible()
+    expect(dialog.get_by_role("button", name="Büro", exact=True)).to_be_visible()
 
-    # GEÄNDERT: Sucht nun nach dem neuen Wording "Offizieller PDF Saldo"
     expect(dialog.get_by_text("Offizieller PDF Saldo")).to_be_visible()
 
 def test_pdf_import_element_exists(page: Page):
