@@ -68,7 +68,6 @@
     .day-row { transition: background-color 0.2s; border-bottom: 1px solid rgba(128,128,128, 0.05); }
     .day-row:hover { background-color: rgba(128,128,128, 0.08) !important; }
     
-    /* HEUTIGER TAG HIGHLIGHT */
     .day-row.is-today td { background-color: rgba(33, 150, 243, 0.08) !important; }
     .day-row.is-today td:first-child { box-shadow: inset 3px 0 0 0 #2196F3; }
     .cal-cell.is-today { border: 2px solid #2196F3; background-color: rgba(33, 150, 243, 0.05); }
@@ -726,6 +725,7 @@
             } catch(e) { console.error(e); } 
         },
 
+        // ERWEITERT: Chart.js Tooltips und Interaktivität
         renderCharts() {
             if (!window.Chart) return;
             
@@ -746,13 +746,27 @@
                     datasets: [{
                         data: [this.yearTotalHo, this.yearTotalOffice, this.yearTotalVacation],
                         backgroundColor: ['#4CAF50', '#FFC107', '#9C27B0'],
-                        borderWidth: 0
+                        borderWidth: 0,
+                        hoverOffset: 4 // NEU: Pop-Out Effekt beim Drüberfahren
                     }]
                 },
                 options: {
                     responsive: true, maintainAspectRatio: false,
                     cutout: '65%',
-                    plugins: { legend: { position: 'right', labels: { boxWidth: 12 } } }
+                    plugins: { 
+                        legend: { position: 'right', labels: { boxWidth: 12 } },
+                        tooltip: { // NEU: Benutzerdefinierter Tooltip
+                            callbacks: {
+                                label: function(context) {
+                                    let val = context.parsed || 0;
+                                    let dataset = context.chart.data.datasets[context.datasetIndex];
+                                    let total = dataset.data.reduce((acc, current) => acc + current, 0);
+                                    let percentage = total > 0 ? Math.round((val / total) * 100) : 0;
+                                    return ` ${context.label}: ${val} Tage (${percentage}%)`;
+                                }
+                            }
+                        }
+                    }
                 }
             });
 
@@ -764,12 +778,23 @@
                         label: 'HO Tage',
                         data: this.yearData.map(d => d.days_ho),
                         backgroundColor: '#4CAF50',
+                        hoverBackgroundColor: '#66BB6A', // NEU: Leuchteffekt
                         borderRadius: 4
                     }]
                 },
                 options: {
                     responsive: true, maintainAspectRatio: false,
-                    plugins: { legend: { display: false } },
+                    interaction: { mode: 'index', intersect: false }, // NEU: Reagiert schon, wenn man in der Nähe des Balkens ist
+                    plugins: { 
+                        legend: { display: false },
+                        tooltip: { // NEU: Benutzerdefinierter Tooltip
+                            callbacks: {
+                                label: function(context) {
+                                    return ` ${context.parsed.y} Home Office Tage`;
+                                }
+                            }
+                        }
+                    },
                     scales: { 
                         y: { beginAtZero: true, suggestedMax: 20, ticks: { stepSize: 5 } },
                         x: { grid: { display: false } }
