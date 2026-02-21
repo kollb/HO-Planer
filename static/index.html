@@ -235,7 +235,7 @@
                                 <thead>
                                     <tr style="background-color: rgba(128,128,128,0.05);">
                                         <th class="text-left font-weight-bold text-uppercase opacity-70">Datum</th>
-                                        <th class="text-left font-weight-bold text-uppercase opacity-70" style="width:170px">Status</th>
+                                        <th class="text-left font-weight-bold text-uppercase opacity-70" style="width:195px">Status</th>
                                         <th class="text-center font-weight-bold text-uppercase opacity-70" style="width:100px">Start</th>
                                         <th class="text-center font-weight-bold text-uppercase opacity-70" style="width:100px">Ende</th>
                                         <th class="text-center font-weight-bold text-uppercase opacity-70" style="width:140px">GLZ Saldo</th>
@@ -564,7 +564,7 @@
           seriesDialog: { show: false, start: '', end: '', weekdays: [4], type: 'planned', overwrite: false },
           customHolidays: [], newCustomHoliday: { id: null, date: '', name: '', hours: 0 },
           snackbar: { show: false, text: '', color: 'success' },
-          types: [{ title: 'Home Office', value: 'home' }, { title: 'Büro', value: 'office' }, { title: 'Geplant (HO)', value: 'planned' }, { title: 'Krank', value: 'sick' }, { title: 'Urlaub', value: 'vacation' }, { title: 'Gleitzeit', value: 'glz' }, { title: 'Dienstreise', value: 'dr' }, { title: 'Leer', value: '' }]
+          types: [{ title: 'Home Office', value: 'home' }, { title: 'Büro', value: 'office' }, { title: 'Home Office ⏳', value: 'planned' }, { title: 'Krank', value: 'sick' }, { title: 'Urlaub', value: 'vacation' }, { title: 'Gleitzeit', value: 'glz' }, { title: 'Dienstreise', value: 'dr' }, { title: 'Leer', value: '' }]
       }},
       computed: {
         currentYear() { return this.currentDate.getFullYear() },
