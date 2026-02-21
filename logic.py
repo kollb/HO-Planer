@@ -29,7 +29,7 @@ def normalize_time_str(t_str):
 def calculate_net_hours(start_str, end_str):
     """
     Berechnet die Netto-Arbeitszeit. 
-    WICHTIG: Zieht Pausen gemäß Arbeitszeitgesetz ab.
+    WICHTIG: Zieht Pausen gemäß Arbeitszeitgesetz ab inkl. dynamischer Kappungsgrenzen.
     """
     start_str = normalize_time_str(start_str)
     end_str = normalize_time_str(end_str)
@@ -50,14 +50,21 @@ def calculate_net_hours(start_str, end_str):
         # Wichtig: total_seconds gibt float zurück
         hours_worked = diff.total_seconds() / 3600.0
         
-        # Pausenabzug (Initialisierung mit Brutto)
-        net_hours = hours_worked
-        
-        # Strikte Prüfung auf Float-Werte
-        if hours_worked > 9.0:
-            net_hours -= 0.75 
-        elif hours_worked > 6.0:
-            net_hours -= 0.50
+        # Pausenkappung nach ArbZG:
+        if hours_worked <= 6.0:
+            net_hours = hours_worked
+        elif hours_worked <= 6.5:
+            # Präsenz zwischen 6.0h und 6.5h -> Netto wird auf 6.0h gedeckelt (füllt die 30 Min. Pause)
+            net_hours = 6.0
+        elif hours_worked <= 9.5:
+            # Präsenz bis 9.5h -> 30 Min Pause abziehen (ergibt max. 9.0h Netto)
+            net_hours = hours_worked - 0.5
+        elif hours_worked <= 9.75:
+            # Präsenz zwischen 9.5h und 9.75h -> Netto wird auf 9.0h gedeckelt (füllt die restlichen 15 Min.)
+            net_hours = 9.0
+        else:
+            # Präsenz über 9.75h -> Volle 45 Min Pause abziehen
+            net_hours = hours_worked - 0.75
             
         return max(0.0, round(net_hours, 2))
     except Exception as e:
@@ -70,10 +77,11 @@ def calculate_gross_time_needed(target_net_hours):
     """
     if target_net_hours <= 6.0:
         return target_net_hours
-    elif target_net_hours <= 8.25: # Bis 9h Brutto (8.25 Netto + 0.75 Pause ist falsch, hier gilt 0.5)
-        # Korrektur: 8.5h Brutto - 0.5 Pause = 8.0 Netto
+    elif target_net_hours <= 9.0: 
+        # Bis zu einem Ziel von 9,0h Netto reicht eine Pause von 0,5h aus
         return target_net_hours + 0.5
     else:
+        # Alles über 9,0h Netto durchbricht zwingend die 9,5h Brutto-Marke -> 0,75h Pause nötig
         return target_net_hours + 0.75
 
 def get_day_info(date_obj, settings, he_holidays, custom_map):

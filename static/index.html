@@ -4,13 +4,16 @@
   <title>Home Office Planer</title>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, minimal-ui">
+  <meta name="theme-color" content="#121212">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22%231976D2%22><path d=%22M10,20V14H14V20H19V12H22L12,3L2,12H5V20H10Z%22/></svg>">
   
   <link href="https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@400;500;700&family=Roboto:wght@100;300;400;500;700;900&display=swap" rel="stylesheet">
   <link href="https://cdn.jsdelivr.net/npm/@mdi/font@6.x/css/materialdesignicons.min.css" rel="stylesheet">
   <link href="https://cdn.jsdelivr.net/npm/vuetify@3.x/dist/vuetify.min.css" rel="stylesheet">
+  
   <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/vuetify@3.x/dist/vuetify.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   
   <style>
     [v-cloak] { display: none !important; }
@@ -65,7 +68,7 @@
     .day-row { transition: background-color 0.2s; border-bottom: 1px solid rgba(128,128,128, 0.05); }
     .day-row:hover { background-color: rgba(128,128,128, 0.08) !important; }
     
-    /* HEUTIGER TAG HIGHLIGHT (Dezent & Elegant) */
+    /* HEUTIGER TAG HIGHLIGHT */
     .day-row.is-today td { background-color: rgba(33, 150, 243, 0.08) !important; }
     .day-row.is-today td:first-child { box-shadow: inset 3px 0 0 0 #2196F3; }
     .cal-cell.is-today { border: 2px solid #2196F3; background-color: rgba(33, 150, 243, 0.05); }
@@ -85,7 +88,7 @@
         .cal-date { font-size: 0.8rem; margin: 0; }
         .dash-card { padding: 8px; }
         .stat-value { font-size: 0.9rem; }
-        .row-actions { opacity: 1; } /* Auf Mobile immer Buttons zeigen */
+        .row-actions { opacity: 1; } 
     }
   </style>
 </head>
@@ -153,6 +156,7 @@
       </v-navigation-drawer>
 
       <v-app-bar color="background" density="compact" elevation="0" border="bottom">
+        <v-progress-linear v-if="isSaving" indeterminate color="primary" class="position-absolute" style="top: 0; width: 100%; z-index: 9999;"></v-progress-linear>
         <v-app-bar-nav-icon @click.stop="drawer = !drawer" v-if="$vuetify.display.mobile"></v-app-bar-nav-icon>
         <v-spacer></v-spacer>
         <v-btn icon @click="toggleTheme" class="mr-2" variant="tonal" size="small" color="grey">
@@ -162,9 +166,9 @@
 
       <v-main>
         <v-container fluid class="status-bar" v-if="viewMode !== 'year'">
-            <div class="d-flex flex-wrap align-center justify-space-between" style="max-width: 1400px; gap: 16px;">
+            <div class="d-flex flex-column flex-md-row align-center justify-space-between w-100" style="max-width: 1400px; gap: 12px;">
                 
-                <div class="d-flex align-center px-2">
+                <div class="d-flex align-center justify-center w-100 w-md-auto mb-1 mb-md-0 px-2">
                     <v-btn icon variant="text" size="small" @click="changeMonth(-1)"><v-icon>mdi-chevron-left</v-icon></v-btn>
                     <div class="font-weight-bold mx-2 text-center" style="line-height: 1.1; min-width: 120px;">
                         <div class="text-h6 font-weight-bold text-uppercase">[[ currentMonthName ]]</div>
@@ -173,16 +177,16 @@
                     <v-btn icon variant="text" size="small" @click="changeMonth(1)"><v-icon>mdi-chevron-right</v-icon></v-btn>
                 </div>
                 
-                <div class="d-flex flex-wrap flex-grow-1 justify-center" style="gap: 12px;">
-                    <div class="dash-card">
+                <div class="d-flex flex-wrap justify-center flex-grow-1 w-100 w-md-auto" style="gap: 8px;">
+                    <div class="dash-card flex-grow-1 flex-md-grow-0">
                         <div class="stat-label"><v-icon size="x-small" class="mr-1">mdi-calendar-check</v-icon>Arbeitstage in<br>diesem Monat</div>
                         <div class="stat-value text-center mono-num">[[ stats.workdays_month ]]</div>
                     </div>
-                    <div class="dash-card">
+                    <div class="dash-card flex-grow-1 flex-md-grow-0">
                         <div class="stat-label"><v-icon size="x-small" class="mr-1">mdi-office-building</v-icon>Geleistete<br>Bürostd.</div>
                         <div class="stat-value text-center text-amber-darken-2 mono-num">[[ formatNum(stats.total_office_made) ]] <span class="text-caption opacity-50">h</span></div>
                     </div>
-                    <div class="dash-card" :style="stats.current_glz >= 0 ? 'border-left: 3px solid #4CAF50;' : 'border-left: 3px solid #FF5252;'">
+                    <div class="dash-card flex-grow-1 flex-md-grow-0" :style="stats.current_glz >= 0 ? 'border-left: 3px solid #4CAF50;' : 'border-left: 3px solid #FF5252;'">
                         <div class="stat-label"><v-icon size="x-small" class="mr-1">mdi-clock-outline</v-icon>Gleitzeit<br>Saldo</div>
                         <div class="stat-value text-center mono-num" :class="stats.current_glz >= 0 ? 'text-green' : 'text-red-accent-2'">
                             <span v-if="stats.current_glz > 0">+</span>[[ formatNum(stats.current_glz) ]] <span class="text-caption opacity-50 font-weight-regular">h</span>
@@ -190,14 +194,17 @@
                     </div>
                 </div>
 
-                <div class="dash-card d-flex align-center" style="min-width: 250px; flex-grow: 1; max-width: 300px; gap: 16px;">
+                <div class="dash-card d-flex align-center w-100 w-md-auto mt-1 mt-md-0" style="min-width: 250px; max-width: 400px; gap: 16px;">
                     <v-progress-circular :model-value="quotaPercentage" :color="getQuotaColor" size="50" width="6" bg-color="rgba(128,128,128,0.2)">
                         <span class="text-caption font-weight-bold">[[ Math.round(quotaPercentage) ]]%</span>
                     </v-progress-circular>
                     <div class="d-flex flex-column justify-center w-100">
                         <span class="stat-label justify-start mb-1 text-left">Home Office Budget</span>
                         <div class="d-flex justify-space-between align-end">
-                            <div class="mono-num font-weight-bold text-subtitle-1" :class="budgetStateColor" style="line-height: 1;"><span v-if="budgetRemainingDays > 0">+</span>[[ formatOneDecimal(budgetRemainingDays) ]] <span class="text-caption opacity-50">Tage</span></div>
+                            <div class="d-flex flex-column">
+                                <div class="mono-num font-weight-bold text-subtitle-1" :class="budgetStateColor" style="line-height: 1;"><span v-if="budgetRemainingDays > 0">+</span>[[ formatOneDecimal(budgetRemainingDays) ]] <span class="text-caption opacity-50">Tage</span></div>
+                                <div class="text-caption opacity-60 mono-num mt-1">[[ formatNum(budgetRemainingHours) ]] h</div>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -205,173 +212,206 @@
             </div>
         </v-container>
 
-        <v-container fluid class="status-bar py-3 px-4 mb-3" v-else>
-            <div class="d-flex align-center justify-space-between" style="max-width: 1400px;">
-                <div class="d-flex align-center">
+        <v-container fluid class="status-bar" v-else>
+            <div class="d-flex flex-column flex-md-row align-center justify-center w-100" style="max-width: 1400px;">
+                <div class="d-flex align-center justify-center w-100 w-md-auto px-2">
                     <v-btn icon variant="text" size="small" @click="changeYear(-1)"><v-icon>mdi-chevron-left</v-icon></v-btn>
-                    <div class="font-weight-bold mx-2 text-center text-h6" style="min-width: 120px;">[[ currentYear ]]</div>
+                    <div class="font-weight-bold mx-2 text-center" style="line-height: 1.1; min-width: 180px;">
+                        <div class="text-h6 font-weight-bold text-uppercase">Jahresübersicht</div>
+                        <div class="text-caption opacity-60">[[ currentYear ]]</div>
+                    </div>
                     <v-btn icon variant="text" size="small" @click="changeYear(1)"><v-icon>mdi-chevron-right</v-icon></v-btn>
                 </div>
-                <div class="stat-label mb-0 text-h6 opacity-100">Jahresübersicht</div>
             </div>
         </v-container>
 
-        <v-container fluid class="px-4 px-md-6">
+        <v-container fluid class="px-4 px-md-6 pb-12">
             <v-card elevation="0" border min-height="500" rounded="lg" style="max-width: 1400px;">
                 
-                <v-table density="compact" v-if="viewMode === 'list'" class="d-none d-md-block" style="width: 100%;">
-                    <template v-slot:default>
-                        <thead>
-                            <tr style="background-color: rgba(128,128,128,0.05);">
-                                <th class="text-left font-weight-bold text-uppercase opacity-70">Datum</th>
-                                <th class="text-left font-weight-bold text-uppercase opacity-70" style="width:160px">Status</th>
-                                <th class="text-center font-weight-bold text-uppercase opacity-70" style="width:100px">Start</th>
-                                <th class="text-center font-weight-bold text-uppercase opacity-70" style="width:100px">Ende</th>
-                                <th class="text-center font-weight-bold text-uppercase opacity-70" style="width:140px">GLZ Saldo</th>
-                                <th class="text-left font-weight-bold text-uppercase opacity-70">Notiz</th>
-                                <th style="width: 70px;"></th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <template v-for="item in items" :key="item ? item.date : 'list-desk'">
-                                <template v-if="item && item.row_type === 'day' && (!settings.hide_weekends || !isWeekend(item))">
-                                    <tr v-for="(entry, index) in item.entries" :key="index"
-                                        :class="{'weekend': isWeekend(item), 'off-day-row': item.is_off_day, 'holiday-row': item.is_holiday, 'is-today': isToday(item.date), 'day-row': true}">
-                                        
-                                        <td class="py-2" style="width: 180px; vertical-align: middle;">
-                                            <div v-if="index === 0">
-                                                <div class="font-weight-bold d-flex align-center" :class="{'text-primary': isToday(item.date)}">
-                                                    [[ item.day_num ]]. <span class="opacity-70 font-weight-regular ml-1">[[ getGermanDay(item.weekday_index) ]]</span>
-                                                    <v-chip v-if="isToday(item.date)" size="x-small" color="primary" variant="flat" class="ml-2 font-weight-bold px-2" style="height: 16px; font-size: 0.6rem;">HEUTE</v-chip>
-                                                </div>
-                                                <div v-if="item.is_holiday" class="text-caption text-red-lighten-1 font-weight-bold mt-n1">[[ item.holiday_name ]]</div>
-                                            </div>
-                                        </td>
-
-                                        <td class="py-1">
-                                            <v-select v-model="entry.type" :items="types" item-title="title" item-value="value" variant="plain" density="compact" hide-details class="inv-input inv-input-left" @update:model-value="onEntryChange(item, entry)"></v-select>
-                                        </td>
-                                        
-                                        <td>
-                                            <v-text-field v-if="needsTimeInput(entry.type)" v-model="entry.start" placeholder="-" variant="plain" density="compact" hide-details class="inv-input mono-num font-weight-medium" @change="saveSingleEntry(item.date, entry)"></v-text-field>
-                                        </td>
-                                        
-                                        <td>
-                                            <v-text-field v-if="needsTimeInput(entry.type)" v-model="entry.end" placeholder="-" variant="plain" density="compact" hide-details class="inv-input mono-num font-weight-medium" @change="saveSingleEntry(item.date, entry)"></v-text-field>
-                                        </td>
-                                        
-                                        <td class="text-center mono-num" style="vertical-align: middle;">
-                                            <div v-if="index === 0" class="font-weight-bold" :class="item.glz_saldo >= 0 ? 'text-green' : 'text-red'">
-                                                <span v-if="item.glz_saldo > 0">+</span>[[ formatNum(item.glz_saldo) ]] <span class="text-caption opacity-50 font-weight-regular">h</span>
-                                                <v-icon v-if="item.glz_override !== null" size="x-small" color="blue-grey" class="ml-1 opacity-80" title="Offizieller GLZ Anker">mdi-anchor</v-icon>
-                                            </div>
-                                        </td>
-
-                                        <td>
-                                            <v-text-field v-model="entry.comment" placeholder="..." variant="plain" density="compact" hide-details class="inv-input inv-input-left opacity-70" @change="saveSingleEntry(item.date, entry)"></v-text-field>
-                                        </td>
-                                        
-                                        <td style="vertical-align: middle; padding-right: 8px;">
-                                            <div class="row-actions d-flex justify-end">
-                                                <v-btn v-if="index === 0" icon size="small" variant="text" color="grey-darken-1" @click="openEditDialog(item)"><v-icon size="small">mdi-pencil</v-icon></v-btn>
-                                                <v-btn v-else icon size="small" color="error" variant="text" @click="deleteEntry(item, index)"><v-icon size="small">mdi-close</v-icon></v-btn>
-                                            </div>
-                                        </td>
+                <v-fade-transition hide-on-leave>
+                    <div :key="viewMode">
+                        
+                        <v-table density="compact" v-if="viewMode === 'list'" class="d-none d-md-block" style="width: 100%;">
+                            <template v-slot:default>
+                                <thead>
+                                    <tr style="background-color: rgba(128,128,128,0.05);">
+                                        <th class="text-left font-weight-bold text-uppercase opacity-70">Datum</th>
+                                        <th class="text-left font-weight-bold text-uppercase opacity-70" style="width:160px">Status</th>
+                                        <th class="text-center font-weight-bold text-uppercase opacity-70" style="width:100px">Start</th>
+                                        <th class="text-center font-weight-bold text-uppercase opacity-70" style="width:100px">Ende</th>
+                                        <th class="text-center font-weight-bold text-uppercase opacity-70" style="width:140px">GLZ Saldo</th>
+                                        <th class="text-left font-weight-bold text-uppercase opacity-70">Notiz</th>
+                                        <th style="width: 70px;"></th>
                                     </tr>
-                                </template>
-                                <tr v-else-if="item && item.row_type === 'summary'" class="week-summary-row"><td colspan="2" class="text-right pr-4 text-uppercase opacity-60">KW [[ item.iso_week ]] Gesamt:</td><td colspan="5"><span :class="getWeeklyColor(item.sum, item.target)" class="mono-num font-weight-bold">[[ formatNum(item.sum) ]] / [[ formatNum(item.target) ]] <span class="text-caption opacity-50 font-weight-regular">h</span></span></td></tr>
+                                </thead>
+                                <tbody>
+                                    <template v-for="(item, idx) in items" :key="item.date ? 'list-desk-'+item.date : 'list-desk-sum-'+idx">
+                                        <template v-if="item && item.row_type === 'day' && (!settings.hide_weekends || !isWeekend(item))">
+                                            <tr v-for="(entry, index) in item.entries" :key="index"
+                                                :class="{'weekend': isWeekend(item), 'off-day-row': item.is_off_day, 'holiday-row': item.is_holiday, 'is-today': isToday(item.date), 'day-row': true}">
+                                                
+                                                <td class="py-2" style="width: 180px; vertical-align: middle;">
+                                                    <div v-if="index === 0">
+                                                        <div class="font-weight-bold d-flex align-center" :class="{'text-primary': isToday(item.date)}">
+                                                            [[ item.day_num ]]. <span class="opacity-70 font-weight-regular ml-1">[[ getGermanDay(item.weekday_index) ]]</span>
+                                                            <v-chip v-if="isToday(item.date)" size="x-small" color="primary" variant="flat" class="ml-2 font-weight-bold px-2" style="height: 16px; font-size: 0.6rem;">HEUTE</v-chip>
+                                                        </div>
+                                                        <div v-if="item.is_holiday" class="text-caption text-red-lighten-1 font-weight-bold mt-n1">[[ item.holiday_name ]]</div>
+                                                    </div>
+                                                </td>
+
+                                                <td class="py-1">
+                                                    <v-select v-model="entry.type" :items="types" item-title="title" item-value="value" variant="plain" density="compact" hide-details class="inv-input inv-input-left" @update:model-value="onEntryChange(item, entry)"></v-select>
+                                                </td>
+                                                
+                                                <td>
+                                                    <v-text-field v-if="needsTimeInput(entry.type)" v-model="entry.start" placeholder="-" variant="plain" density="compact" hide-details class="inv-input mono-num font-weight-medium" @update:model-value="debouncedSave(item.date, entry)"></v-text-field>
+                                                </td>
+                                                
+                                                <td>
+                                                    <v-text-field v-if="needsTimeInput(entry.type)" v-model="entry.end" placeholder="-" variant="plain" density="compact" hide-details class="inv-input mono-num font-weight-medium" @update:model-value="debouncedSave(item.date, entry)"></v-text-field>
+                                                </td>
+                                                
+                                                <td class="text-center mono-num" style="vertical-align: middle;">
+                                                    <div v-if="index === 0" class="font-weight-bold" :class="item.glz_saldo >= 0 ? 'text-green' : 'text-red'">
+                                                        <span v-if="item.glz_saldo > 0">+</span>[[ formatNum(item.glz_saldo) ]] <span class="text-caption opacity-50 font-weight-regular">h</span>
+                                                        <v-icon v-if="item.glz_override !== null" size="x-small" color="blue-grey" class="ml-1 opacity-80" title="Offizieller GLZ Anker">mdi-anchor</v-icon>
+                                                    </div>
+                                                </td>
+
+                                                <td>
+                                                    <v-text-field v-model="entry.comment" placeholder="..." variant="plain" density="compact" hide-details class="inv-input inv-input-left opacity-70" @update:model-value="debouncedSave(item.date, entry)"></v-text-field>
+                                                </td>
+                                                
+                                                <td style="vertical-align: middle; padding-right: 8px;">
+                                                    <div class="row-actions d-flex justify-end">
+                                                        <v-btn v-if="index === 0" icon size="small" variant="text" color="grey-darken-1" @click="openEditDialog(item)"><v-icon size="small">mdi-pencil</v-icon></v-btn>
+                                                        <v-btn v-else icon size="small" color="error" variant="text" @click="deleteEntry(item, index)"><v-icon size="small">mdi-close</v-icon></v-btn>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        </template>
+                                        <tr v-else-if="item && item.row_type === 'summary'" class="week-summary-row"><td colspan="2" class="text-right pr-4 text-uppercase opacity-60">KW [[ item.iso_week ]] Gesamt:</td><td colspan="5"><span :class="getWeeklyColor(item.sum, item.target)" class="mono-num font-weight-bold">[[ formatNum(item.sum) ]] / [[ formatNum(item.target) ]] <span class="text-caption opacity-50 font-weight-regular">h</span></span></td></tr>
+                                    </template>
+                                </tbody>
                             </template>
-                        </tbody>
-                    </template>
-                </v-table>
+                        </v-table>
 
-                <div v-if="viewMode === 'list'" class="d-md-none pa-2">
-                    <template v-for="(item, idx) in items" :key="item.date ? 'mob-'+item.date : 'mob-sum-'+idx">
-                        <v-card v-if="item && item.row_type === 'day' && (!settings.hide_weekends || !isWeekend(item))" class="mb-2" elevation="1" rounded="lg" :class="{'is-today': isToday(item.date)}" @click="openEditDialog(item)">
-                            <div class="d-flex justify-space-between align-center pa-3 pb-1 border-bottom">
-                                <div>
-                                    <span class="font-weight-bold text-subtitle-1" :class="{'text-primary': isToday(item.date)}">[[ item.day_num ]]. <span class="opacity-60">[[ getGermanDay(item.weekday_index) ]]</span></span>
-                                    <span v-if="item.is_holiday" class="text-caption text-red ml-2 font-weight-bold">[[ item.holiday_name ]]</span>
-                                </div>
-                                <div class="text-right">
-                                    <div class="text-caption font-weight-bold mono-num" :class="item.glz_saldo >= 0 ? 'text-green' : 'text-red'">
-                                        <v-icon v-if="item.glz_override !== null" size="x-small" color="blue-grey" class="mr-1 opacity-80">mdi-anchor</v-icon>
-                                        <span v-if="item.glz_saldo > 0">+</span>[[ formatNum(item.glz_saldo) ]] <span class="opacity-50">h</span>
+                        <div v-if="viewMode === 'list'" class="d-md-none pa-2">
+                            <template v-for="(item, idx) in items" :key="item.date ? 'mob-'+item.date : 'mob-sum-'+idx">
+                                <v-card v-if="item && item.row_type === 'day' && (!settings.hide_weekends || !isWeekend(item))" class="mb-2" elevation="1" rounded="lg" :class="{'is-today': isToday(item.date)}" @click="openEditDialog(item)">
+                                    <div class="d-flex justify-space-between align-center pa-3 pb-1 border-bottom">
+                                        <div>
+                                            <span class="font-weight-bold text-subtitle-1" :class="{'text-primary': isToday(item.date)}">[[ item.day_num ]]. <span class="opacity-60">[[ getGermanDay(item.weekday_index) ]]</span></span>
+                                            <span v-if="item.is_holiday" class="text-caption text-red ml-2 font-weight-bold">[[ item.holiday_name ]]</span>
+                                        </div>
+                                        <div class="text-right">
+                                            <div class="text-caption font-weight-bold mono-num" :class="item.glz_saldo >= 0 ? 'text-green' : 'text-red'">
+                                                <v-icon v-if="item.glz_override !== null" size="x-small" color="blue-grey" class="mr-1 opacity-80">mdi-anchor</v-icon>
+                                                <span v-if="item.glz_saldo > 0">+</span>[[ formatNum(item.glz_saldo) ]] <span class="opacity-50">h</span>
+                                            </div>
+                                        </div>
                                     </div>
+                                    <div class="pa-3 pt-2">
+                                        <div v-for="(entry, i) in item.entries" :key="i" class="text-body-2 d-flex align-center mb-1">
+                                            <v-icon size="small" :color="getStatusIconColor(entry.type)" class="mr-2">[[ getStatusIcon(entry.type) ]]</v-icon>
+                                            <span class="mr-2 font-weight-medium" style="min-width: 90px">[[ getTypeName(entry.type) ]]</span>
+                                            <span v-if="entry.start" class="mono-num opacity-80">[[ entry.start ]] - [[ entry.end ]]</span>
+                                            <span v-if="entry.comment" class="ml-2 text-grey text-truncate">([[ entry.comment ]])</span>
+                                        </div>
+                                        <div v-if="item.entries[0].type === ''" class="text-caption text-grey">Tippen zum Bearbeiten...</div>
+                                    </div>
+                                </v-card>
+                                <div v-else-if="item && item.row_type === 'summary'" class="text-center py-2 mb-2 text-caption font-weight-bold text-uppercase opacity-70 dash-card mx-1">
+                                    KW [[ item.iso_week ]]: <span :class="getWeeklyColor(item.sum, item.target)" class="mono-num ml-2">[[ formatNum(item.sum) ]] / [[ formatNum(item.target) ]] h</span>
                                 </div>
-                            </div>
-                            <div class="pa-3 pt-2">
-                                <div v-for="(entry, i) in item.entries" :key="i" class="text-body-2 d-flex align-center mb-1">
-                                    <v-icon size="small" :color="getStatusIconColor(entry.type)" class="mr-2">[[ getStatusIcon(entry.type) ]]</v-icon>
-                                    <span class="mr-2 font-weight-medium" style="min-width: 90px">[[ getTypeName(entry.type) ]]</span>
-                                    <span v-if="entry.start" class="mono-num opacity-80">[[ entry.start ]] - [[ entry.end ]]</span>
-                                    <span v-if="entry.comment" class="ml-2 text-grey text-truncate">([[ entry.comment ]])</span>
-                                </div>
-                                <div v-if="item.entries[0].type === ''" class="text-caption text-grey">Tippen zum Bearbeiten...</div>
-                            </div>
-                        </v-card>
-                        <div v-else-if="item && item.row_type === 'summary'" class="text-center py-2 mb-2 text-caption font-weight-bold text-uppercase opacity-70 dash-card mx-1">
-                            KW [[ item.iso_week ]]: <span :class="getWeeklyColor(item.sum, item.target)" class="mono-num ml-2">[[ formatNum(item.sum) ]] / [[ formatNum(item.target) ]] h</span>
+                            </template>
                         </div>
-                    </template>
-                </div>
 
-                <div v-if="viewMode === 'calendar'" class="pa-2">
-                    <div class="calendar-wrapper">
-                        <div class="cal-header">Mo</div><div class="cal-header">Di</div><div class="cal-header">Mi</div><div class="cal-header">Do</div><div class="cal-header">Fr</div><div class="cal-header text-red">Sa</div><div class="cal-header text-red">So</div><div class="cal-header" style="font-size: 0.7rem">KW</div>
-                        <div v-for="n in paddingDays" :key="'pad-'+n"></div>
-                        <template v-for="item in items" :key="item ? item.date : 'cal-unk'">
-                            <div v-if="item && item.row_type === 'day'" class="cal-cell"
-                                 :class="{'is-holiday': item.is_holiday, 'is-weekend': isWeekend(item), 'is-today': isToday(item.date), 'is-short-day': item.is_short_day, 'is-off-day': item.is_off_day, 
-                                          'status-home': item.main_type === 'home', 'status-office': item.main_type === 'office', 'status-planned': item.main_type === 'planned', 'status-sick': item.main_type === 'sick', 'status-vacation': item.main_type === 'vacation', 'status-dr': item.main_type === 'dr'}"
-                                 @click="openEditDialog(item)">
-                                <div class="d-flex justify-space-between align-start">
-                                    <span class="cal-date mono-num" :class="{'opacity-50': item.is_off_day, 'text-primary': isToday(item.date)}">
-                                        [[ item.day_num ]]
-                                        <v-icon v-if="item.glz_override !== null" size="x-small" color="blue-grey" class="ml-1 opacity-80" title="Offizieller GLZ Anker">mdi-anchor</v-icon>
-                                    </span>
-                                </div>
-                                <div v-if="item.is_holiday" class="cal-holiday-name text-truncate" :title="item.holiday_name">[[ item.holiday_name ]]</div>
-                                <div class="cal-content">
-                                    <div v-if="item.main_type" class="font-weight-bold text-caption text-uppercase" :style="{color: getStatusIconColor(item.main_type)}">
-                                        <v-icon size="x-small" class="mr-1">[[ getStatusIcon(item.main_type) ]]</v-icon>[[ getTypeName(item.main_type) ]]
+                        <div v-if="viewMode === 'calendar'" class="pa-2">
+                            <div class="calendar-wrapper">
+                                <div class="cal-header">Mo</div><div class="cal-header">Di</div><div class="cal-header">Mi</div><div class="cal-header">Do</div><div class="cal-header">Fr</div><div class="cal-header text-red">Sa</div><div class="cal-header text-red">So</div><div class="cal-header" style="font-size: 0.7rem">KW</div>
+                                <div v-for="n in paddingDays" :key="'pad-'+n"></div>
+                                <template v-for="item in items" :key="item ? item.date : 'cal-unk'">
+                                    <div v-if="item && item.row_type === 'day'" class="cal-cell"
+                                         :class="{'is-holiday': item.is_holiday, 'is-weekend': isWeekend(item), 'is-today': isToday(item.date), 'is-short-day': item.is_short_day, 'is-off-day': item.is_off_day, 
+                                                  'status-home': item.main_type === 'home', 'status-office': item.main_type === 'office', 'status-planned': item.main_type === 'planned', 'status-sick': item.main_type === 'sick', 'status-vacation': item.main_type === 'vacation', 'status-dr': item.main_type === 'dr'}"
+                                         @click="openEditDialog(item)">
+                                        <div class="d-flex justify-space-between align-start">
+                                            <span class="cal-date mono-num" :class="{'opacity-50': item.is_off_day, 'text-primary': isToday(item.date)}">
+                                                [[ item.day_num ]]
+                                                <v-icon v-if="item.glz_override !== null" size="x-small" color="blue-grey" class="ml-1 opacity-80" title="Offizieller GLZ Anker">mdi-anchor</v-icon>
+                                            </span>
+                                        </div>
+                                        <div v-if="item.is_holiday" class="cal-holiday-name text-truncate" :title="item.holiday_name">[[ item.holiday_name ]]</div>
+                                        <div class="cal-content">
+                                            <div v-if="item.main_type" class="font-weight-bold text-caption text-uppercase" :style="{color: getStatusIconColor(item.main_type)}">
+                                                <v-icon size="x-small" class="mr-1">[[ getStatusIcon(item.main_type) ]]</v-icon>[[ getTypeName(item.main_type) ]]
+                                            </div>
+                                            <div v-if="item.total_net > 0 || item.main_type === 'planned'" class="text-caption font-weight-bold mono-num mt-1">[[ formatNum(item.total_net) ]] <span class="opacity-50 font-weight-regular">h</span></div>
+                                        </div>
                                     </div>
-                                    <div v-if="item.total_net > 0 || item.main_type === 'planned'" class="text-caption font-weight-bold mono-num mt-1">[[ formatNum(item.total_net) ]] <span class="opacity-50 font-weight-regular">h</span></div>
-                                </div>
+                                    <div v-else-if="item && item.row_type === 'summary'" class="cal-week-sum mono-num" :title="'KW ' + item.iso_week"><span :class="getWeeklyColor(item.sum, item.target)" class="font-weight-bold">[[ formatNum(item.sum) ]]</span></div>
+                                </template>
                             </div>
-                            <div v-else-if="item && item.row_type === 'summary'" class="cal-week-sum mono-num" :title="'KW ' + item.iso_week"><span :class="getWeeklyColor(item.sum, item.target)" class="font-weight-bold">[[ formatNum(item.sum) ]]</span></div>
-                        </template>
-                    </div>
-                </div>
+                        </div>
 
-                <v-table v-if="viewMode === 'year'" density="comfortable">
-                    <template v-slot:default>
-                        <thead><tr style="background-color: rgba(128,128,128,0.05);"><th class="text-left font-weight-bold text-uppercase opacity-70">Monat</th><th class="text-center font-weight-bold text-uppercase opacity-70">Home Office</th><th class="text-center font-weight-bold text-uppercase opacity-70">Büro</th><th class="text-center font-weight-bold text-uppercase opacity-70">Urlaub</th><th class="text-center font-weight-bold text-uppercase opacity-70">Budget Nutzung</th></tr></thead>
-                        <tbody>
-                            <tr v-for="stat in yearData" :key="stat.month">
-                                <td class="font-weight-bold">[[ getGermanMonthName(stat.month) ]]</td>
-                                <td class="text-center"><v-chip size="small" color="green" variant="tonal" v-if="stat.days_ho > 0" class="font-weight-bold mono-num">[[ stat.days_ho ]] T.</v-chip><span v-else class="opacity-30">-</span></td>
-                                <td class="text-center"><v-chip size="small" color="amber-darken-2" variant="tonal" v-if="stat.days_office > 0" class="font-weight-bold mono-num">[[ stat.days_office ]] T.</v-chip><span v-else class="opacity-30">-</span></td>
-                                <td class="text-center"><v-chip size="small" color="purple" variant="tonal" v-if="stat.days_vacation > 0" class="font-weight-bold mono-num">[[ stat.days_vacation ]] T.</v-chip><span v-else class="opacity-30">-</span></td>
-                                <td class="text-center">
-                                    <div class="d-flex align-center justify-center">
-                                        <div style="width: 120px" class="mr-3"><v-progress-linear :model-value="stat.ho_hours_allowed ? (stat.ho_hours_made / stat.ho_hours_allowed)*100 : 0" color="blue" height="6" rounded bg-opacity="0.2"></v-progress-linear></div>
-                                        <span class="text-body-2 mono-num opacity-80">[[ formatNum(stat.ho_hours_made) ]] / [[ formatNum(stat.ho_hours_allowed) ]] h</span>
+                        <div v-if="viewMode === 'year'" class="pa-4">
+                            <v-row class="mb-4">
+                                <v-col cols="12" md="4">
+                                    <div class="dash-card h-100 d-flex flex-column align-center justify-center py-4">
+                                        <div class="stat-label mb-3">Verteilung der Tage</div>
+                                        <div style="height: 180px; width: 100%; position: relative;">
+                                            <canvas id="donutChart"></canvas>
+                                        </div>
                                     </div>
-                                </td>
-                            </tr>
-                        </tbody>
-                        <tfoot class="bg-surface-variant font-weight-bold">
-                            <tr>
-                                <td class="text-left py-4 text-h6">GESAMT</td>
-                                <td class="text-center"><v-chip color="green" variant="elevated" class="font-weight-bold mono-num">[[ yearTotalHo ]] T.</v-chip></td>
-                                <td class="text-center"><v-chip color="amber-darken-2" variant="elevated" class="font-weight-bold mono-num">[[ yearTotalOffice ]] T.</v-chip></td>
-                                <td class="text-center"><v-chip color="purple" variant="elevated" class="font-weight-bold mono-num">[[ yearTotalVacation ]] T.</v-chip></td>
-                                <td class="text-center"></td>
-                            </tr>
-                        </tfoot>
-                    </template>
-                </v-table>
+                                </v-col>
+                                <v-col cols="12" md="8">
+                                    <div class="dash-card h-100 d-flex flex-column align-center justify-center py-4">
+                                        <div class="stat-label mb-3">Home Office Verlauf</div>
+                                        <div style="height: 180px; width: 100%; position: relative;">
+                                            <canvas id="barChart"></canvas>
+                                        </div>
+                                    </div>
+                                </v-col>
+                            </v-row>
+
+                            <v-table density="comfortable">
+                                <template v-slot:default>
+                                    <thead><tr style="background-color: rgba(128,128,128,0.05);"><th class="text-left font-weight-bold text-uppercase opacity-70">Monat</th><th class="text-center font-weight-bold text-uppercase opacity-70">Home Office</th><th class="text-center font-weight-bold text-uppercase opacity-70">Büro</th><th class="text-center font-weight-bold text-uppercase opacity-70">Urlaub</th><th class="text-center font-weight-bold text-uppercase opacity-70">Budget Nutzung</th></tr></thead>
+                                    <tbody>
+                                        <tr v-for="stat in yearData" :key="stat.month">
+                                            <td class="font-weight-bold">[[ getGermanMonthName(stat.month) ]]</td>
+                                            <td class="text-center"><v-chip size="small" color="green" variant="tonal" v-if="stat.days_ho > 0" class="font-weight-bold mono-num">[[ stat.days_ho ]] T.</v-chip><span v-else class="opacity-30">-</span></td>
+                                            <td class="text-center"><v-chip size="small" color="amber-darken-2" variant="tonal" v-if="stat.days_office > 0" class="font-weight-bold mono-num">[[ stat.days_office ]] T.</v-chip><span v-else class="opacity-30">-</span></td>
+                                            <td class="text-center"><v-chip size="small" color="purple" variant="tonal" v-if="stat.days_vacation > 0" class="font-weight-bold mono-num">[[ stat.days_vacation ]] T.</v-chip><span v-else class="opacity-30">-</span></td>
+                                            <td class="text-center">
+                                                <div class="d-flex align-center justify-center">
+                                                    <div style="width: 100px" class="mr-3"><v-progress-linear :model-value="stat.ho_hours_allowed ? (stat.ho_hours_made / stat.ho_hours_allowed)*100 : 0" color="blue" height="6" rounded bg-opacity="0.2"></v-progress-linear></div>
+                                                    <div class="d-flex align-center text-body-2 mono-num opacity-80" style="width: 145px;">
+                                                        <div class="text-right" style="width: 50px;">[[ formatNum(stat.ho_hours_made) ]]</div>
+                                                        <div class="text-center mx-1" style="width: 10px;">/</div>
+                                                        <div class="text-right" style="width: 55px;">[[ formatNum(stat.ho_hours_allowed) ]]</div>
+                                                        <div class="ml-1 text-left" style="width: 15px;">h</div>
+                                                    </div>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                    <tfoot class="bg-surface-variant font-weight-bold">
+                                        <tr>
+                                            <td class="text-left py-4 text-h6">GESAMT</td>
+                                            <td class="text-center"><v-chip color="green" variant="elevated" class="font-weight-bold mono-num">[[ yearTotalHo ]] T.</v-chip></td>
+                                            <td class="text-center"><v-chip color="amber-darken-2" variant="elevated" class="font-weight-bold mono-num">[[ yearTotalOffice ]] T.</v-chip></td>
+                                            <td class="text-center"><v-chip color="purple" variant="elevated" class="font-weight-bold mono-num">[[ yearTotalVacation ]] T.</v-chip></td>
+                                            <td class="text-center"></td>
+                                        </tr>
+                                    </tfoot>
+                                </template>
+                            </v-table>
+                        </div>
+                    </div>
+                </v-fade-transition>
             </v-card>
         </v-container>
       </v-main>
@@ -398,14 +438,14 @@
                     <div class="timeline-node" v-for="(entry, index) in editingDay.entries" :key="index">
                         <v-card variant="outlined" class="pa-3" :style="{'border-left': '4px solid ' + getStatusIconColor(entry.type), 'border-color': 'rgba(128,128,128,0.2)'}">
                             <div class="d-flex justify-space-between align-start mb-2">
-                                <v-select v-model="entry.type" :items="types" item-title="title" item-value="value" variant="plain" density="compact" hide-details class="font-weight-bold text-subtitle-1 pt-0 mt-0" style="max-width: 220px;" :color="getStatusIconColor(entry.type)" @update:model-value="saveSingleEntry(editingDay.date, entry)"></v-select>
+                                <v-select v-model="entry.type" :items="types" item-title="title" item-value="value" variant="plain" density="compact" hide-details class="font-weight-bold text-subtitle-1 pt-0 mt-0" style="max-width: 220px;" :color="getStatusIconColor(entry.type)" @update:model-value="debouncedSave(editingDay.date, entry)"></v-select>
                                 <v-btn v-if="index > 0" icon="mdi-delete" size="small" variant="text" color="grey" @click="deleteEntry(editingDay, index)"></v-btn>
                             </div>
                             
                             <v-row dense>
-                                <v-col cols="6"><v-text-field v-if="needsTimeInput(entry.type)" v-model="entry.start" label="Startzeit" variant="underlined" density="compact" hide-details class="mono-num" prepend-inner-icon="mdi-clock-start" :type="$vuetify.display.mobile ? 'time' : 'text'" @change="saveSingleEntry(editingDay.date, entry)"></v-text-field></v-col>
-                                <v-col cols="6"><v-text-field v-if="needsTimeInput(entry.type)" v-model="entry.end" label="Endzeit" variant="underlined" density="compact" hide-details class="mono-num" prepend-inner-icon="mdi-clock-end" :type="$vuetify.display.mobile ? 'time' : 'text'" @change="saveSingleEntry(editingDay.date, entry)"></v-text-field></v-col>
-                                <v-col cols="12" class="mt-2"><v-text-field v-model="entry.comment" label="Notiz / Projekt" variant="underlined" density="compact" hide-details prepend-inner-icon="mdi-text" @change="saveSingleEntry(editingDay.date, entry)"></v-text-field></v-col>
+                                <v-col cols="6"><v-text-field v-if="needsTimeInput(entry.type)" v-model="entry.start" label="Startzeit" variant="underlined" density="compact" hide-details class="mono-num" prepend-inner-icon="mdi-clock-start" :type="$vuetify.display.mobile ? 'time' : 'text'" @update:model-value="debouncedSave(editingDay.date, entry)"></v-text-field></v-col>
+                                <v-col cols="6"><v-text-field v-if="needsTimeInput(entry.type)" v-model="entry.end" label="Endzeit" variant="underlined" density="compact" hide-details class="mono-num" prepend-inner-icon="mdi-clock-end" :type="$vuetify.display.mobile ? 'time' : 'text'" @update:model-value="debouncedSave(editingDay.date, entry)"></v-text-field></v-col>
+                                <v-col cols="12" class="mt-2"><v-text-field v-model="entry.comment" label="Notiz / Projekt" variant="underlined" density="compact" hide-details prepend-inner-icon="mdi-text" @update:model-value="debouncedSave(editingDay.date, entry)"></v-text-field></v-col>
                             </v-row>
                         </v-card>
                     </div>
@@ -417,7 +457,7 @@
                 
                 <v-divider class="my-5 opacity-20"></v-divider>
                 
-                <div class="dash-card bg-surface-variant">
+                <div class="pa-3 rounded-lg border" style="background-color: rgba(255,255,255,0.02); border-color: rgba(255,255,255,0.1) !important;">
                     <div class="d-flex justify-space-between align-center mb-2">
                         <div class="text-caption font-weight-bold text-uppercase letter-spacing-1"><v-icon size="small" color="blue-grey" class="mr-1">mdi-anchor</v-icon>GLZ Sync-Anker</div>
                         <div class="text-caption opacity-70">Stand: <strong class="mono-num text-body-2">[[ formatNum(editingDay.glz_saldo) ]] h</strong></div>
@@ -427,8 +467,8 @@
                         v-model.number="editingDay.entries[0].glz_override" 
                         label="Offiziellen PDF-Saldo überschreiben" 
                         placeholder="z.B. 12.5" 
-                        variant="outlined" density="compact" hide-details bg-color="surface" class="mono-num" type="number" step="0.01" 
-                        @change="saveSingleEntry(editingDay.date, editingDay.entries[0])">
+                        variant="outlined" density="compact" hide-details bg-color="transparent" class="mono-num" type="number" step="0.01" 
+                        @update:model-value="debouncedSave(editingDay.date, editingDay.entries[0])">
                     </v-text-field>
                 </div>
             </v-card-text>
@@ -477,9 +517,30 @@
             
             <v-divider class="my-4 opacity-20"></v-divider>
             
-            <div class="d-flex justify-space-between align-center mb-2"><h3 class="text-subtitle-1 font-weight-bold">Eigene Feiertage</h3><v-btn size="small" variant="tonal" color="primary" @click="addWaeldchestag"><v-icon start>mdi-calendar-plus</v-icon> Wäldchestag</v-btn></div>
-            <div v-for="(h, i) in customHolidays" :key="i" class="d-flex align-center mb-1"><div style="width:90px" class="text-caption">[[ h.date ]]</div><div class="text-caption font-weight-bold mr-2">[[ h.name ]]</div><v-icon size="x-small" color="red" @click="deleteCustomHoliday(h.id)">mdi-delete</v-icon></div>
-            <div class="d-flex mt-1"><v-text-field v-model="newCustomHoliday.date" type="date" density="compact" variant="outlined" hide-details class="mr-2"></v-text-field><v-text-field v-model="newCustomHoliday.name" label="Name" density="compact" variant="outlined" hide-details class="mr-2"></v-text-field><v-btn icon="mdi-plus" size="small" color="primary" @click="addCustomHoliday"></v-btn></div>
+            <div class="d-flex justify-space-between align-center mb-2">
+                <h3 class="text-subtitle-1 font-weight-bold">Eigene Feiertage</h3>
+                <v-btn size="small" variant="tonal" color="primary" @click="addWaeldchestag"><v-icon start>mdi-calendar-plus</v-icon> Wäldchestag</v-btn>
+            </div>
+            
+            <div class="bg-surface-variant rounded mb-2 border" style="border-color: rgba(255,255,255,0.05) !important;">
+                <div v-for="(h, i) in customHolidays" :key="i" class="d-flex align-center py-2 px-3" :style="i < customHolidays.length - 1 ? 'border-bottom: 1px solid rgba(255,255,255,0.05);' : ''">
+                    <div style="width: 95px;" class="text-caption mono-num opacity-80">[[ h.date ]]</div>
+                    <div class="text-caption font-weight-bold flex-grow-1 text-truncate">[[ h.name ]] <span v-if="h.hours > 0" class="text-grey ml-1 font-weight-regular">([[ h.hours ]]h)</span></div>
+                    <div class="d-flex" style="gap: 12px;">
+                        <v-icon size="small" color="primary" class="cursor-pointer" @click="editCustomHoliday(h)" title="Bearbeiten">mdi-pencil</v-icon>
+                        <v-icon size="small" color="error" class="cursor-pointer" @click="deleteCustomHoliday(h.id)" title="Löschen">mdi-delete</v-icon>
+                    </div>
+                </div>
+                <div v-if="!customHolidays || customHolidays.length === 0" class="text-caption text-grey pa-3 text-center">Keine eigenen Feiertage angelegt.</div>
+            </div>
+            
+            <div class="d-flex mt-2 align-center pa-2 rounded border" style="border-color: rgba(255,255,255,0.05) !important; background: rgba(255,255,255,0.02);">
+                <v-text-field v-model="newCustomHoliday.date" type="date" density="compact" variant="outlined" bg-color="transparent" hide-details class="mr-2" style="flex: 0 0 155px;"></v-text-field>
+                <v-text-field v-model="newCustomHoliday.name" label="Bez." density="compact" variant="outlined" bg-color="transparent" hide-details class="mr-2"></v-text-field>
+                <v-text-field v-model="newCustomHoliday.hours" label="Std." type="number" density="compact" variant="outlined" bg-color="transparent" hide-details class="mr-2" style="max-width: 80px;"></v-text-field>
+                <v-btn icon="mdi-content-save" size="small" color="primary" elevation="0" @click="addCustomHoliday"></v-btn>
+            </div>
+
           </v-card-text>
           <v-card-actions class="px-4 pb-4"><v-spacer></v-spacer><v-btn variant="flat" color="primary" @click="saveSettings">Speichern & Schließen</v-btn></v-card-actions>
         </v-card>
@@ -492,15 +553,17 @@
     const app = createApp({
       data() { return {
           drawer: true,
+          isSaving: false, saveTimeout: null, 
           viewMode: 'list', currentDate: new Date(), items: [], yearData: [],
           stats: { total_ho_made: 0, total_ho_allowed: 1, total_office_made: 0, total_work_made: 0, avg_per_week: 0, workdays_month: 0, current_glz: 0 }, 
           settings: { weekly_hours: 39, active_weekdays: [0,1,2,3,4], ho_quota_percent: 60, hide_weekends: false, default_start_time: '08:00', auto_convert_planned: true },
           dialogSettings: false, dialogEditDay: false, editingDay: null, 
           importDialog: { show: false, overwrite: false, file: null },
           seriesDialog: { show: false, start: '', end: '', weekdays: [4], type: 'planned', overwrite: false },
-          customHolidays: [], newCustomHoliday: { date: '', name: '', hours: 0 },
+          customHolidays: [], newCustomHoliday: { id: null, date: '', name: '', hours: 0 },
           snackbar: { show: false, text: '', color: 'success' },
-          types: [{ title: 'Home Office', value: 'home' }, { title: 'Büro', value: 'office' }, { title: 'Geplant (HO)', value: 'planned' }, { title: 'Krank', value: 'sick' }, { title: 'Urlaub', value: 'vacation' }, { title: 'Gleitzeit', value: 'glz' }, { title: 'Dienstreise', value: 'dr' }, { title: 'Leer', value: '' }]
+          types: [{ title: 'Home Office', value: 'home' }, { title: 'Büro', value: 'office' }, { title: 'Geplant (HO)', value: 'planned' }, { title: 'Krank', value: 'sick' }, { title: 'Urlaub', value: 'vacation' }, { title: 'Gleitzeit', value: 'glz' }, { title: 'Dienstreise', value: 'dr' }, { title: 'Leer', value: '' }],
+          chartInstances: { donut: null, bar: null } 
       }},
       computed: {
         currentYear() { return this.currentDate.getFullYear() },
@@ -521,10 +584,30 @@
         yearTotalHoHours() { return this.yearData.reduce((sum, item) => sum + item.ho_hours_made, 0); },
         yearTotalAllowed() { return this.yearData.reduce((sum, item) => sum + item.ho_hours_allowed, 0); }
       },
-      watch: { viewMode(newVal) { if(newVal === 'year') this.loadYearData(); else this.loadMonthData(); } },
+      watch: { 
+          viewMode(newVal) { 
+              if(newVal === 'year') {
+                  this.loadYearData(); 
+              } else {
+                  this.loadMonthData(); 
+              }
+          } 
+      },
       mounted() { 
           if(window.innerWidth < 1200) this.drawer = false;
           this.loadSettings(); this.loadCustomHolidays(); this.loadMonthData(); 
+
+          window.addEventListener('keydown', (e) => {
+              if(e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+              if(this.dialogEditDay || this.dialogSettings || this.importDialog.show || this.seriesDialog.show) return;
+              if(this.viewMode === 'year') {
+                  if(e.key === 'ArrowLeft') this.changeYear(-1);
+                  if(e.key === 'ArrowRight') this.changeYear(1);
+              } else {
+                  if(e.key === 'ArrowLeft') this.changeMonth(-1);
+                  if(e.key === 'ArrowRight') this.changeMonth(1);
+              }
+          });
       },
       methods: {
         goHome() { window.location.reload(); },
@@ -556,11 +639,6 @@
             if(!this.editingDay.entries || this.editingDay.entries.length === 0) { this.editingDay.entries = [{type: 'home', start: '', end: '', net: 0, comment: '', glz_override: null}]; } 
             this.dialogEditDay = true; 
         },
-        quickSetStatus(day, newType) {
-            if(newType === '') { if(day.entries.length > 0) { if(day.entries[0].id) this.deleteEntry(day, 0); else { day.entries = []; this.loadMonthData(); } } return; }
-            if(day.entries.length === 0) this.addEntryToDay(day);
-            const entry = day.entries[0]; entry.type = newType; this.onEntryChange(day, entry); 
-        },
         setPrimaryType(day, type) { if(day.entries.length === 0) this.addEntryToDay(day); const entry = day.entries[0]; entry.type = type; this.onEntryChange(day, entry); },
         addEntryToDay(day) { day.entries.push({type: 'home', start: '', end: '', net: 0, comment: '', glz_override: null}); },
         
@@ -582,13 +660,28 @@
                      const endMin = startMin + (grossHours * 60); const h = Math.floor(endMin / 60); const m = Math.round(endMin % 60);
                      entry.end = `${(h<10?'0':'')+h}:${(m<10?'0':'')+m}`;
                 }
-             } this.saveSingleEntry(day.date, entry); 
+             } this.debouncedSave(day.date, entry); 
+        },
+        
+        debouncedSave(dateStr, entry) {
+            this.isSaving = true;
+            clearTimeout(this.saveTimeout);
+            this.saveTimeout = setTimeout(() => {
+                this.saveSingleEntry(dateStr, entry);
+            }, 800);
         },
         
         async saveSingleEntry(dateStr, entry) { 
+            this.isSaving = true;
+            if(entry.comment) entry.comment = entry.comment.trim();
             const payload = { ...entry, date: dateStr }; 
             const res = await fetch('/api/entry', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(payload) }); 
-            if(res.ok) { const data = await res.json(); if(data.id) entry.id = data.id; this.loadMonthData(); }
+            if(res.ok) { 
+                const data = await res.json(); 
+                if(data.id) entry.id = data.id; 
+                this.loadMonthData(); 
+            }
+            this.isSaving = false;
         },
         
         openSeriesDialog() { const nextM = new Date(); nextM.setMonth(nextM.getMonth() + 1); const y = nextM.getFullYear(), m = nextM.getMonth(); const lastDay = new Date(y, m + 1, 0).getDate(); this.seriesDialog.start = `${y}-${(m+1).toString().padStart(2,'0')}-01`; this.seriesDialog.end = `${y}-${(m+1).toString().padStart(2,'0')}-${lastDay}`; this.seriesDialog.show = true; },
@@ -598,9 +691,21 @@
         changeYear(delta) { this.currentDate = new Date(this.currentDate.setFullYear(this.currentDate.getFullYear() + delta)); if(this.viewMode === 'year') this.loadYearData(); else this.loadMonthData(); },
         async loadSettings() { try { const res = await fetch('/api/settings'); if(res.ok) this.settings = await res.json(); } catch(e){} },
         async loadCustomHolidays() { try { const res = await fetch('/api/custom-holidays'); if(res.ok) this.customHolidays = await res.json(); } catch(e){} },
-        async addCustomHoliday() { if(!this.newCustomHoliday.date || !this.newCustomHoliday.name) return; await fetch('/api/custom-holidays', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(this.newCustomHoliday) }); this.newCustomHoliday.date = ''; this.newCustomHoliday.name = ''; this.loadCustomHolidays(); if(this.viewMode === 'year') this.loadYearData(); else this.loadMonthData(); },
+        
+        editCustomHoliday(h) {
+            this.newCustomHoliday = { id: h.id, date: h.date, name: h.name, hours: h.hours };
+        },
+
+        async addCustomHoliday() { 
+            if(!this.newCustomHoliday.date || !this.newCustomHoliday.name) return; 
+            await fetch('/api/custom-holidays', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(this.newCustomHoliday) }); 
+            this.newCustomHoliday.id = null; this.newCustomHoliday.date = ''; this.newCustomHoliday.name = ''; this.newCustomHoliday.hours = 0; 
+            this.loadCustomHolidays(); 
+            if(this.viewMode === 'year') this.loadYearData(); else this.loadMonthData(); 
+        },
         async deleteCustomHoliday(id) { await fetch(`/api/custom-holidays/${id}`, { method: 'DELETE' }); this.loadCustomHolidays(); if(this.viewMode === 'year') this.loadYearData(); else this.loadMonthData(); },
         async saveSettings() { await fetch('/api/settings', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(this.settings) }); this.dialogSettings = false; if(this.viewMode === 'year') this.loadYearData(); else this.loadMonthData(); },
+        
         async loadMonthData() { 
             try { 
                 const res = await fetch(`/api/month/${this.currentYear}/${this.currentMonth}`); const data = await res.json(); 
@@ -608,8 +713,85 @@
                 this.items.forEach(item => { if (item.row_type === 'day' && item.entries.length === 0) { item.entries.push({type: '', start: '', end: '', net: 0, comment: '', glz_override: null}); } });
             } catch(e){} 
         },
-        async loadYearData() { try { const res = await fetch(`/api/year/${this.currentYear}`); if(res.ok) this.yearData = await res.json(); } catch(e) { console.error(e); } },
-        addWaeldchestag() { const y = this.currentYear; const a=y%19, b=Math.floor(y/100), c=y%100, dd=Math.floor(b/4), e=b%4, f=Math.floor((b+8)/25), g=Math.floor((b-f+1)/3), h=(19*a+b-dd-g+15)%30, i=Math.floor(c/4), k=c%4, l=(32+2*e+2*i-h-k)%7, m_easter=Math.floor((a+11*h+22*l)/451); const monthE = Math.floor((h+l-7*m_easter+114)/31); const dayE = ((h+l-7*m_easter+114)%31)+1; const easterDate = new Date(y, monthE - 1, dayE); const waeldchestag = new Date(easterDate); waeldchestag.setDate(easterDate.getDate() + 51); const dateStr = new Date(waeldchestag.getTime() - (waeldchestag.getTimezoneOffset() * 60000)).toISOString().split('T')[0]; this.newCustomHoliday.date = dateStr; this.newCustomHoliday.name = 'Wäldchestag'; this.newCustomHoliday.hours = 6.0; this.addCustomHoliday(); this.showMsg("Wäldchestag " + y + " hinzugefügt.", "success"); }
+        
+        async loadYearData() { 
+            try { 
+                const res = await fetch(`/api/year/${this.currentYear}`); 
+                if(res.ok) {
+                    this.yearData = await res.json(); 
+                    if (this.viewMode === 'year') {
+                        this.$nextTick(() => { this.renderCharts(); });
+                    }
+                }
+            } catch(e) { console.error(e); } 
+        },
+
+        renderCharts() {
+            if (!window.Chart) return;
+            
+            if (this.chartInstances.donut) this.chartInstances.donut.destroy();
+            if (this.chartInstances.bar) this.chartInstances.bar.destroy();
+
+            const ctxDonut = document.getElementById('donutChart');
+            const ctxBar = document.getElementById('barChart');
+            if (!ctxDonut || !ctxBar) return;
+
+            Chart.defaults.color = 'rgba(255, 255, 255, 0.7)';
+            Chart.defaults.borderColor = 'rgba(255, 255, 255, 0.1)';
+
+            this.chartInstances.donut = new Chart(ctxDonut, {
+                type: 'doughnut',
+                data: {
+                    labels: ['Home Office', 'Büro', 'Urlaub'],
+                    datasets: [{
+                        data: [this.yearTotalHo, this.yearTotalOffice, this.yearTotalVacation],
+                        backgroundColor: ['#4CAF50', '#FFC107', '#9C27B0'],
+                        borderWidth: 0
+                    }]
+                },
+                options: {
+                    responsive: true, maintainAspectRatio: false,
+                    cutout: '65%',
+                    plugins: { legend: { position: 'right', labels: { boxWidth: 12 } } }
+                }
+            });
+
+            this.chartInstances.bar = new Chart(ctxBar, {
+                type: 'bar',
+                data: {
+                    labels: ['Jan', 'Feb', 'Mär', 'Apr', 'Mai', 'Jun', 'Jul', 'Aug', 'Sep', 'Okt', 'Nov', 'Dez'],
+                    datasets: [{
+                        label: 'HO Tage',
+                        data: this.yearData.map(d => d.days_ho),
+                        backgroundColor: '#4CAF50',
+                        borderRadius: 4
+                    }]
+                },
+                options: {
+                    responsive: true, maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    scales: { 
+                        y: { beginAtZero: true, suggestedMax: 20, ticks: { stepSize: 5 } },
+                        x: { grid: { display: false } }
+                    }
+                }
+            });
+        },
+        
+        addWaeldchestag() { 
+            const y = this.currentYear; 
+            const a=y%19, b=Math.floor(y/100), c=y%100, dd=Math.floor(b/4), e=b%4, f=Math.floor((b+8)/25), g=Math.floor((b-f+1)/3), h=(19*a+b-dd-g+15)%30, i=Math.floor(c/4), k=c%4, l=(32+2*e+2*i-h-k)%7, m_easter=Math.floor((a+11*h+22*l)/451); 
+            const monthE = Math.floor((h+l-7*m_easter+114)/31); const dayE = ((h+l-7*m_easter+114)%31)+1; 
+            const easterDate = new Date(y, monthE - 1, dayE); 
+            const waeldchestag = new Date(easterDate); waeldchestag.setDate(easterDate.getDate() + 51); 
+            const dateStr = new Date(waeldchestag.getTime() - (waeldchestag.getTimezoneOffset() * 60000)).toISOString().split('T')[0]; 
+            
+            this.newCustomHoliday.id = null;
+            this.newCustomHoliday.date = dateStr; 
+            this.newCustomHoliday.name = 'Wäldchestag'; 
+            this.newCustomHoliday.hours = 6.0; 
+            this.showMsg("Wäldchestag geladen. Bitte anpassen und mit + speichern.", "info"); 
+        }
       }
     });
     

@@ -57,20 +57,28 @@ def test_normalize_time_invalid(input_str):
     ("08:00", "12:00", 4.0),
     ("08:00", "14:00", 6.0),      # Exakt 6h -> Kein Abzug
     
-    # Fall 2: Über 6 Stunden (0.5h Abzug)
-    ("08:00", "14:30", 6.0),      # 6.5h Brutto - 0.5h Pause = 6.0h Netto
-    ("08:00", "16:00", 7.5),      # 8.0h Brutto - 0.5h Pause = 7.5h Netto
-    ("08:00", "17:00", 8.5),      # 9.0h Brutto - 0.5h Pause = 8.5h Netto (Grenzfall)
+    # Fall 2: Kappungsgrenze 1 (6:00 bis 6:30 Präsenz)
+    ("08:00", "14:05", 6.0),      # 6h 5m -> gekappt auf 6.0h
+    ("08:00", "14:29", 6.0),      # 6h 29m -> gekappt auf 6.0h
+    ("08:00", "14:30", 6.0),      # 6h 30m -> gekappt auf 6.0h
 
-    # Fall 3: Über 9 Stunden (0.75h Abzug)
-    ("08:00", "17:15", 8.5),      # 9.25h Brutto - 0.75h Pause = 8.5h Netto
+    # Fall 3: Regulärer Abzug 30 Min (6:30 bis 9:30 Präsenz)
+    ("08:00", "15:00", 6.5),      # 7h Brutto - 0.5h = 6.5h Netto
+    ("08:00", "17:00", 8.5),      # 9h Brutto - 0.5h = 8.5h Netto
+    ("08:00", "17:30", 9.0),      # 9.5h Brutto - 0.5h = 9.0h Netto
+
+    # Fall 4: Kappungsgrenze 2 (9:30 bis 9:45 Präsenz)
+    ("08:00", "17:35", 9.0),      # 9h 35m -> gekappt auf 9.0h Netto
+    ("08:00", "17:45", 9.0),      # 9h 45m -> gekappt auf 9.0h Netto
+
+    # Fall 5: Regulärer Abzug 45 Min (über 9:45 Präsenz)
     ("08:00", "18:00", 9.25),     # 10.0h Brutto - 0.75h Pause = 9.25h Netto
 
-    # Fall 4: Nachtschicht (Ende < Start)
+    # Fall 6: Nachtschicht (Ende < Start)
     ("22:00", "02:00", 4.0),      # 4h Arbeit
-    ("20:00", "05:00", 8.5),      # 9h Brutto - 0.5h Pause = 8.5h
+    ("20:00", "05:00", 8.5),      # 9h Brutto - 0.5h Pause = 8.5h Netto
 
-    # Fall 5: Ungültige Eingaben
+    # Fall 7: Ungültige Eingaben
     (None, "12:00", 0.0),
     ("08:00", None, 0.0),
 ])
@@ -84,12 +92,13 @@ def test_calculate_net_hours(start, end, expected_net):
     (4.0, 4.0),
     (6.0, 6.0),
     
-    # Bis 8.25h Netto (entspricht <= 8.75h Brutto, hier greift deine +0.5 Logik)
-    (8.0, 8.5),   # 8.0 Netto braucht 8.5 Brutto (wegen 0.5 Pause)
-    (8.25, 8.75), # Grenzfall in deiner Logik
+    # Bis 9.0h Netto (hier greift die +0.5 Logik)
+    (8.0, 8.5),   
+    (8.5, 9.0),   
+    (9.0, 9.5),   # KORRIGIERTER GRENZFALL: 9.0 Netto braucht 9.5 Brutto
     
-    # Über 8.25h Netto -> +0.75 Pause
-    (8.5, 9.25), 
+    # Über 9.0h Netto -> +0.75 Pause nötig
+    (9.1, 9.85),  # 9.1 + 0.75 = 9.85
 ])
 def test_calculate_gross_time_needed(target_net, expected_gross):
     assert calculate_gross_time_needed(target_net) == expected_gross

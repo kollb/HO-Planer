@@ -168,7 +168,8 @@ def get_glz_carryover(year, month, settings, custom_map):
         if e.date not in entries_by_date: entries_by_date[e.date] = []
         entries_by_date[e.date].append(e)
         
-    years = list(set([start_date.year, target_date.year]))
+    # GEFIXT: Jahre über den gesamten Zeitraum iterieren!
+    years = list(range(start_date.year, target_date.year + 1))
     he_hols = holidays.DE(subdiv='HE', years=years)
     for y in years:
         he_hols[date(y, 12, 24)] = "Heiligabend"
@@ -186,13 +187,15 @@ def get_glz_carryover(year, month, settings, custom_map):
         
         is_paid_leave = any(e.type in ['sick', 'vacation'] for e in day_entries)
         is_glz_day = any(e.type == 'glz' for e in day_entries)
+        
+        # Wenn der Tag "Leer" ist, belasten wir das GLZ nicht
         is_empty = len(day_entries) == 0 or all(not e.type for e in day_entries)
         
         day_delta = 0.0
         if info["is_workday"]:
             if is_paid_leave: day_delta = day_net
             elif is_glz_day: day_delta = day_net - info["target"]
-            elif is_empty: day_delta = 0.0 # FIX: Leere Tage reißen den Saldo nicht mehr ins Minus
+            elif is_empty: day_delta = 0.0 
             else: day_delta = day_net - info["target"]
         else:
             day_delta = day_net
@@ -207,8 +210,9 @@ def get_glz_carryover(year, month, settings, custom_map):
 def parse_pdf_content(file_obj):
     TYPE_MAP = {
         "Mobil": "home", "Telearb": "home", "anwesend": "office", 
-        "Krank": "sick", "Urlaub": "vacation", "Erholungs": "vacation", "Gleitzeit": "glz", 
-        "Dienstreise": "dr", "Fortbildung": "dr", "Reisezeit": "dr",
+        "Krank": "sick", "Urlaub": "vacation", "Erholungs": "vacation", "Zusatz": "vacation", "Sonder": "vacation",
+        "Gleitzeit": "glz", "GLZ": "glz",
+        "Dienstreise": "dr", "Fortbildung": "dr", "Reise": "dr",
         "BUCHUNG FEHLT": "missing"
     }
     extracted_entries = []
@@ -232,7 +236,6 @@ def parse_pdf_content(file_obj):
                     if not row or len(row) < 2: continue
                     col0 = str(row[0] or "").strip()
                     
-                    # FIX: Verhindert, dass Zusammenfassungen oder neue Seitenköpfe an den Vortag angehängt werden
                     if col0.startswith("Wochensumme") or col0.startswith("Tag") or col0.startswith("Zeitkonto") or col0.startswith("Kontingent"):
                         curr_day = None
                         continue
@@ -254,7 +257,6 @@ def parse_pdf_content(file_obj):
                     if times and all(t == "00:00" for t in times): times = []
 
                     glz_saldo_val = None
-                    # FIX: Der GLZ Saldo wird NUR auf der echten Zeile des Tages ausgelesen
                     if dm:
                         for c in reversed(row):
                             c_str = str(c or "").strip()
@@ -283,7 +285,6 @@ def parse_pdf_content(file_obj):
                         is_valid = True
                     
                     if is_valid:
-                        # FIX: Verhindert Mehrfach-Einträge wie doppelte Urlaubstage 
                         if not entry['times']:
                             already_exists = False
                             for existing in daily_data[curr_day]:
@@ -376,7 +377,6 @@ def get_month_data(year, month):
     response_items = []
     
     running_glz = get_glz_carryover(year, month, settings, custom_map)
-    
     num_days = calendar.monthrange(year, month)[1]
     
     for day in range(1, num_days + 1):
@@ -429,20 +429,19 @@ def get_month_data(year, month):
         day_delta = 0.0
         is_paid_leave = any(e.type in ['sick', 'vacation'] for e in day_entries)
         is_glz_day = any(e.type == 'glz' for e in day_entries)
+        
         is_empty = len(day_entries) == 0 or all(not e.type for e in day_entries)
         
         if info["is_workday"]:
             if is_paid_leave: day_delta = day_net
             elif is_glz_day: day_delta = day_net - info["target"]
-            elif is_empty: day_delta = 0.0 # FIX: Leere Tage im Planer reißen den Saldo nicht ins Minus
+            elif is_empty: day_delta = 0.0
             else: day_delta = day_net - info["target"]
         else:
             day_delta = day_net
 
         running_glz += day_delta
-        
-        if day_override is not None:
-            running_glz = day_override
+        if day_override is not None: running_glz = day_override
         
         response_items.append({
             "row_type": "day", "date": date_str, "day_num": day, "weekday_index": date_obj.weekday(),
@@ -542,7 +541,7 @@ def save_entry():
     entry.type = d.get('type')
     entry.start_time = normalize_time_str(d.get('start'))
     entry.end_time = normalize_time_str(d.get('end'))
-    entry.comment = d.get('comment')
+    entry.comment = d.get('comment').strip() if d.get('comment') else ''
     
     if 'glz_override' in d:
         val = d.get('glz_override')
@@ -624,9 +623,26 @@ def handle_custom_holidays():
     data = request.json
     if not is_valid_date(data.get('date')): return jsonify({"success": False, "message": "Ungültiges Datum"}), 400
         
-    if not CustomHoliday.query.filter_by(date=data['date']).first():
-        db.session.add(CustomHoliday(date=data['date'], name=data['name'], hours=float(data.get('hours', 0))))
-        db.session.commit()
+    # GEFIXT: ID prüfen, damit Bearbeiten funktioniert und keine Duplikate entstehen
+    holiday_id = data.get('id')
+    
+    if holiday_id:
+        existing = db.session.get(CustomHoliday, holiday_id)
+        if existing:
+            existing.date = data['date']
+            existing.name = data['name']
+            existing.hours = float(data.get('hours', 0))
+        else:
+            db.session.add(CustomHoliday(date=data['date'], name=data['name'], hours=float(data.get('hours', 0))))
+    else:
+        existing = CustomHoliday.query.filter_by(date=data['date']).first()
+        if existing:
+            existing.name = data['name']
+            existing.hours = float(data.get('hours', 0))
+        else:
+            db.session.add(CustomHoliday(date=data['date'], name=data['name'], hours=float(data.get('hours', 0))))
+        
+    db.session.commit()
     return jsonify({"success": True})
 
 @app.route('/api/custom-holidays/<int:id>', methods=['DELETE'])
