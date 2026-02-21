@@ -68,8 +68,6 @@ def test_list_view_new_columns(page: Page):
 def test_edit_day_dialog_buttons(page: Page):
     page.goto(BASE_URL)
     
-    # Da die Buttons jetzt Hover-Aktionen sind, weisen wir Playwright an, 
-    # das Element sicherheitshalber vorher zu hovern.
     row = page.locator(".day-row").first
     row.hover()
     row.locator(".mdi-pencil").click()
@@ -81,8 +79,8 @@ def test_edit_day_dialog_buttons(page: Page):
     expect(dialog.locator("button").filter(has_text="Home Office")).to_be_visible()
     expect(dialog.locator("button").filter(has_text="Büro")).to_be_visible()
 
-    # GLZ-Override Label im Dialog prüfen
-    expect(dialog.get_by_text("GLZ Sync-Anker")).to_be_visible()
+    # GEÄNDERT: Sucht nun nach dem neuen Wording "Offizieller PDF Saldo"
+    expect(dialog.get_by_text("Offizieller PDF Saldo")).to_be_visible()
 
 def test_pdf_import_element_exists(page: Page):
     page.goto(BASE_URL)
@@ -109,7 +107,6 @@ def test_series_planner_dialog(page: Page):
     expect(dialog_title).not_to_be_visible()
 
 def test_custom_holiday_edit(page: Page):
-    """NEU: Prüft ob der Edit-Button für eigene Feiertage in den Einstellungen funktioniert."""
     page.goto(BASE_URL)
     
     # Einstellungen öffnen
@@ -120,7 +117,7 @@ def test_custom_holiday_edit(page: Page):
     # Wäldchestag laden (als Testdaten)
     dialog.locator("button").filter(has_text="Wäldchestag").click()
     
-    # Speichern (mit dem Plus/Save Button)
+    # Speichern
     save_icon_btn = dialog.locator(".mdi-content-save").locator("..")
     save_icon_btn.click()
     
@@ -128,14 +125,13 @@ def test_custom_holiday_edit(page: Page):
     expect(dialog.get_by_text("Wäldchestag").first).to_be_visible()
     
     # Auf den Stift (Edit-Icon) klicken
-    # Sucht die Zeile mit dem Wäldchestag und klickt das .mdi-pencil Icon
     dialog.locator("div.d-flex.align-center").filter(has_text="Wäldchestag").locator(".mdi-pencil").click()
     
     # Feld ändern
     page.get_by_label("Bez.").fill("Test Feiertag")
     save_icon_btn.click()
     
-    # Warten und prüfen, ob sich der Text aktualisiert hat und "Wäldchestag" verschwunden ist
+    # Warten und prüfen, ob sich der Text aktualisiert hat
     expect(dialog.get_by_text("Test Feiertag").first).to_be_visible()
     
     # Fenster wieder schließen

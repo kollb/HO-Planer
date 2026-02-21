@@ -274,7 +274,7 @@
                                                 <td class="text-center mono-num" style="vertical-align: middle;">
                                                     <div v-if="index === 0" class="font-weight-bold" :class="item.glz_saldo >= 0 ? 'text-green' : 'text-red'">
                                                         <span v-if="item.glz_saldo > 0">+</span>[[ formatNum(item.glz_saldo) ]] <span class="text-caption opacity-50 font-weight-regular">h</span>
-                                                        <v-icon v-if="item.glz_override !== null" size="x-small" color="blue-grey" class="ml-1 opacity-80" title="Offizieller GLZ Anker">mdi-anchor</v-icon>
+                                                        <v-icon v-if="item.glz_override !== null" size="x-small" color="blue-grey" class="ml-1 opacity-80" title="PDF / Manueller GLZ Saldo">mdi-file-pdf-box</v-icon>
                                                     </div>
                                                 </td>
 
@@ -306,7 +306,7 @@
                                         </div>
                                         <div class="text-right">
                                             <div class="text-caption font-weight-bold mono-num" :class="item.glz_saldo >= 0 ? 'text-green' : 'text-red'">
-                                                <v-icon v-if="item.glz_override !== null" size="x-small" color="blue-grey" class="mr-1 opacity-80">mdi-anchor</v-icon>
+                                                <v-icon v-if="item.glz_override !== null" size="x-small" color="blue-grey" class="mr-1 opacity-80">mdi-file-pdf-box</v-icon>
                                                 <span v-if="item.glz_saldo > 0">+</span>[[ formatNum(item.glz_saldo) ]] <span class="opacity-50">h</span>
                                             </div>
                                         </div>
@@ -339,7 +339,7 @@
                                         <div class="d-flex justify-space-between align-start">
                                             <span class="cal-date mono-num" :class="{'opacity-50': item.is_off_day, 'text-primary': isToday(item.date)}">
                                                 [[ item.day_num ]]
-                                                <v-icon v-if="item.glz_override !== null" size="x-small" color="blue-grey" class="ml-1 opacity-80" title="Offizieller GLZ Anker">mdi-anchor</v-icon>
+                                                <v-icon v-if="item.glz_override !== null" size="x-small" color="blue-grey" class="ml-1 opacity-80" title="PDF / Manueller GLZ Saldo">mdi-file-pdf-box</v-icon>
                                             </span>
                                         </div>
                                         <div v-if="item.is_holiday" class="cal-holiday-name text-truncate" :title="item.holiday_name">[[ item.holiday_name ]]</div>
@@ -458,13 +458,13 @@
                 
                 <div class="pa-3 rounded-lg border" style="background-color: rgba(255,255,255,0.02); border-color: rgba(255,255,255,0.1) !important;">
                     <div class="d-flex justify-space-between align-center mb-2">
-                        <div class="text-caption font-weight-bold text-uppercase letter-spacing-1"><v-icon size="small" color="blue-grey" class="mr-1">mdi-anchor</v-icon>GLZ Sync-Anker</div>
+                        <div class="text-caption font-weight-bold text-uppercase letter-spacing-1"><v-icon size="small" color="blue-grey" class="mr-1">mdi-file-pdf-box</v-icon>Offizieller PDF Saldo</div>
                         <div class="text-caption opacity-70">Stand: <strong class="mono-num text-body-2">[[ formatNum(editingDay.glz_saldo) ]] h</strong></div>
                     </div>
                     <v-text-field 
                         v-if="editingDay.entries && editingDay.entries.length > 0"
                         v-model.number="editingDay.entries[0].glz_override" 
-                        label="Offiziellen PDF-Saldo überschreiben" 
+                        label="Gleitzeit Saldo" 
                         placeholder="z.B. 12.5" 
                         variant="outlined" density="compact" hide-details bg-color="transparent" class="mono-num" type="number" step="0.01" 
                         @update:model-value="debouncedSave(editingDay.date, editingDay.entries[0])">
@@ -547,6 +547,9 @@
     </v-app>
   </div>
   <script>
+    // Proxy-Befreiung: Diagramme werden sicher außerhalb von Vue gehalten
+    let activeCharts = { donut: null, bar: null };
+
     const { createApp } = Vue; const { createVuetify } = Vuetify; const vuetify = createVuetify({ theme: { defaultTheme: 'dark' } });
     
     const app = createApp({
@@ -561,8 +564,7 @@
           seriesDialog: { show: false, start: '', end: '', weekdays: [4], type: 'planned', overwrite: false },
           customHolidays: [], newCustomHoliday: { id: null, date: '', name: '', hours: 0 },
           snackbar: { show: false, text: '', color: 'success' },
-          types: [{ title: 'Home Office', value: 'home' }, { title: 'Büro', value: 'office' }, { title: 'Geplant (HO)', value: 'planned' }, { title: 'Krank', value: 'sick' }, { title: 'Urlaub', value: 'vacation' }, { title: 'Gleitzeit', value: 'glz' }, { title: 'Dienstreise', value: 'dr' }, { title: 'Leer', value: '' }],
-          chartInstances: { donut: null, bar: null } 
+          types: [{ title: 'Home Office', value: 'home' }, { title: 'Büro', value: 'office' }, { title: 'Geplant (HO)', value: 'planned' }, { title: 'Krank', value: 'sick' }, { title: 'Urlaub', value: 'vacation' }, { title: 'Gleitzeit', value: 'glz' }, { title: 'Dienstreise', value: 'dr' }, { title: 'Leer', value: '' }]
       }},
       computed: {
         currentYear() { return this.currentDate.getFullYear() },
@@ -588,6 +590,7 @@
               if(newVal === 'year') {
                   this.loadYearData(); 
               } else {
+                  this.destroyCharts();
                   this.loadMonthData(); 
               }
           } 
@@ -725,12 +728,21 @@
             } catch(e) { console.error(e); } 
         },
 
-        // ERWEITERT: Chart.js Tooltips und Interaktivität
+        destroyCharts() {
+            if (activeCharts.donut) {
+                activeCharts.donut.destroy();
+                activeCharts.donut = null;
+            }
+            if (activeCharts.bar) {
+                activeCharts.bar.destroy();
+                activeCharts.bar = null;
+            }
+        },
+
         renderCharts() {
             if (!window.Chart) return;
             
-            if (this.chartInstances.donut) this.chartInstances.donut.destroy();
-            if (this.chartInstances.bar) this.chartInstances.bar.destroy();
+            this.destroyCharts();
 
             const ctxDonut = document.getElementById('donutChart');
             const ctxBar = document.getElementById('barChart');
@@ -739,7 +751,7 @@
             Chart.defaults.color = 'rgba(255, 255, 255, 0.7)';
             Chart.defaults.borderColor = 'rgba(255, 255, 255, 0.1)';
 
-            this.chartInstances.donut = new Chart(ctxDonut, {
+            activeCharts.donut = new Chart(ctxDonut, {
                 type: 'doughnut',
                 data: {
                     labels: ['Home Office', 'Büro', 'Urlaub'],
@@ -747,15 +759,16 @@
                         data: [this.yearTotalHo, this.yearTotalOffice, this.yearTotalVacation],
                         backgroundColor: ['#4CAF50', '#FFC107', '#9C27B0'],
                         borderWidth: 0,
-                        hoverOffset: 4 // NEU: Pop-Out Effekt beim Drüberfahren
+                        hoverOffset: 10
                     }]
                 },
                 options: {
                     responsive: true, maintainAspectRatio: false,
                     cutout: '65%',
+                    layout: { padding: 10 },
                     plugins: { 
                         legend: { position: 'right', labels: { boxWidth: 12 } },
-                        tooltip: { // NEU: Benutzerdefinierter Tooltip
+                        tooltip: { 
                             callbacks: {
                                 label: function(context) {
                                     let val = context.parsed || 0;
@@ -770,7 +783,7 @@
                 }
             });
 
-            this.chartInstances.bar = new Chart(ctxBar, {
+            activeCharts.bar = new Chart(ctxBar, {
                 type: 'bar',
                 data: {
                     labels: ['Jan', 'Feb', 'Mär', 'Apr', 'Mai', 'Jun', 'Jul', 'Aug', 'Sep', 'Okt', 'Nov', 'Dez'],
@@ -778,16 +791,16 @@
                         label: 'HO Tage',
                         data: this.yearData.map(d => d.days_ho),
                         backgroundColor: '#4CAF50',
-                        hoverBackgroundColor: '#66BB6A', // NEU: Leuchteffekt
+                        hoverBackgroundColor: '#66BB6A',
                         borderRadius: 4
                     }]
                 },
                 options: {
                     responsive: true, maintainAspectRatio: false,
-                    interaction: { mode: 'index', intersect: false }, // NEU: Reagiert schon, wenn man in der Nähe des Balkens ist
+                    interaction: { mode: 'index', intersect: false },
                     plugins: { 
                         legend: { display: false },
-                        tooltip: { // NEU: Benutzerdefinierter Tooltip
+                        tooltip: { 
                             callbacks: {
                                 label: function(context) {
                                     return ` ${context.parsed.y} Home Office Tage`;
