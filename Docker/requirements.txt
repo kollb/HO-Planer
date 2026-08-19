@@ -1,0 +1,12 @@
+flask
+flask-cors
+flask-sqlalchemy
+holidays
+pdfplumber
+pytest
+gunicorn
+pytest 
+pytest-flask 
+playwright
+requests
+pytest-playwright

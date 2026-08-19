@@ -1,0 +1,1099 @@
+{
+  "settings": {
+    "weekly_hours": 39,
+    "active_weekdays": [
+      0,
+      1,
+      2,
+      3,
+      4
+    ],
+    "ho_quota_percent": 60,
+    "hide_weekends": true,
+    "default_start_time": "08:00",
+    "auto_convert_planned": true,
+    "workdays_per_week": 5
+  },
+  "entries": {
+    "2025-11-03": [
+      {
+        "type": "home",
+        "start": "07:45",
+        "end": "16:10"
+      }
+    ],
+    "2025-11-04": [
+      {
+        "type": "office",
+        "start": "07:45",
+        "end": "16:33"
+      }
+    ],
+    "2025-11-05": [
+      {
+        "type": "home",
+        "start": "07:50",
+        "end": "16:30"
+      }
+    ],
+    "2025-11-06": [
+      {
+        "type": "office",
+        "start": "07:36",
+        "end": "16:59"
+      }
+    ],
+    "2025-11-07": [
+      {
+        "type": "home",
+        "start": "07:50",
+        "end": "16:10"
+      }
+    ],
+    "2025-11-10": [
+      {
+        "type": "home",
+        "start": "07:50",
+        "end": "15:25"
+      }
+    ],
+    "2025-11-11": [
+      {
+        "type": "office",
+        "start": "07:26",
+        "end": "15:51"
+      }
+    ],
+    "2025-11-12": [
+      {
+        "type": "home",
+        "start": "07:45",
+        "end": "16:45"
+      }
+    ],
+    "2025-11-13": [
+      {
+        "type": "office",
+        "start": "07:42",
+        "end": "16:58"
+      }
+    ],
+    "2025-11-14": [
+      {
+        "type": "home",
+        "start": "07:45",
+        "end": "16:45"
+      }
+    ],
+    "2025-11-16": [
+      {
+        "type": "dr",
+        "start": "07:00",
+        "end": "23:59"
+      }
+    ],
+    "2025-11-17": [
+      {
+        "type": "dr",
+        "start": "08:00",
+        "end": "16:18"
+      }
+    ],
+    "2025-11-18": [
+      {
+        "type": "dr",
+        "start": "08:00",
+        "end": "16:18"
+      }
+    ],
+    "2025-11-19": [
+      {
+        "type": "dr",
+        "start": "08:00",
+        "end": "16:18"
+      }
+    ],
+    "2025-11-20": [
+      {
+        "type": "dr",
+        "start": "08:00",
+        "end": "16:18"
+      }
+    ],
+    "2025-11-21": [
+      {
+        "type": "dr",
+        "start": "08:00",
+        "end": "16:18"
+      }
+    ],
+    "2025-11-24": [
+      {
+        "type": "glz",
+        "start": "08:00",
+        "end": "16:18"
+      }
+    ],
+    "2025-11-25": [
+      {
+        "type": "glz",
+        "start": "08:00",
+        "end": "16:18"
+      }
+    ],
+    "2025-11-26": [
+      {
+        "type": "glz",
+        "start": "08:00",
+        "end": "16:18"
+      }
+    ],
+    "2025-11-27": [
+      {
+        "type": "glz",
+        "start": "08:00",
+        "end": "16:18"
+      }
+    ],
+    "2025-11-28": [
+      {
+        "type": "glz",
+        "start": "08:00",
+        "end": "16:18"
+      }
+    ],
+    "2025-11-29": [
+      {
+        "type": "dr",
+        "start": "00:00",
+        "end": "18:05"
+      }
+    ],
+    "2025-10-01": [
+      {
+        "type": "dr",
+        "start": "08:00",
+        "end": "16:18"
+      }
+    ],
+    "2025-10-02": [
+      {
+        "type": "glz",
+        "start": "08:00",
+        "end": "16:18"
+      }
+    ],
+    "2025-10-06": [
+      {
+        "type": "home",
+        "start": "07:45",
+        "end": "16:15"
+      }
+    ],
+    "2025-10-07": [
+      {
+        "type": "office",
+        "start": "07:48",
+        "end": "16:25"
+      }
+    ],
+    "2025-10-08": [
+      {
+        "type": "sick",
+        "start": "08:00",
+        "end": "16:18"
+      }
+    ],
+    "2025-10-09": [
+      {
+        "type": "sick",
+        "start": "08:00",
+        "end": "16:18"
+      }
+    ],
+    "2025-10-10": [
+      {
+        "type": "sick",
+        "start": "08:00",
+        "end": "16:18"
+      }
+    ],
+    "2025-10-13": [
+      {
+        "type": "vacation",
+        "start": "08:00",
+        "end": "16:18"
+      }
+    ],
+    "2025-10-14": [
+      {
+        "type": "vacation",
+        "start": "08:00",
+        "end": "16:18"
+      }
+    ],
+    "2025-10-15": [
+      {
+        "type": "vacation",
+        "start": "08:00",
+        "end": "16:18"
+      }
+    ],
+    "2025-10-16": [
+      {
+        "type": "vacation",
+        "start": "08:00",
+        "end": "16:18"
+      }
+    ],
+    "2025-10-17": [
+      {
+        "type": "vacation",
+        "start": "08:00",
+        "end": "16:18"
+      }
+    ],
+    "2025-10-18": [
+      {
+        "type": "vacation",
+        "start": "00:00",
+        "end": "00:00"
+      }
+    ],
+    "2025-10-19": [
+      {
+        "type": "vacation",
+        "start": "00:00",
+        "end": "00:00"
+      }
+    ],
+    "2025-10-20": [
+      {
+        "type": "vacation",
+        "start": "08:00",
+        "end": "16:18"
+      }
+    ],
+    "2025-10-21": [
+      {
+        "type": "vacation",
+        "start": "08:00",
+        "end": "16:18"
+      }
+    ],
+    "2025-10-22": [
+      {
+        "type": "home",
+        "start": "07:50",
+        "end": "16:30"
+      }
+    ],
+    "2025-10-23": [
+      {
+        "type": "office",
+        "start": "07:42",
+        "end": "16:22"
+      }
+    ],
+    "2025-10-24": [
+      {
+        "type": "home",
+        "start": "07:50",
+        "end": "16:20"
+      }
+    ],
+    "2025-10-27": [
+      {
+        "type": "home",
+        "start": "07:45",
+        "end": "16:35"
+      }
+    ],
+    "2025-10-28": [
+      {
+        "type": "office",
+        "start": "07:51",
+        "end": "16:15"
+      }
+    ],
+    "2025-10-29": [
+      {
+        "type": "home",
+        "start": "07:50",
+        "end": "16:30"
+      }
+    ],
+    "2025-10-30": [
+      {
+        "type": "office",
+        "start": "07:48",
+        "end": "17:00"
+      }
+    ],
+    "2025-10-31": [
+      {
+        "type": "home",
+        "start": "07:45",
+        "end": "16:20"
+      }
+    ],
+    "2025-04-01": [
+      {
+        "type": "office",
+        "start": "07:44",
+        "end": "16:42"
+      }
+    ],
+    "2025-04-02": [
+      {
+        "type": "home",
+        "start": "07:45",
+        "end": "16:25"
+      }
+    ],
+    "2025-04-03": [
+      {
+        "type": "office",
+        "start": "07:51",
+        "end": "16:20"
+      }
+    ],
+    "2025-04-04": [
+      {
+        "type": "home",
+        "start": "07:45",
+        "end": "16:10"
+      }
+    ],
+    "2025-04-07": [
+      {
+        "type": "home",
+        "start": "07:45",
+        "end": "16:20"
+      }
+    ],
+    "2025-04-08": [
+      {
+        "type": "office",
+        "start": "07:48",
+        "end": "17:06"
+      }
+    ],
+    "2025-04-09": [
+      {
+        "type": "home",
+        "start": "07:45",
+        "end": "16:25"
+      }
+    ],
+    "2025-04-10": [
+      {
+        "type": "office",
+        "start": "07:53",
+        "end": "17:35"
+      }
+    ],
+    "2025-04-11": [
+      {
+        "type": "home",
+        "start": "07:45",
+        "end": "16:35"
+      }
+    ],
+    "2025-04-14": [
+      {
+        "type": "home",
+        "start": "07:55",
+        "end": "16:45"
+      }
+    ],
+    "2025-04-15": [
+      {
+        "type": "office",
+        "start": "07:52",
+        "end": "15:30"
+      },
+      {
+        "type": "home",
+        "start": "16:45",
+        "end": "17:30"
+      }
+    ],
+    "2025-04-16": [
+      {
+        "type": "home",
+        "start": "07:45",
+        "end": "16:40"
+      }
+    ],
+    "2025-04-17": [
+      {
+        "type": "glz",
+        "start": "08:00",
+        "end": "16:18"
+      }
+    ],
+    "2025-04-22": [
+      {
+        "type": "home",
+        "start": "07:35",
+        "end": "15:45"
+      }
+    ],
+    "2025-04-23": [
+      {
+        "type": "home",
+        "start": "07:45",
+        "end": "16:45"
+      }
+    ],
+    "2025-04-24": [
+      {
+        "type": "office",
+        "start": "07:51",
+        "end": "16:30"
+      }
+    ],
+    "2025-04-25": [
+      {
+        "type": "home",
+        "start": "07:35",
+        "end": "16:15"
+      }
+    ],
+    "2025-04-28": [
+      {
+        "type": "office",
+        "start": "08:00",
+        "end": "16:18"
+      }
+    ],
+    "2025-04-29": [
+      {
+        "type": "office",
+        "start": "08:00",
+        "end": "16:18"
+      }
+    ],
+    "2025-04-30": [
+      {
+        "type": "glz",
+        "start": "",
+        "end": ""
+      },
+      {
+        "type": "office",
+        "start": "08:00",
+        "end": "16:18"
+      }
+    ],
+    "2026-02-19": [
+      {
+        "type": "home",
+        "start": "08:00",
+        "end": "16:18",
+        "comment": ""
+      }
+    ],
+    "2026-02-20": [
+      {
+        "type": "home",
+        "start": "08:00",
+        "end": "16:18",
+        "comment": ""
+      }
+    ],
+    "2026-01-01": [
+      {
+        "type": "vacation",
+        "start": "",
+        "end": "",
+        "glz_override": 37.32
+      }
+    ],
+    "2026-01-02": [
+      {
+        "type": "vacation",
+        "start": "08:00",
+        "end": "16:18",
+        "glz_override": 37.32
+      }
+    ],
+    "2026-01-03": [
+      {
+        "type": "vacation",
+        "start": "",
+        "end": "",
+        "glz_override": 37.32
+      }
+    ],
+    "2026-01-04": [
+      {
+        "type": "vacation",
+        "start": "",
+        "end": "",
+        "glz_override": 37.32
+      }
+    ],
+    "2026-01-05": [
+      {
+        "type": "vacation",
+        "start": "08:00",
+        "end": "16:18",
+        "glz_override": 37.32
+      }
+    ],
+    "2026-01-06": [
+      {
+        "type": "vacation",
+        "start": "08:00",
+        "end": "16:18",
+        "glz_override": 37.32
+      }
+    ],
+    "2026-01-07": [
+      {
+        "type": "vacation",
+        "start": "08:00",
+        "end": "16:18",
+        "glz_override": 37.32
+      }
+    ],
+    "2026-01-08": [
+      {
+        "type": "vacation",
+        "start": "08:00",
+        "end": "16:18",
+        "glz_override": 37.32
+      }
+    ],
+    "2026-01-09": [
+      {
+        "type": "vacation",
+        "start": "08:00",
+        "end": "16:18",
+        "glz_override": 37.32
+      }
+    ],
+    "2026-01-10": [
+      {
+        "type": "vacation",
+        "start": "",
+        "end": "",
+        "glz_override": 37.32
+      }
+    ],
+    "2026-01-11": [
+      {
+        "type": "vacation",
+        "start": "",
+        "end": "",
+        "glz_override": 37.32
+      }
+    ],
+    "2026-01-12": [
+      {
+        "type": "home",
+        "start": "07:50",
+        "end": "16:20",
+        "glz_override": 37.52
+      }
+    ],
+    "2026-01-13": [
+      {
+        "type": "office",
+        "start": "07:51",
+        "end": "16:08",
+        "glz_override": 37.5
+      }
+    ],
+    "2026-01-14": [
+      {
+        "type": "home",
+        "start": "07:50",
+        "end": "16:30",
+        "glz_override": 37.87
+      }
+    ],
+    "2026-01-15": [
+      {
+        "type": "office",
+        "start": "07:50",
+        "end": "15:52",
+        "glz_override": 37.6
+      }
+    ],
+    "2026-01-16": [
+      {
+        "type": "home",
+        "start": "07:55",
+        "end": "16:45",
+        "glz_override": 38.13
+      }
+    ],
+    "2026-01-19": [
+      {
+        "type": "home",
+        "start": "07:30",
+        "end": "15:50",
+        "glz_override": 38.16
+      }
+    ],
+    "2026-01-20": [
+      {
+        "type": "home",
+        "start": "07:50",
+        "end": "16:25",
+        "glz_override": 38.44
+      }
+    ],
+    "2026-01-21": [
+      {
+        "type": "home",
+        "start": "07:35",
+        "end": "16:15",
+        "glz_override": 38.81
+      }
+    ],
+    "2026-01-22": [
+      {
+        "type": "office",
+        "start": "07:42",
+        "end": "16:04",
+        "glz_override": 38.88
+      }
+    ],
+    "2026-01-23": [
+      {
+        "type": "home",
+        "start": "07:35",
+        "end": "16:10",
+        "glz_override": 39.16
+      }
+    ],
+    "2026-01-26": [
+      {
+        "type": "home",
+        "start": "07:35",
+        "end": "16:15",
+        "glz_override": 39.53
+      }
+    ],
+    "2026-01-27": [
+      {
+        "type": "home",
+        "start": "07:50",
+        "end": "16:20",
+        "glz_override": 39.73
+      }
+    ],
+    "2026-01-28": [
+      {
+        "type": "home",
+        "start": "07:35",
+        "end": "16:15",
+        "glz_override": 40.1
+      }
+    ],
+    "2026-01-29": [
+      {
+        "type": "office",
+        "start": "07:56",
+        "end": "16:03",
+        "glz_override": 39.92
+      }
+    ],
+    "2026-01-30": [
+      {
+        "type": "vacation",
+        "start": "08:00",
+        "end": "16:18",
+        "glz_override": 39.92
+      }
+    ],
+    "2026-01-31": [
+      {
+        "type": "vacation",
+        "start": "",
+        "end": "",
+        "glz_override": 39.92
+      }
+    ],
+    "2026-02-16": [
+      {
+        "type": "glz",
+        "start": "",
+        "end": "",
+        "comment": "",
+        "glz_override": null
+      }
+    ],
+    "2026-02-17": [
+      {
+        "type": "office",
+        "start": "08:00",
+        "end": "18:44",
+        "comment": "",
+        "glz_override": null,
+        "net": 9.55
+      }
+    ],
+    "2026-02-23": [
+      {
+        "type": "planned",
+        "start": "",
+        "end": "",
+        "comment": "",
+        "glz_override": null
+      }
+    ],
+    "2026-02-01": [
+      {
+        "type": "vacation",
+        "start": "",
+        "end": "",
+        "glz_override": 39.92,
+        "glz_override_source": "pdf"
+      }
+    ],
+    "2026-02-02": [
+      {
+        "type": "vacation",
+        "start": "08:00",
+        "end": "16:18",
+        "glz_override": 39.92,
+        "glz_override_source": "pdf"
+      }
+    ],
+    "2026-02-03": [
+      {
+        "type": "vacation",
+        "start": "08:00",
+        "end": "16:18",
+        "glz_override": 39.92,
+        "glz_override_source": "pdf"
+      }
+    ],
+    "2026-02-04": [
+      {
+        "type": "vacation",
+        "start": "08:00",
+        "end": "16:18",
+        "glz_override": 39.92,
+        "glz_override_source": "pdf"
+      }
+    ],
+    "2026-02-05": [
+      {
+        "type": "vacation",
+        "start": "08:00",
+        "end": "16:18",
+        "glz_override": 39.92,
+        "glz_override_source": "pdf"
+      }
+    ],
+    "2026-02-06": [
+      {
+        "type": "vacation",
+        "start": "08:00",
+        "end": "16:18",
+        "glz_override": 39.92,
+        "glz_override_source": "pdf"
+      }
+    ],
+    "2026-02-07": [
+      {
+        "type": "vacation",
+        "start": "",
+        "end": "",
+        "glz_override": 39.92,
+        "glz_override_source": "pdf"
+      }
+    ],
+    "2026-02-08": [
+      {
+        "type": "vacation",
+        "start": "",
+        "end": "",
+        "glz_override": 39.92,
+        "glz_override_source": "pdf"
+      }
+    ],
+    "2026-02-09": [
+      {
+        "type": "vacation",
+        "start": "08:00",
+        "end": "16:18",
+        "glz_override": 39.92,
+        "glz_override_source": "pdf"
+      }
+    ],
+    "2026-02-10": [
+      {
+        "type": "vacation",
+        "start": "08:00",
+        "end": "16:18",
+        "glz_override": 39.92,
+        "glz_override_source": "pdf"
+      }
+    ],
+    "2026-02-11": [
+      {
+        "type": "home",
+        "start": "07:45",
+        "end": "16:25",
+        "glz_override": 40.29,
+        "glz_override_source": "pdf"
+      }
+    ],
+    "2026-02-12": [
+      {
+        "type": "office",
+        "start": "07:51",
+        "end": "17:05",
+        "glz_override": 41.22,
+        "glz_override_source": "pdf"
+      }
+    ],
+    "2026-02-13": [
+      {
+        "type": "",
+        "start": "",
+        "end": "",
+        "comment": "⚠️ Fehlt im PDF",
+        "glz_override": null,
+        "glz_override_source": null
+      }
+    ],
+    "2025-05-01": [
+      {
+        "type": "vacation",
+        "start": "",
+        "end": "",
+        "glz_override": 37.71,
+        "glz_override_source": "pdf"
+      }
+    ],
+    "2025-05-02": [
+      {
+        "type": "vacation",
+        "start": "08:00",
+        "end": "16:18",
+        "glz_override": 37.71,
+        "glz_override_source": "pdf"
+      }
+    ],
+    "2025-05-04": [
+      {
+        "type": "dr",
+        "start": "06:45",
+        "end": "12:30",
+        "glz_override": 39.63,
+        "glz_override_source": "pdf"
+      }
+    ],
+    "2025-05-05": [
+      {
+        "type": "dr",
+        "start": "08:00",
+        "end": "16:18",
+        "glz_override": 39.63,
+        "glz_override_source": "pdf"
+      }
+    ],
+    "2025-05-06": [
+      {
+        "type": "dr",
+        "start": "08:00",
+        "end": "16:18",
+        "glz_override": 39.63,
+        "glz_override_source": "pdf"
+      }
+    ],
+    "2025-05-07": [
+      {
+        "type": "dr",
+        "start": "08:00",
+        "end": "16:18",
+        "glz_override": 39.63,
+        "glz_override_source": "pdf"
+      }
+    ],
+    "2025-05-08": [
+      {
+        "type": "dr",
+        "start": "08:00",
+        "end": "16:18",
+        "glz_override": 39.63,
+        "glz_override_source": "pdf"
+      }
+    ],
+    "2025-05-09": [
+      {
+        "type": "dr",
+        "start": "09:30",
+        "end": "18:00",
+        "glz_override": 41.82,
+        "glz_override_source": "pdf"
+      },
+      {
+        "type": "dr",
+        "start": "18:00",
+        "end": "23:59",
+        "glz_override": null,
+        "glz_override_source": null
+      }
+    ],
+    "2025-05-10": [
+      {
+        "type": "",
+        "start": "",
+        "end": "",
+        "glz_override": 41.88,
+        "glz_override_source": "pdf"
+      }
+    ],
+    "2025-05-12": [
+      {
+        "type": "glz",
+        "start": "08:00",
+        "end": "16:18",
+        "glz_override": 34.08,
+        "glz_override_source": "pdf"
+      }
+    ],
+    "2025-05-13": [
+      {
+        "type": "home",
+        "start": "07:45",
+        "end": "16:20",
+        "glz_override": 34.36,
+        "glz_override_source": "pdf"
+      }
+    ],
+    "2025-05-14": [
+      {
+        "type": "office",
+        "start": "07:49",
+        "end": "16:44",
+        "glz_override": 34.98,
+        "glz_override_source": "pdf"
+      }
+    ],
+    "2025-05-15": [
+      {
+        "type": "office",
+        "start": "08:05",
+        "end": "17:34",
+        "glz_override": 36.16,
+        "glz_override_source": "pdf"
+      }
+    ],
+    "2025-05-16": [
+      {
+        "type": "home",
+        "start": "07:45",
+        "end": "16:35",
+        "glz_override": 36.69,
+        "glz_override_source": "pdf"
+      }
+    ],
+    "2025-05-19": [
+      {
+        "type": "home",
+        "start": "07:45",
+        "end": "16:30",
+        "glz_override": 37.14,
+        "glz_override_source": "pdf"
+      }
+    ],
+    "2025-05-20": [
+      {
+        "type": "office",
+        "start": "07:46",
+        "end": "16:37",
+        "glz_override": 37.69,
+        "glz_override_source": "pdf"
+      }
+    ],
+    "2025-05-21": [
+      {
+        "type": "home",
+        "start": "07:50",
+        "end": "16:45",
+        "glz_override": 38.31,
+        "glz_override_source": "pdf"
+      }
+    ],
+    "2025-05-22": [
+      {
+        "type": "office",
+        "start": "07:48",
+        "end": "17:01",
+        "glz_override": 39.23,
+        "glz_override_source": "pdf"
+      }
+    ],
+    "2025-05-23": [
+      {
+        "type": "home",
+        "start": "07:50",
+        "end": "16:15",
+        "glz_override": 39.35,
+        "glz_override_source": "pdf"
+      }
+    ],
+    "2025-05-26": [
+      {
+        "type": "home",
+        "start": "07:45",
+        "end": "16:05",
+        "glz_override": 39.38,
+        "glz_override_source": "pdf"
+      }
+    ],
+    "2025-05-27": [
+      {
+        "type": "office",
+        "start": "07:48",
+        "end": "16:53",
+        "glz_override": 40.16,
+        "glz_override_source": "pdf"
+      }
+    ],
+    "2025-05-28": [
+      {
+        "type": "home",
+        "start": "07:45",
+        "end": "16:20",
+        "glz_override": 40.44,
+        "glz_override_source": "pdf"
+      }
+    ],
+    "2025-05-29": [
+      {
+        "type": "",
+        "start": "",
+        "end": "",
+        "glz_override": 40.44,
+        "glz_override_source": "pdf"
+      }
+    ],
+    "2025-05-30": [
+      {
+        "type": "vacation",
+        "start": "08:00",
+        "end": "16:18",
+        "glz_override": 40.44,
+        "glz_override_source": "pdf"
+      }
+    ]
+  },
+  "customHolidays": {
+    "2026-05-26": {
+      "date": "2026-05-26",
+      "name": "Wäldchestag",
+      "hours": 6
+    }
+  }
+}

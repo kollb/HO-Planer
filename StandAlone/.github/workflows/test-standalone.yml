@@ -1,0 +1,40 @@
+name: Standalone App Tests
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  test-html-js:
+    runs-on: ubuntu-latest
+    
+    steps:
+      # 1. Code auschecken
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # 2. Python installieren (für den http.server und pytest)
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.13'
+
+      # 3. Playwright & Pytest installieren
+      - name: Install dependencies
+        run: |
+          pip install pytest-playwright
+          playwright install chromium --with-deps
+
+      # 4. Tests ausführen (Server starten & testen in einem Schritt)
+      - name: Run Tests
+        run: |
+          # Server im Hintergrund (&) starten
+          python -m http.server 8000 &
+          
+          # Kurz warten bis er da ist
+          sleep 3
+          
+          # Tests feuern
+          pytest test_standalone.py
