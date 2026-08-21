@@ -9,7 +9,7 @@
       "active_weekdays": [0, 1, 2, 3, 4],
       "statutory_holiday": "Weihnachten",
       "custom_holiday": {"name": "Wäldchestag", "hours": 6.0},
-      "expected": {"is_workday": false, "target": 0.0, "holiday_name": "Weihnachten", "is_short_day": false}
+      "expected": {"is_workday": false, "target": 0.0, "holiday_name": "1. Weihnachtstag", "is_short_day": false}
     },
     {
       "id": "custom-full-day-off",

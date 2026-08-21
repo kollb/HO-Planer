@@ -1,12 +1,15 @@
 import pytest
-import pytest
 import json
 from pathlib import Path
 from datetime import timedelta
 import io
+
+import pytest
 from app import app, db, Settings, WorkEntry, CustomHoliday, get_local_now
 
 SHARED_IMPORT_CASES = Path(__file__).resolve().parents[2] / "shared" / "test-cases" / "json-import.json"
+SHARED_INCOMPLETE_ENTRY_CASES = Path(__file__).resolve().parents[2] / "shared" / "test-cases" / "incomplete-entries.json"
+SHARED_GLZ_CASES = Path(__file__).resolve().parents[2] / "shared" / "test-cases" / "glz.json"
 
 @pytest.fixture
 def client():
@@ -19,7 +22,7 @@ def client():
 def test_index_page_loads(client):
     response = client.get('/')
     assert response.status_code == 200
-    assert b"Home Office Planer" in response.data
+    assert b"HO Planer" in response.data
 
 def test_get_settings(client):
     response = client.get('/api/settings')
@@ -51,40 +54,37 @@ def test_create_and_read_entry(client):
         WorkEntry.query.filter_by(date="2024-01-15").delete()
         db.session.commit()
 
-def test_unfinished_actual_entries_count_only_for_future_days(client):
-    """Unvollständige Ist-Einträge erhalten nur an zukünftigen Tagen die Sollzeit."""
+def test_shared_incomplete_entry_cases(client):
+    """Docker erfüllt alle zentral definierten Regeln für unvollständige Einträge."""
+    cases = json.loads(SHARED_INCOMPLETE_ENTRY_CASES.read_text(encoding="utf-8"))["cases"]
     today = get_local_now().date()
-    tomorrow = today + timedelta(days=1)
+    dates = {"past": today - timedelta(days=1), "today": today, "future": today + timedelta(days=1)}
     created_ids = []
 
     try:
-        for entry_date, entry_type in ((today, "home"), (tomorrow, "office"), (today, "dr")):
-            response = client.post('/api/entry', json={
-                "date": entry_date.isoformat(),
-                "type": entry_type,
-                "start": "",
-                "end": "",
-                "comment": "Heute-Regel-Regressionstest"
+        for case in cases:
+            entry_date = dates[case["relative_day"]]
+            response = client.post("/api/entry", json={
+                "date": entry_date.isoformat(), "type": case["type"], "start": "", "end": "",
+                "comment": f"Referenzfall {case['id']}",
             })
-            assert response.status_code == 200
-            created_ids.append(response.get_json()["id"])
+            assert response.status_code == 200, case["id"]
+            created_ids.append((case, entry_date, response.get_json()["id"]))
 
-        today_response = client.get(f'/api/month/{today.year}/{today.month:02d}')
-        assert today_response.status_code == 200
-        today_items = {item["date"]: item for item in today_response.get_json()["items"] if item.get("row_type") == "day"}
-
-        today_entries = today_items[today.isoformat()]["entries"]
-        assert next(entry for entry in today_entries if entry["id"] == created_ids[0])["net"] == 0
-        assert next(entry for entry in today_entries if entry["id"] == created_ids[2])["net"] == 0
-
-        tomorrow_response = client.get(f'/api/month/{tomorrow.year}/{tomorrow.month:02d}')
-        assert tomorrow_response.status_code == 200
-        tomorrow_items = {item["date"]: item for item in tomorrow_response.get_json()["items"] if item.get("row_type") == "day"}
-        tomorrow_entry = next(entry for entry in tomorrow_items[tomorrow.isoformat()]["entries"] if entry["id"] == created_ids[1])
-        assert tomorrow_entry["net"] == tomorrow_items[tomorrow.isoformat()]["daily_target"]
+        month_cache = {}
+        for case, entry_date, entry_id in created_ids:
+            key = (entry_date.year, entry_date.month)
+            if key not in month_cache:
+                response = client.get(f"/api/month/{entry_date.year}/{entry_date.month:02d}")
+                assert response.status_code == 200, case["id"]
+                month_cache[key] = {item["date"]: item for item in response.get_json()["items"] if item.get("row_type") == "day"}
+            day = month_cache[key][entry_date.isoformat()]
+            entry = next(item for item in day["entries"] if item["id"] == entry_id)
+            expected = day["daily_target"] if case["expected_mode"] == "target" else 0
+            assert entry["net"] == expected, case["id"]
     finally:
         with app.app_context():
-            WorkEntry.query.filter(WorkEntry.id.in_(created_ids)).delete(synchronize_session=False)
+            WorkEntry.query.filter(WorkEntry.id.in_([entry_id for _, _, entry_id in created_ids])).delete(synchronize_session=False)
             db.session.commit()
 
 def test_glz_override_save_and_carryover(client):
@@ -137,27 +137,67 @@ def test_json_export_and_additive_import(client):
             db.session.commit()
 
 
-def test_json_import_uses_shared_contract_case(client):
-    """Der API-Import erfüllt den zentral definierten additiven Importfall."""
-    case = json.loads(SHARED_IMPORT_CASES.read_text(encoding="utf-8"))["cases"][0]
-    unique_date = case["incoming_entries"][0]["date"]
-    payload = {
-        "format": "ho-planer-export", "version": 1, "exported_at": "2098-01-01T00:00:00+00:00",
-        "settings": {}, "custom_holidays": [], "entries": case["incoming_entries"],
-    }
+def test_shared_json_import_cases(client):
+    """Der API-Import erfüllt alle zentral definierten additiven Importfälle."""
+    cases = json.loads(SHARED_IMPORT_CASES.read_text(encoding="utf-8"))["cases"]
+    unique_dates = {entry["date"] for case in cases for entry in case["incoming_entries"]}
     try:
-        response = client.post(
-            "/api/import/json",
-            data={"file": (io.BytesIO(json.dumps(payload).encode("utf-8")), "export.json")},
-            content_type="multipart/form-data",
-        )
-        assert response.status_code == 200
-        result = response.get_json()
-        assert result["imported_entries"] == case["expected"]["imported_entries"]
-        assert result["skipped_entries"] == case["expected"]["skipped_entries"]
+        for case in cases:
+            with app.app_context():
+                for existing in case["existing_entries"]:
+                    db.session.add(WorkEntry(
+                        date=existing["date"], type=existing["type"], start_time=existing["start"],
+                        end_time=existing["end"], comment=existing["comment"],
+                        glz_override=existing["glz_override"], glz_override_source=existing["glz_override_source"],
+                    ))
+                db.session.commit()
+
+            payload = {
+                "format": "ho-planer-export", "version": 1, "exported_at": "2098-01-01T00:00:00+00:00",
+                "settings": {}, "custom_holidays": [], "entries": case["incoming_entries"],
+            }
+            response = client.post(
+                "/api/import/json",
+                data={"file": (io.BytesIO(json.dumps(payload).encode("utf-8")), "export.json")},
+                content_type="multipart/form-data",
+            )
+            assert response.status_code == 200, case["id"]
+            result = response.get_json()
+            assert result["imported_entries"] == case["expected"]["imported_entries"], case["id"]
+            assert result["skipped_entries"] == case["expected"]["skipped_entries"], case["id"]
     finally:
         with app.app_context():
-            WorkEntry.query.filter_by(date=unique_date).delete()
+            WorkEntry.query.filter(WorkEntry.date.in_(unique_dates)).delete(synchronize_session=False)
+            db.session.commit()
+
+
+def test_shared_glz_anchor_round_trip(client):
+    """GLZ-Anker behalten beim JSON-Import und anschließendem Export Wert sowie Quelle."""
+    cases = json.loads(SHARED_GLZ_CASES.read_text(encoding="utf-8"))["cases"]
+    dates = {entry["date"] for case in cases for entry in case["entries"]}
+    try:
+        for case in cases:
+            payload = {
+                "format": "ho-planer-export", "version": 1, "exported_at": "2098-01-01T00:00:00+00:00",
+                "settings": {}, "custom_holidays": [], "entries": case["entries"],
+            }
+            response = client.post(
+                "/api/import/json",
+                data={"file": (io.BytesIO(json.dumps(payload).encode("utf-8")), "export.json")},
+                content_type="multipart/form-data",
+            )
+            assert response.status_code == 200, case["id"]
+
+        exported = client.get("/api/export/json")
+        assert exported.status_code == 200
+        entries = exported.get_json()["entries"]
+        for case in cases:
+            anchor = case["expected_anchor"]
+            exported_anchor = next(entry for entry in entries if entry["date"] == anchor["date"] and entry["glz_override"] == anchor["value"])
+            assert exported_anchor["glz_override_source"] == anchor["source"], case["id"]
+    finally:
+        with app.app_context():
+            WorkEntry.query.filter(WorkEntry.date.in_(dates)).delete(synchronize_session=False)
             db.session.commit()
 
 

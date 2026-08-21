@@ -1,4 +1,3 @@
-import pytest
 import json
 import os
 import re
@@ -10,6 +9,8 @@ from playwright.sync_api import Page, expect
 SHARED_BREAK_CASES = Path(__file__).resolve().parents[1] / "shared" / "test-cases" / "breaks.json"
 SHARED_HOLIDAY_CASES = Path(__file__).resolve().parents[1] / "shared" / "test-cases" / "holidays.json"
 SHARED_IMPORT_CASES = Path(__file__).resolve().parents[1] / "shared" / "test-cases" / "json-import.json"
+SHARED_INCOMPLETE_ENTRY_CASES = Path(__file__).resolve().parents[1] / "shared" / "test-cases" / "incomplete-entries.json"
+SHARED_GLZ_CASES = Path(__file__).resolve().parents[1] / "shared" / "test-cases" / "glz.json"
 
 BASE_URL = "http://localhost:8000/ho-planer.html"
 PRIVATE_DIR = "testfiles"
@@ -59,35 +60,69 @@ def test_shared_break_cases(page: Page):
         assert result == case["expected_net_hours"], case["id"]
 
 
-def test_statutory_holiday_overrides_custom_holiday(page: Page):
-    """Gesetzliche Feiertage haben Vorrang vor eigenen Sondertagen."""
-    result = page.evaluate("""() => {
-        window.vm.customHolidays = {
-            '2023-12-25': { date: '2023-12-25', name: 'Wäldchestag', hours: 6.0 }
-        };
-        return window.vm.getDayInfo(new Date(2023, 11, 25));
-    }""")
+def test_shared_holiday_cases(page: Page):
+    """Standalone erfüllt die zentral definierten Feiertags- und Wochenendfälle."""
+    cases = json.loads(SHARED_HOLIDAY_CASES.read_text(encoding="utf-8"))["cases"]
+    for case in cases:
+        result = page.evaluate("""case => {
+            const date = new Date(`${case.date}T12:00:00`);
+            window.vm.settings = {
+                ...window.vm.settings,
+                weekly_hours: case.weekly_hours,
+                active_weekdays: case.active_weekdays,
+            };
+            window.vm.customHolidays = case.custom_holiday
+                ? { [case.date]: { date: case.date, ...case.custom_holiday } }
+                : {};
+            return window.vm.getDayInfo(date);
+        }""", case)
+        for field, expected in case["expected"].items():
+            assert result[field] == expected, case["id"]
 
-    assert result['is_workday'] is False
-    assert result['target'] == 0
-    assert result['holiday_name'] == '1. Weihnachtstag'
-    assert result['is_short_day'] is False
+
+def test_shared_json_import_cases(page: Page):
+    """Der Browser-Import erfüllt alle zentral definierten additiven Importfälle."""
+    cases = json.loads(SHARED_IMPORT_CASES.read_text(encoding="utf-8"))["cases"]
+    for case in cases:
+        page.evaluate("() => Store.set({ settings: {}, entries: {}, customHolidays: {} })")
+        for entry in case["existing_entries"]:
+            page.evaluate("entry => Store.saveDayEntries(entry.date, [{ ...entry }])", entry)
+        payload = {
+            "format": "ho-planer-export", "version": 1, "exported_at": "2098-01-01T00:00:00Z",
+            "settings": {}, "custom_holidays": [], "entries": case["incoming_entries"],
+        }
+        result = page.evaluate("payload => mergePortableExport(payload)", payload)
+        assert result["imported_entries"] == case["expected"]["imported_entries"], case["id"]
+        assert result["skipped_entries"] == case["expected"]["skipped_entries"], case["id"]
 
 
-def test_portable_json_import_is_additive(page: Page):
-    """Der gemeinsame JSON-Import erfüllt den zentral definierten additiven Referenzfall."""
-    case = json.loads(SHARED_IMPORT_CASES.read_text(encoding="utf-8"))["cases"][0]
-    payload = {
-        "format": "ho-planer-export", "version": 1, "exported_at": "2098-01-01T00:00:00Z",
-        "settings": {}, "custom_holidays": [], "entries": case["incoming_entries"],
-    }
-    first = page.evaluate("payload => mergePortableExport(payload)", payload)
-    second = page.evaluate("payload => mergePortableExport(payload)", payload)
-    stored = page.evaluate("() => Store.getEntries()['2098-07-15']")
-    assert first['imported_entries'] == case["expected"]["imported_entries"]
-    assert first['skipped_entries'] == case["expected"]["skipped_entries"]
-    assert second['skipped_entries'] == 1
-    assert len(stored) == 1
+def test_shared_glz_anchor_round_trip(page: Page):
+    """GLZ-Anker behalten beim Browser-Export und -Import Wert sowie Quelle."""
+    cases = json.loads(SHARED_GLZ_CASES.read_text(encoding="utf-8"))["cases"]
+    for case in cases:
+        page.evaluate("() => Store.set({ settings: {}, entries: {}, customHolidays: {} })")
+        payload = {
+            "format": "ho-planer-export", "version": 1, "exported_at": "2098-01-01T00:00:00Z",
+            "settings": {}, "custom_holidays": [], "entries": case["entries"],
+        }
+        page.evaluate("payload => mergePortableExport(payload)", payload)
+        exported = page.evaluate("() => buildPortableExport()")
+        anchor = case["expected_anchor"]
+        exported_anchor = next(entry for entry in exported["entries"] if entry["date"] == anchor["date"] and entry["glz_override"] == anchor["value"])
+        assert exported_anchor["glz_override_source"] == anchor["source"], case["id"]
+
+
+def test_shared_incomplete_entry_cases(page: Page):
+    """Standalone erfüllt alle zentral definierten Regeln für unvollständige Einträge."""
+    cases = json.loads(SHARED_INCOMPLETE_ENTRY_CASES.read_text(encoding="utf-8"))["cases"]
+    for case in cases:
+        is_future = case["relative_day"] == "future"
+        result = page.evaluate(
+            """({ entry, target, isFuture }) => calculateTotalDailyNet([entry], target, isFuture)""",
+            {"entry": {"type": case["type"], "start": "", "end": ""}, "target": 7.8, "isFuture": is_future},
+        )
+        expected = 7.8 if case["expected_mode"] == "target" else 0
+        assert result == expected, case["id"]
 
 
 # --- GUI TESTS (V2 UI) ---
