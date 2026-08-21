@@ -46,6 +46,13 @@ docker start ho-planer-app
 
 Eine Wiederherstellung ersetzt den aktuellen Datenstand. Daher vor dem Kopieren auch die aktuelle `database.db` separat sichern.
 
+## Betriebshinweise für SQLite
+
+- Backups im selben Volume schützen nicht gegen NAS-, Datenträger- oder Volume-Ausfall. Sichere `/app/data` zusätzlich auf ein getrenntes Ziel und überwache den freien Speicher.
+- Restore- oder Kopieraktionen nur bei gestopptem Container durchführen. Mehrere unabhängige Schreibinstanzen dürfen nicht dieselbe SQLite-Datei verwenden.
+- Bei `database is locked` die Logs prüfen und parallele Schreibzugriffe reduzieren. Der Container startet derzeit Gunicorn mit zwei Workern; das ist für die vorgesehene kleine LAN-Installation zu beobachten.
+- Eine optionale Integritätsprüfung auf einer gestoppten Datenbankkopie lautet `PRAGMA integrity_check;`. WAL erst aktivieren, wenn NAS-Dateisystem und Backup-Verfahren dafür getestet sind.
+
 ## Grenzen
 
 JSON ist für Export, Import und den Austausch mit Standalone vorgesehen. Es ersetzt SQLite nicht und ist keine automatische Datenbankmigration.

@@ -6,40 +6,178 @@
       "id": "statutory-holiday-overrides-custom-holiday",
       "date": "2023-12-25",
       "weekly_hours": 40,
-      "active_weekdays": [0, 1, 2, 3, 4],
+      "active_weekdays": [
+        0,
+        1,
+        2,
+        3,
+        4
+      ],
       "statutory_holiday": "Weihnachten",
-      "custom_holiday": {"name": "Wäldchestag", "hours": 6.0},
-      "expected": {"is_workday": false, "target": 0.0, "holiday_name": "1. Weihnachtstag", "is_short_day": false}
+      "custom_holiday": {
+        "name": "Wäldchestag",
+        "hours": 6.0
+      },
+      "expected": {
+        "is_workday": false,
+        "target": 0.0,
+        "is_short_day": false
+      }
     },
     {
       "id": "custom-full-day-off",
       "date": "2023-06-15",
       "weekly_hours": 40,
-      "active_weekdays": [0, 1, 2, 3, 4],
-      "custom_holiday": {"name": "Betriebsausflug", "hours": 0.0},
-      "expected": {"is_workday": false, "target": 0.0, "holiday_name": "Betriebsausflug"}
+      "active_weekdays": [
+        0,
+        1,
+        2,
+        3,
+        4
+      ],
+      "custom_holiday": {
+        "name": "Betriebsausflug",
+        "hours": 0.0
+      },
+      "expected": {
+        "is_workday": false,
+        "target": 0.0,
+        "holiday_name": "Betriebsausflug"
+      }
     },
     {
       "id": "custom-short-day",
       "date": "2023-05-30",
       "weekly_hours": 40,
-      "active_weekdays": [0, 1, 2, 3, 4],
-      "custom_holiday": {"name": "Wäldchestag", "hours": 6.0},
-      "expected": {"is_workday": true, "target": 6.0, "holiday_name": "Wäldchestag", "is_short_day": true}
+      "active_weekdays": [
+        0,
+        1,
+        2,
+        3,
+        4
+      ],
+      "custom_holiday": {
+        "name": "Wäldchestag",
+        "hours": 6.0
+      },
+      "expected": {
+        "is_workday": true,
+        "target": 6.0,
+        "holiday_name": "Wäldchestag",
+        "is_short_day": true
+      }
+    },
+    {
+      "id": "custom-day-at-regular-target-is-not-short",
+      "date": "2023-05-30",
+      "weekly_hours": 40,
+      "active_weekdays": [
+        0,
+        1,
+        2,
+        3,
+        4
+      ],
+      "custom_holiday": {
+        "name": "Regelarbeitstag",
+        "hours": 8.0
+      },
+      "expected": {
+        "is_workday": true,
+        "target": 8.0,
+        "holiday_name": "Regelarbeitstag",
+        "is_short_day": false
+      }
+    },
+    {
+      "id": "custom-day-above-regular-target-is-not-short",
+      "date": "2023-05-30",
+      "weekly_hours": 40,
+      "active_weekdays": [
+        0,
+        1,
+        2,
+        3,
+        4
+      ],
+      "custom_holiday": {
+        "name": "Mehrarbeit",
+        "hours": 9.0
+      },
+      "expected": {
+        "is_workday": true,
+        "target": 9.0,
+        "holiday_name": "Mehrarbeit",
+        "is_short_day": false
+      }
+    },
+    {
+      "id": "custom-day-below-four-day-target-is-short",
+      "date": "2023-05-30",
+      "weekly_hours": 24,
+      "active_weekdays": [
+        0,
+        1,
+        2,
+        3
+      ],
+      "custom_holiday": {
+        "name": "Kurztag",
+        "hours": 5.0
+      },
+      "expected": {
+        "is_workday": true,
+        "target": 5.0,
+        "holiday_name": "Kurztag",
+        "is_short_day": true
+      }
+    },
+    {
+      "id": "custom-day-at-four-day-target-is-not-short",
+      "date": "2023-05-30",
+      "weekly_hours": 24,
+      "active_weekdays": [
+        0,
+        1,
+        2,
+        3
+      ],
+      "custom_holiday": {
+        "name": "Regelarbeitstag",
+        "hours": 6.0
+      },
+      "expected": {
+        "is_workday": true,
+        "target": 6.0,
+        "holiday_name": "Regelarbeitstag",
+        "is_short_day": false
+      }
     },
     {
       "id": "active-saturday",
       "date": "2023-10-07",
       "weekly_hours": 12,
-      "active_weekdays": [5, 6],
-      "expected": {"is_workday": true, "target": 6.0}
+      "active_weekdays": [
+        5,
+        6
+      ],
+      "expected": {
+        "is_workday": true,
+        "target": 6.0
+      }
     },
     {
       "id": "active-sunday",
       "date": "2023-10-08",
       "weekly_hours": 12,
-      "active_weekdays": [5, 6],
-      "expected": {"is_workday": true, "target": 6.0}
+      "active_weekdays": [
+        5,
+        6
+      ],
+      "expected": {
+        "is_workday": true,
+        "target": 6.0
+      }
     }
   ]
 }

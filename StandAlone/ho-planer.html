@@ -778,6 +778,8 @@
 
     const EXPORT_FORMAT = 'ho-planer-export';
     const EXPORT_VERSION = 1;
+    const MAX_PDF_BYTES = 10 * 1024 * 1024;
+    const MAX_PDF_PAGES = 31;
 
     function isExportDate(value) { return /^\d{4}-\d{2}-\d{2}$/.test(String(value || '')); }
     function normalizeExportTime(value) { return value ? normalizeTimeInput(value) : ''; }
@@ -967,10 +969,11 @@
               else { this.destroyCharts(); this.loadMonthData(); }
           } 
       },
-      mounted() { 
+      async mounted() {
           Store.onPersist = () => { if(this.viewMode==='year') this.loadYearData(); else this.loadMonthData(); if(this.fileHandle) this.saveToFile(); else this.unsavedChanges = true; };
           this.loadData();
-          this.checkForStoredHandle();
+          await this.checkForStoredHandle();
+          this.showBrowserBackupReminder();
           
           window.addEventListener('keydown', (e) => {
               if(e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT' || e.target.tagName === 'TEXTAREA') return;
@@ -992,16 +995,43 @@
         },
         formatOneDecimal(val) { return val || val === 0 ? val.toFixed(1).replace('.', ',') : '0,0'; },
         showMsg(text, color='success') { this.snackbar.text = text; this.snackbar.color = color; this.snackbar.show = true; },
+        showBrowserBackupReminder() {
+            const hasEntries = Object.values(Store.getEntries()).some(entries => entries.length > 0);
+            const hasCustomHolidays = Object.keys(Store.getCustomHolidays()).length > 0;
+            const hasData = hasEntries || hasCustomHolidays;
+            const reminderKey = 'ho_planer_last_backup_reminder';
+            const lastReminder = Number(localStorage.getItem(reminderKey) || 0);
+            const sevenDays = 7 * 24 * 60 * 60 * 1000;
+            if (!this.fileHandle && !this.storedHandleName && hasData && Date.now() - lastReminder >= sevenDays) {
+                this.showMsg('Daten liegen nur im Browser. Bitte JSON-Backup herunterladen oder Datei verbinden.', 'warning');
+                localStorage.setItem(reminderKey, String(Date.now()));
+            }
+        },
         
         triggerPdfImport() { this.$refs.pdfInput.click(); },
-        onPdfFileChange(event) { const file = event.target.files[0]; if (!file) return; this.importDialog.file = file; this.importDialog.show = true; event.target.value = ''; },
+        onPdfFileChange(event) {
+            const file = event.target.files[0];
+            event.target.value = '';
+            if (!file) return;
+            if (file.size > MAX_PDF_BYTES) {
+                this.showMsg('PDF ist zu groß. Maximal erlaubt sind 10 MiB.', 'error');
+                return;
+            }
+            this.importDialog.file = file;
+            this.importDialog.show = true;
+        },
         async processPdfImport() {
             this.importDialog.show = false;
             const file = this.importDialog.file; if (!file) return;
+            let pdf = null;
             try {
                 this.showMsg("Lese PDF...", "info");
                 const arrayBuffer = await file.arrayBuffer();
-                const pdf = await pdfjsLib.getDocument(arrayBuffer).promise;
+                pdf = await pdfjsLib.getDocument(arrayBuffer).promise;
+                if (pdf.numPages > MAX_PDF_PAGES) {
+                    this.showMsg('PDF enthält mehr als 31 Seiten.', 'error');
+                    return;
+                }
                 let cnt = 0;
                 
                 const germanMonths = {'Januar':1,'Februar':2,'März':3,'April':4,'Mai':5,'Juni':6,'Juli':7,'August':8,'September':9,'Oktober':10,'November':11,'Dezember':12};
@@ -1068,7 +1098,8 @@
                     
                     let glz_saldo_val = null;
                     const floats = [...cleanText.matchAll(/-?\d{1,3}[.,]\d{2}/g)].map(m => m[0]);
-                    if (floats.length > 0) {
+                    const hasGlzContext = /\b(zeitkonto|gleitzeit|glz|saldo)\b/i.test(cleanText);
+                    if (floats.length > 0 && hasGlzContext) {
                         glz_saldo_val = parseFloat(floats[floats.length - 1].replace(',', '.'));
                     }
 
@@ -1078,10 +1109,11 @@
                         if(cleanText.includes("BUCHUNG FEHLT")) foundType = 'missing';
                     }
 
-                    const times = [...cleanText.matchAll(/(\d{2}:\d{2})/g)].map(m=>m[1]);
-                    const validTimes = times.filter(t => t !== "00:00");
-                    
-                    let is_valid = false;
+                    const times = [...cleanText.matchAll(/\b([01]\d|2[0-3]):[0-5]\d\b/g)].map(m=>m[0]);
+                    let validTimes = times.filter(t => t !== "00:00");
+                    if (validTimes.length % 2 !== 0) {
+                        validTimes = validTimes.slice(0, -1);
+                    }
                     
                     if (foundType === "missing") {
                         dataStore[day].push({ type: '', start: '', end: '', comment: '⚠️ Fehlt im PDF', glz_override: null, glz_override_source: null });
@@ -1091,13 +1123,15 @@
                         for(let i=0; i<validTimes.length-1; i+=2) {
                             let e_glz = (i===0) ? glz_saldo_val : null;
                             let src = e_glz !== null ? 'pdf' : null;
-                            dataStore[day].push({ 
-                                type: foundType ? foundType : "office", 
-                                start: validTimes[i], 
-                                end: validTimes[i+1], 
-                                comment: cleanText.toLowerCase().includes("betriebsausflug") ? "Betriebsausflug" : "",
-                                glz_override: e_glz, 
-                                glz_override_source: src 
+                            dataStore[day].push({
+                                type: foundType || "",
+                                start: validTimes[i],
+                                end: validTimes[i+1],
+                                comment: cleanText.toLowerCase().includes("betriebsausflug")
+                                    ? "Betriebsausflug"
+                                    : (!foundType ? "⚠️ PDF-Prüfung erforderlich: unbekannter Status" : ""),
+                                glz_override: e_glz,
+                                glz_override_source: src
                             });
                         }
                     } 
@@ -1157,7 +1191,12 @@
                 }
                 this.showMsg(`${cnt} Tage importiert.`);
                 this.loadData();
-            } catch(e) { console.error(e); this.showMsg("Import Fehler: " + e.message, "error"); }
+            } catch(e) {
+                console.error(e);
+                this.showMsg('PDF konnte nicht verarbeitet werden.', 'error');
+            } finally {
+                if (pdf && typeof pdf.destroy === 'function') await pdf.destroy();
+            }
         },
 
         getDayInfo(dateObj) {
@@ -1176,7 +1215,12 @@
 
             if(cust) {
                 hName = cust.name;
-                if(cust.hours > 0) { is_workday = true; target = cust.hours; is_short = true; }
+                if(cust.hours > 0) {
+                    is_workday = true;
+                    target = cust.hours;
+                    const regularDailyTarget = activeDays.length > 0 ? this.settings.weekly_hours / activeDays.length : 0;
+                    is_short = cust.hours < regularDailyTarget;
+                }
             } else {
                 if(is_active) {
                     is_workday = true;

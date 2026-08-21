@@ -96,18 +96,20 @@ def get_day_info(date_obj, settings, he_holidays, custom_map):
             "is_off_day": False
         }
 
+    active_days_list = [int(x) for x in settings.active_weekdays.split(',') if x.strip().isdigit()] if settings.active_weekdays else []
+    regular_daily_target = settings.weekly_hours / len(active_days_list) if active_days_list else 0.0
+
     cust = custom_map.get(date_obj)
     if cust:
         return {
             "is_workday": cust.hours > 0,
             "target": cust.hours if cust.hours else 0.0,
             "holiday_name": cust.name,
-            "is_short_day": (cust.hours > 0 and cust.hours < (settings.weekly_hours / 5)),
+            "is_short_day": cust.hours > 0 and cust.hours < regular_daily_target,
             "is_off_day": False
         }
 
     weekday = date_obj.weekday()
-    active_days_list = [int(x) for x in settings.active_weekdays.split(',')] if settings.active_weekdays else []
     
     if weekday not in active_days_list:
         return {

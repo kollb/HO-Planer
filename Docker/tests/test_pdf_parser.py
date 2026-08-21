@@ -1,7 +1,88 @@
 import pytest
 import os
 from datetime import date
-from app import parse_pdf_content 
+from app import MAX_PDF_PAGES, parse_pdf_content
+
+
+class FakePdf:
+    def __init__(self, page_count):
+        self.pages = [object()] * page_count
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, _exc_type, _exc_value, _traceback):
+        return False
+
+
+def test_pdf_import_rejects_too_many_pages(monkeypatch):
+    monkeypatch.setattr('app.pdfplumber.open', lambda _file: FakePdf(MAX_PDF_PAGES + 1))
+
+    with pytest.raises(ValueError, match='mehr als'):
+        parse_pdf_content(object())
+
+
+class FakePage:
+    def __init__(self, text, tables=None):
+        self.text = text
+        self.tables = tables or []
+
+    def extract_text(self):
+        return self.text
+
+    def extract_tables(self):
+        return self.tables
+
+
+class FakeContentPdf:
+    def __init__(self, pages):
+        self.pages = pages
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, _exc_type, _exc_value, _traceback):
+        return False
+
+
+def test_pdf_parser_marks_unknown_status_instead_of_office(monkeypatch):
+    page = FakePage(
+        'Monat: Februar 2026',
+        [[['03 DI Unbekannter Status 08:00 16:00']]],
+    )
+    monkeypatch.setattr('app.pdfplumber.open', lambda _file: FakeContentPdf([page]))
+
+    entries, report = parse_pdf_content(object(), include_report=True)
+
+    assert entries[0]['type'] == ''
+    assert 'unbekannter Status' in entries[0]['comment']
+    assert any('unbekannten Status' in warning for warning in report['warnings'])
+
+
+def test_pdf_parser_uses_text_fallback_and_reports_odd_time(monkeypatch):
+    page = FakePage('Monat: Februar 2026\n03 DI Mobil 08:00 12:00 13:00')
+    monkeypatch.setattr('app.pdfplumber.open', lambda _file: FakeContentPdf([page]))
+
+    entries, report = parse_pdf_content(object(), include_report=True)
+
+    assert entries[0]['type'] == 'home'
+    assert entries[0]['start'] == '08:00'
+    assert entries[0]['end'] == '12:00'
+    assert any('Text-Fallback' in warning for warning in report['warnings'])
+    assert any('ungerade Anzahl' in warning for warning in report['warnings'])
+
+
+def test_pdf_parser_requires_glz_context(monkeypatch):
+    page = FakePage(
+        'Monat: Februar 2026',
+        [[['03 DI Mobil 08:00 16:00 12,50']]],
+    )
+    monkeypatch.setattr('app.pdfplumber.open', lambda _file: FakeContentPdf([page]))
+
+    entries, report = parse_pdf_content(object(), include_report=True)
+
+    assert entries[0]['glz_override'] is None
+    assert any('ohne GLZ-Kontext' in warning for warning in report['warnings'])
 
 PRIVATE_DIR = os.path.join(os.path.dirname(__file__), "testfiles")
 

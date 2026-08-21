@@ -1,7 +1,7 @@
 #1805206
 
 from flask import Flask, Response, jsonify, redirect, request, send_file, url_for
-from flask_cors import CORS
+from werkzeug.exceptions import RequestEntityTooLarge
 from models import db, Settings, CustomHoliday, WorkEntry
 from logic import calculate_daily_net_hours, calculate_gross_hours, get_day_info, normalize_time_str, calculate_gross_time_needed
 import json
@@ -19,16 +19,19 @@ from logging.handlers import TimedRotatingFileHandler
 from zoneinfo import ZoneInfo
 
 app = Flask(__name__)
-CORS(app)
 
 # --- PFADE & ORDNER (DOCKER OPTIMIERT) ---
 basedir = os.path.abspath(os.path.dirname(__file__))
-data_dir = os.path.join(basedir, 'data')
-db_path = os.path.join(data_dir, 'database.db')
-log_dir = os.path.join(data_dir, 'logs')
-backup_dir = os.path.join(data_dir, 'backups')
+# Die Standardpfade bleiben für bestehende Docker-Volumes unverändert. Test- und
+# Wartungsprozesse können ein vollständig separates Datenverzeichnis übergeben.
+data_dir = os.path.abspath(os.environ.get('HO_PLANER_DATA_DIR', os.path.join(basedir, 'data')))
+db_path = os.path.abspath(os.environ.get('HO_PLANER_DB_PATH', os.path.join(data_dir, 'database.db')))
+log_dir = os.path.abspath(os.environ.get('HO_PLANER_LOG_DIR', os.path.join(data_dir, 'logs')))
+backup_dir = os.path.abspath(os.environ.get('HO_PLANER_BACKUP_DIR', os.path.join(data_dir, 'backups')))
+MAX_UPLOAD_BYTES = 10 * 1024 * 1024
+MAX_PDF_PAGES = 31
 
-for directory in [data_dir, log_dir, backup_dir]:
+for directory in [data_dir, os.path.dirname(db_path), log_dir, backup_dir]:
     os.makedirs(directory, exist_ok=True)
 
 # --- LOGGING ---
@@ -41,6 +44,7 @@ app.logger.setLevel(logging.INFO)
 # --- DB KONFIGURATION ---
 app.config['SQLALCHEMY_DATABASE_URI'] = f'sqlite:///{db_path}?timeout=15'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+app.config['MAX_CONTENT_LENGTH'] = MAX_UPLOAD_BYTES
 db.init_app(app)
 
 def get_local_now():
@@ -232,113 +236,116 @@ def get_glz_carryover(year, month, settings, custom_map):
         
     return running_glz
 
-# --- PDF PARSER (V2 - ROBUST) ---
-def parse_pdf_content(file_obj):
-    TYPE_MAP = {
-        "mobil": "home", "telearb": "home", "anwesend": "office", 
-        "krank": "sick", "erholungs": "vacation", "zusatz": "vacation", "sonder": "vacation",
-        "gleitzeit": "glz", 
-        "dienstreise": "dr", "fortbildung": "dr", "reise": "dr",
-        "betriebsausflug": "office", 
-        "buchung fehlt": "missing"
-    }
+# --- PDF PARSER (V3 - konservative, nachvollziehbare Interpretation) ---
+PDF_TYPE_RULES = (
+    (r'\bbuchung\s+fehlt\b', 'missing'), (r'\bbetriebsausflug\b', 'office'),
+    (r'\bdienstreise\b|\bfortbildung\b|\breise\b', 'dr'),
+    (r'\bkrank(?:\s+im\s+dienst)?\b', 'sick'),
+    (r'\berholungs\w*|\burlaub\b|\bzusatz\w*|\bsonder\w*', 'vacation'),
+    (r'\bgleitzeit\b|\bglz\b', 'glz'), (r'\bmobil\b|\btelearb\w*', 'home'),
+    (r'\banwesend\b', 'office'),
+)
+PDF_DATE_PATTERN = re.compile(r'\b(\d{2})\s+(MO|DI|MI|DO|FR|SA|SO)\b', re.IGNORECASE)
+PDF_TIME_PATTERN = re.compile(r'\b([01]\d|2[0-3]):([0-5]\d)\b')
+PDF_GLZ_PATTERN = re.compile(r'-?\d{1,3}[.,]\d{2}\b')
+PDF_GLZ_CONTEXT_PATTERN = re.compile(r'\b(zeitkonto|gleitzeit|glz|saldo)\b', re.IGNORECASE)
+
+
+def _pdf_type_for_text(text):
+    return next((entry_type for pattern, entry_type in PDF_TYPE_RULES if re.search(pattern, text, re.IGNORECASE)), None)
+
+
+def _pdf_glz_for_row(text, known_glz_column, report, day):
+    candidates = PDF_GLZ_PATTERN.findall(text)
+    if not candidates:
+        return None
+    if not (known_glz_column or PDF_GLZ_CONTEXT_PATTERN.search(text)):
+        report['warnings'].append(f"Tag {day:02d}: Dezimalwert ohne GLZ-Kontext nicht übernommen.")
+        return None
+    if len(candidates) > 1:
+        report['warnings'].append(f"Tag {day:02d}: mehrere GLZ-Kandidaten; letzter Wert wird verwendet.")
+    return float(candidates[-1].replace(',', '.'))
+
+
+def parse_pdf_content(file_obj, include_report=False):
+    """Extrahiert PDF-Buchungen, ohne Arbeitszeit-, Pausen- oder GLZ-Regeln zu verändern."""
     extracted_entries = []
-    
+    report = {'pages': 0, 'recognized_month': None, 'recognized_rows': 0, 'importable_entries': 0, 'warnings': []}
     with pdfplumber.open(file_obj) as pdf:
-        first_page_text = pdf.pages[0].extract_text()
+        if not pdf.pages:
+            raise ValueError("PDF enthält keine Seiten.")
+        if len(pdf.pages) > MAX_PDF_PAGES:
+            raise ValueError(f"PDF enthält mehr als {MAX_PDF_PAGES} Seiten.")
+        report['pages'] = len(pdf.pages)
+        first_page_text = pdf.pages[0].extract_text() or ""
         match_my = re.search(r'Monat:?\s*([a-zA-ZäöüÄÖÜ]+)\s*[-_]?\s*(\d{4})', first_page_text, re.IGNORECASE)
-        if not match_my: raise ValueError("Monat/Jahr im PDF nicht erkannt.")
-            
-        m_str = match_my.group(1).lower().replace('ä', 'ae')
-        m_dict = {'januar':1,'februar':2,'maerz':3,'märz':3,'april':4,'mai':5,'juni':6,
-                  'juli':7,'august':8,'september':9,'oktober':10,'november':11,'dezember':12}
-        
-        month = m_dict.get(m_str)
+        if not match_my:
+            raise ValueError("Monat/Jahr im PDF nicht erkannt.")
+        months = {'januar': 1, 'februar': 2, 'maerz': 3, 'april': 4, 'mai': 5, 'juni': 6, 'juli': 7, 'august': 8, 'september': 9, 'oktober': 10, 'november': 11, 'dezember': 12}
+        month = months.get(match_my.group(1).lower().replace('ä', 'ae'))
         year = int(match_my.group(2))
-        if not month: raise ValueError(f"Unbekannter Monat: {match_my.group(1)}")
-        
+        if not month:
+            raise ValueError(f"Unbekannter Monat: {match_my.group(1)}")
+        report['recognized_month'] = f"{year:04d}-{month:02d}"
         daily_data = {}
-        curr_day = None
-
         for page in pdf.pages:
-            tables = page.extract_tables()
-            for table in tables:
-                for row in table:
-                    if not row: continue
-                    
-                    full_row_text = " ".join([str(c).replace('\n', ' ') for c in row if c]).strip()
-                    if not full_row_text: continue
-                    
-                    if "Wochensumme" in full_row_text or "Zeitkonto" in full_row_text or full_row_text.startswith("Tag"):
-                        curr_day = None
+            page_text = page.extract_text() or ""
+            rows = [row for table in (page.extract_tables() or []) for row in table if row]
+            if not rows:
+                rows = [[line] for line in page_text.splitlines()]
+                if page_text.strip():
+                    report['warnings'].append('Text-Fallback verwendet, weil keine Tabelle erkannt wurde.')
+            current_day = None
+            for row in rows:
+                row_text = " ".join(str(cell).replace('\n', ' ') for cell in row if cell).strip()
+                if not row_text or row_text.startswith('Tag '):
+                    continue
+                if 'Wochensumme' in row_text or 'Kontingent' in row_text:
+                    current_day = None
+                    continue
+                date_match = PDF_DATE_PATTERN.search(row_text)
+                if date_match:
+                    current_day = int(date_match.group(1))
+                    if current_day > calendar.monthrange(year, month)[1]:
+                        report['warnings'].append(f"Ungültiger Kalendertag {current_day:02d} verworfen.")
+                        current_day = None
                         continue
-                    
-                    dm = re.search(r'\b(\d{2})\s+(MO|DI|MI|DO|FR|SA|SO)\b', full_row_text)
-                    if dm: 
-                        curr_day = int(dm.group(1))
-                    elif curr_day is None: 
-                        continue
-
-                    if curr_day not in daily_data: daily_data[curr_day] = []
-                    
-                    full_text_lower = full_row_text.lower()
-                    found_type = None
-                    for k, v in TYPE_MAP.items():
-                        if k in full_text_lower: 
-                            found_type = v
-                            break 
-                    
-                    times = re.findall(r'(\d{2}:\d{2})', full_row_text)
-                    if times and all(t == "00:00" for t in times): 
-                        times = [] 
-                    times.sort() 
-
-                    glz_saldo_val = None
-                    if dm: 
-                        floats = re.findall(r'-?\d{1,3}[.,]\d{2}\b', full_row_text)
-                        if floats:
-                            try:
-                                glz_saldo_val = float(floats[-1].replace(',', '.'))
-                            except ValueError: pass
-
-                    if found_type == "missing":
-                        daily_data[curr_day].append({'type': '', 'times': [], 'glz_override': None, 'comment': "⚠️ Buchung fehlt"})
-                    
-                    elif times and len(times) >= 2:
-                        for i in range(0, len(times) - 1, 2):
-                            start_t, end_t = times[i], times[i+1]
-                            e_glz = glz_saldo_val if i == 0 and len(daily_data[curr_day]) == 0 else None
-                            
-                            daily_data[curr_day].append({
-                                'type': found_type if found_type else "office", 
-                                'times': [start_t, end_t], 
-                                'glz_override': e_glz,
-                                'comment': "Betriebsausflug" if "betriebsausflug" in full_text_lower else ""
-                            })
-                            
-                    elif found_type in ["vacation", "sick", "glz"]:
-                        e_glz = glz_saldo_val if len(daily_data[curr_day]) == 0 else None
-                        daily_data[curr_day].append({'type': found_type, 'times': [], 'glz_override': e_glz})
-                        
-                    elif glz_saldo_val is not None:
-                        if not daily_data[curr_day]:
-                            daily_data[curr_day].append({'type': None, 'times': [], 'glz_override': glz_saldo_val})
-
-        for d, blocks in daily_data.items():
-            try:
-                date_obj = date(year, month, d)
-                for b in blocks:
-                    extracted_entries.append({
-                        'date': date_obj,
-                        'type': b['type'] or '',
-                        'start': b['times'][0] if b['times'] else '',
-                        'end': b['times'][1] if len(b['times']) > 1 else '',
-                        'comment': b.get('comment', ''),
-                        'glz_override': b.get('glz_override')
-                    })
-            except ValueError: continue
-                
-    return extracted_entries
+                    report['recognized_rows'] += 1
+                elif current_day is None or 'Zeitkonto' in row_text:
+                    continue
+                blocks = daily_data.setdefault(current_day, [])
+                found_type = _pdf_type_for_text(row_text)
+                times = [f"{hour}:{minute}" for hour, minute in PDF_TIME_PATTERN.findall(row_text) if f"{hour}:{minute}" != '00:00']
+                glz_override = _pdf_glz_for_row(row_text, bool(PDF_GLZ_CONTEXT_PATTERN.search(page_text)), report, current_day) if date_match else None
+                if found_type == 'missing':
+                    blocks.append({'type': '', 'times': [], 'glz_override': None, 'comment': '⚠️ Buchung fehlt'})
+                    continue
+                if len(times) % 2:
+                    report['warnings'].append(f"Tag {current_day:02d}: ungerade Anzahl von Uhrzeiten; letzter Wert verworfen.")
+                    times = times[:-1]
+                if len(times) >= 2:
+                    entry_type = found_type or ''
+                    comment = 'Betriebsausflug' if 'betriebsausflug' in row_text.lower() else ''
+                    if not entry_type:
+                        comment = '⚠️ PDF-Prüfung erforderlich: unbekannter Status'
+                        report['warnings'].append(f"Tag {current_day:02d}: Zeiten ohne bekannten Status als Prüfeintrag übernommen.")
+                    for index in range(0, len(times), 2):
+                        start_time, end_time = times[index], times[index + 1]
+                        if end_time < start_time:
+                            entry_type, comment = '', '⚠️ PDF-Prüfung erforderlich: Endzeit vor Startzeit'
+                            report['warnings'].append(f"Tag {current_day:02d}: Endzeit vor Startzeit ({start_time}–{end_time}); Prüfeintrag.")
+                        blocks.append({'type': entry_type, 'times': [start_time, end_time], 'glz_override': glz_override if index == 0 and not blocks else None, 'comment': comment})
+                elif found_type in ('vacation', 'sick', 'glz'):
+                    blocks.append({'type': found_type, 'times': [], 'glz_override': glz_override if not blocks else None, 'comment': ''})
+                elif glz_override is not None and not blocks:
+                    blocks.append({'type': '', 'times': [], 'glz_override': glz_override, 'comment': ''})
+        for day, blocks in daily_data.items():
+            for block in blocks:
+                extracted_entries.append({'date': date(year, month, day), 'type': block['type'] or '', 'start': block['times'][0] if block['times'] else '', 'end': block['times'][1] if len(block['times']) > 1 else '', 'comment': block.get('comment', ''), 'glz_override': block.get('glz_override')})
+    report['importable_entries'] = len(extracted_entries)
+    if not extracted_entries:
+        report['warnings'].append('Keine importierbaren Tagesbuchungen erkannt.')
+    return (extracted_entries, report) if include_report else extracted_entries
 
 # --- API ROUTEN ---
 @app.route('/')
@@ -915,21 +922,33 @@ def import_json():
         return jsonify({"success": False, "message": "Fehler beim JSON-Import."}), 500
 
 
+@app.errorhandler(RequestEntityTooLarge)
+def handle_upload_too_large(_error):
+    return jsonify({"success": False, "message": f"Datei ist zu groß. Maximal erlaubt sind {MAX_UPLOAD_BYTES // (1024 * 1024)} MiB."}), 413
+
+
 @app.route('/api/import/pdf', methods=['POST'])
 def import_pdf():
-    if 'file' not in request.files: return jsonify({"success": False, "message": "Keine Datei"}), 400
-        
+    if 'file' not in request.files:
+        return jsonify({"success": False, "message": "Keine Datei ausgewählt."}), 400
+
     file = request.files['file']
-    if not file.filename.lower().endswith('.pdf'):
+    if not file.filename or not file.filename.lower().endswith('.pdf'):
         return jsonify({"success": False, "message": "Bitte lade nur PDF-Dateien hoch."}), 400
+
+    signature = file.stream.read(5)
+    file.stream.seek(0)
+    if signature != b'%PDF-':
+        return jsonify({"success": False, "message": "Die Datei ist keine gültige PDF-Datei."}), 400
+
     overwrite = request.form.get('overwrite') == 'true'
-    
+
     try:
         settings = Settings.query.first()
-        extracted_entries = parse_pdf_content(file)
-        
+        extracted_entries, report = parse_pdf_content(file, include_report=True)
+
         if not extracted_entries:
-             return jsonify({"success": True, "message": "Keine Einträge gefunden."})
+             return jsonify({"success": True, "message": "Keine Einträge gefunden.", "report": report})
              
         y = extracted_entries[0]['date'].year
         he_holidays = holidays.DE(state='HE', years=y)
@@ -980,11 +999,14 @@ def import_pdf():
                 cnt += 1
 
         db.session.commit()
-        return jsonify({"success": True, "message": f"{cnt} Einträge importiert."})
+        return jsonify({"success": True, "message": f"{cnt} Einträge importiert.", "report": report})
             
-    except Exception as e: 
-        app.logger.error(f"IMPORT ERROR: {e}", exc_info=True)
-        return jsonify({"success": False, "message": "Fehler beim Import."}), 500
+    except ValueError as error:
+        app.logger.info("PDF-Import abgelehnt: %s", error)
+        return jsonify({"success": False, "message": str(error)}), 400
+    except Exception as error:
+        app.logger.error("PDF-Import fehlgeschlagen: %s", error, exc_info=True)
+        return jsonify({"success": False, "message": "PDF konnte nicht verarbeitet werden."}), 400
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=False)

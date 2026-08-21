@@ -9,7 +9,7 @@ Diese Anleitung beschreibt die technische Prüfung beider Laufzeitvarianten. Sie
 - Freie Ports `5000` (Docker/Flask) und `8000` (Standalone-Testserver)
 - Für die Standalone-GUI-Tests gegebenenfalls Internetzugriff: Vue, Vuetify, PDF.js, Chart.js und weitere Ressourcen werden per CDN geladen.
 
-> **Achtung:** Die Docker-Tests verwenden derzeit keine isolierte SQLite-Testdatenbank. Sie können Daten in `Docker/data/database.db` sowie lokale Sondertage verändern. Vor einem Testlauf mit wertvollen Daten `Docker/data/` sichern oder in einem separaten Arbeitsbaum mit separatem Datenordner testen.
+> **Hinweis:** `Docker/run_tests.py` setzt `HO_PLANER_DATA_DIR` auf ein temporäres Verzeichnis. Flask-Testserver und Pytest verwenden damit dieselbe isolierte SQLite-Datenbank; das Verzeichnis wird nach dem Lauf gelöscht. Direkte manuelle Pytest-Läufe ohne diese Umgebungsvariable können weiterhin die Standarddatenbank unter `Docker/data/` verwenden.
 
 ## Schnelle Prüfung vor einem Commit
 
@@ -71,12 +71,21 @@ Besonders vor einem Release müssen die Referenzfälle für Pausen, Hessen-Feier
 
 ## PDF-Testdaten und übersprungene Tests
 
-Private PDF-Testdateien werden nicht versioniert. Daher überspringen die Tests PDF-Fälle, wenn diese Dateien fehlen:
+Private PDF-Testdateien und lokale Erwartungen werden nicht versioniert; der Repository-Stamm ignoriert `pdf/` und `Docker/tests/testfiles/`. Die Dateien dürfen weder in Commits noch in Release-Artefakte gelangen.
+
+Die vorhandenen automatisierten PDF-Fälle überspringen sich, wenn private Dateien fehlen:
 
 - Docker: `Docker/tests/testfiles/standard.pdf`, `complex.pdf`, `error.pdf`
 - Standalone: `StandAlone/testfiles/standard.pdf`, `error.pdf`
 
-Ein übersprungener PDF-Test ist kein erfolgreicher Parsernachweis. Vor einem Release mit Änderungen am PDF-Import die privaten Testdateien bereitstellen und die PDF-Tests tatsächlich ausführen.
+Für die sieben lokalen Zeitnachweise den Ordner `pdf/` ausschließlich als Lesebasis verwenden. Die Prüfung erfolgt ohne Datenbankimport über `parse_pdf_content(..., include_report=True)`. Pro Datei mindestens kontrollieren:
+
+- erkannten Monat und Seitenzahl;
+- Anzahl importierbarer Blöcke;
+- Split-Buchungen, fehlende Buchungen und GLZ-Anker;
+- Parserwarnungen für unbekannte Status, ungerade Zeitfolgen und fehlenden GLZ-Kontext.
+
+Personenbezogene Ergebnisse nicht in Testlogs, Commits oder Ticketkommentare kopieren. Falls stabile Regressionserwartungen benötigt werden, ein lokales, ebenfalls ignoriertes Manifest neben den PDFs verwenden. Ein übersprungener PDF-Test ist kein erfolgreicher Parsernachweis.
 
 ## Manuelle Smoke-Tests der Docker-Variante
 
@@ -145,5 +154,5 @@ Beide CI-Testworkflows installieren Playwright Chromium.
 - **Chromium fehlt:** `playwright install chromium --with-deps` ausführen.
 - **Standalone-GUI lädt nicht:** CDN-Erreichbarkeit und Browserkonsole prüfen.
 - **PDF-Test übersprungen:** private Test-PDF am erwarteten Pfad bereitstellen.
-- **Docker-Testdaten verändert:** Datenbank aus einem Backup im persistenten Volume wiederherstellen. Vorher den aktuellen Stand sichern.
+- **Docker-Testdaten verändert:** Den Teststarter verwenden. Bei einem direkten manuellen Testlauf ohne `HO_PLANER_DATA_DIR` die Datenbank aus einem Backup im persistenten Volume wiederherstellen; vorher den aktuellen Stand sichern.
 - **Migration fehlgeschlagen:** Container stoppen, Migrationsbackup im Volume prüfen und nach der [Wiederherstellungsanleitung](../Docker/docs/migrations-and-backups.md) vorgehen.

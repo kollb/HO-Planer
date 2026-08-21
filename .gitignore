@@ -1,0 +1,3 @@
+# Private Zeitnachweise und lokale Erwartungen dürfen nie versioniert werden.
+pdf/
+Docker/tests/testfiles/

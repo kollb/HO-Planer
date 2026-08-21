@@ -54,6 +54,12 @@ docker run -d -p 5000:5000 -v $(pwd)/data:/app/data --name ho-planer-app ho-plan
 ```
 Die App erreichst du dann unter `http://localhost:5000`.
 
+### Betrieb im NAS/LAN
+
+Die Anwendung ist für ein vertrauenswürdiges lokales Netzwerk vorgesehen. Keine Router-Portweiterleitung für Port `5000` einrichten; die NAS-Firewall auf die benötigten lokalen Netze beschränken. `-p 5000:5000` bindet den Port in der Regel an alle Host-Netzwerkschnittstellen. Für ausschließlich lokalen Zugriff verwende stattdessen `-p 127.0.0.1:5000:5000`; andere LAN-Geräte können dann nicht zugreifen.
+
+`/app/data` enthält SQLite-Datenbank, Logs und Backups und muss persistent sowie für den Container beschreibbar sein. Backups im gleichen Volume schützen nicht gegen einen NAS- oder Volume-Ausfall; sichere sie zusätzlich außerhalb des Hosts. Details stehen unter [Migration, Backup und Wiederherstellung](docs/migrations-and-backups.md).
+
 ### Option 2: Python / Lokal (Für Entwickler)
 Wenn du den Code anpassen oder das Tool nativ auf deinem Rechner laufen lassen möchtest.
 

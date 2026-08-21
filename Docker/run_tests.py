@@ -1,80 +1,71 @@
+import os
 import subprocess
 import sys
+import tempfile
 import time
-import os
+from pathlib import Path
+
 import requests
 
-def wait_for_server(url, timeout=5):
-    """Wartet aktiv, bis der Server antwortet, statt nur zu schlafen."""
+
+PROJECT_DIR = Path(__file__).resolve().parent
+
+
+def wait_for_server(url, timeout=10):
+    """Wartet aktiv, bis der Testserver erfolgreich antwortet."""
     start_time = time.time()
     while time.time() - start_time < timeout:
         try:
-            requests.get(url)
-            return True
-        except requests.ConnectionError:
-            time.sleep(0.5)
+            response = requests.get(url, timeout=1)
+            if response.ok:
+                return True
+        except requests.RequestException:
+            pass
+        time.sleep(0.25)
     return False
 
+
 def run_tests():
-    print("🚀 Starte Test-Umgebung für Flask...")
+    print("🚀 Starte isolierte Flask-Test-Umgebung...")
+    with tempfile.TemporaryDirectory(prefix="ho-planer-tests-") as test_data_dir:
+        env = os.environ.copy()
+        env["HO_PLANER_DATA_DIR"] = test_data_dir
+        log_file = Path(test_data_dir) / "server-output.log"
 
-    # 1. Flask Server im Hintergrund starten
-    # WICHTIG: Wir starten app.py, nicht http.server!
-    server_process = subprocess.Popen(
-        [sys.executable, "app.py"],
-        stdout=subprocess.DEVNULL, # Setze dies auf None, wenn du Server-Logs sehen willst
-        stderr=subprocess.DEVNULL,
-        cwd=os.getcwd() # Sicherstellen, dass wir im richtigen Ordner sind
-    )
+        with log_file.open("w", encoding="utf-8") as output:
+            server_process = subprocess.Popen(
+                [sys.executable, "app.py"],
+                stdout=output,
+                stderr=subprocess.STDOUT,
+                cwd=PROJECT_DIR,
+                env=env,
+            )
+            try:
+                base_url = "http://127.0.0.1:5000"
+                print(f"⏳ Warte auf Flask-Testserver ({base_url})...")
+                if not wait_for_server(base_url):
+                    print("❌ Server antwortet nicht. Server-Ausgabe:")
+                    output.flush()
+                    print(log_file.read_text(encoding="utf-8"))
+                    return 1
 
-    try:
-        port = 5000 # Flask Standard
-        base_url = f"http://127.0.0.1:{port}"
-        
-        print(f"⏳ Warte auf Flask-Server ({base_url})...")
-        
-        # Besser als sturres Sleep: Wir pingen den Server an
-        if wait_for_server(base_url):
-            print("✅ Server ist online!")
-        else:
-            print("❌ Server antwortet nicht. Abbruch.")
-            return 1
+                print("🧪 Führe Pytest mit separater SQLite-Datei aus...")
+                result = subprocess.call(
+                    [sys.executable, "-m", "pytest", "tests"],
+                    cwd=PROJECT_DIR,
+                    env=env,
+                )
+                print("\n✅ ALLE TESTS BESTANDEN!" if result == 0 else "\n❌ TESTS FEHLGESCHLAGEN.")
+                return result
+            finally:
+                print("🛑 Stoppe Flask-Testserver...")
+                server_process.terminate()
+                try:
+                    server_process.wait(timeout=2)
+                except subprocess.TimeoutExpired:
+                    server_process.kill()
+                    server_process.wait()
 
-        print("🧪 Führe Pytest aus...")
-        
-        # 2. Pytest starten
-        # Wir rufen "python -m pytest" auf, das löst oft auch die Pfad-Probleme
-        # Wir testen den Ordner "tests/"
-        test_cmd = [sys.executable, "-m", "pytest", "tests"]
-        
-        # Optional: Nur GUI Tests, falls gewünscht:
-        # test_cmd = [sys.executable, "-m", "pytest", "tests/test_gui.py"]
-
-        result = subprocess.call(test_cmd)
-
-        if result == 0:
-            print("\n✅ ALLE TESTS BESTANDEN! Bereit zum Einchecken.")
-        else:
-            print("\n❌ TESTS FEHLGESCHLAGEN.")
-        
-        return result
-
-    finally:
-        # 3. Server beenden
-        print("🛑 Stoppe Flask-Server...")
-        server_process.terminate()
-        # Manchmal braucht Flask/Werkzeug etwas Nachdruck:
-        try:
-            server_process.wait(timeout=2)
-        except subprocess.TimeoutExpired:
-            server_process.kill()
 
 if __name__ == "__main__":
-    # Prüfen ob 'requests' installiert ist, sonst Fehler verhindern
-    try:
-        import requests
-    except ImportError:
-        print("Bitte installiere 'requests' für dieses Skript: pip install requests")
-        sys.exit(1)
-
     sys.exit(run_tests())

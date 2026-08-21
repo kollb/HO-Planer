@@ -14,8 +14,8 @@ SHARED_GLZ_CASES = Path(__file__).resolve().parents[2] / "shared" / "test-cases"
 @pytest.fixture
 def client():
     app.config['TESTING'] = True
-    # Da die SQLAlchemy Engine in app.py bereits beim Import an die Datei gebunden wird,
-    # nutzen wir diese, räumen aber am Ende der Tests immer brav auf.
+    # Der Teststarter setzt HO_PLANER_DATA_DIR auf ein temporäres Verzeichnis.
+    # Alle API-Tests verwenden dadurch eine isolierte SQLite-Datenbank.
     with app.test_client() as client:
         yield client
 
@@ -23,6 +23,29 @@ def test_index_page_loads(client):
     response = client.get('/')
     assert response.status_code == 200
     assert b"HO Planer" in response.data
+
+
+def test_pdf_import_requires_file(client):
+    response = client.post('/api/import/pdf')
+    assert response.status_code == 400
+
+
+def test_pdf_import_rejects_non_pdf_content(client):
+    response = client.post(
+        '/api/import/pdf',
+        data={'file': (io.BytesIO(b'not a PDF'), 'test.pdf')},
+        content_type='multipart/form-data',
+    )
+    assert response.status_code == 400
+
+
+def test_pdf_import_requires_pdf_extension(client):
+    response = client.post(
+        '/api/import/pdf',
+        data={'file': (io.BytesIO(b'%PDF-'), 'test.txt')},
+        content_type='multipart/form-data',
+    )
+    assert response.status_code == 400
 
 def test_get_settings(client):
     response = client.get('/api/settings')

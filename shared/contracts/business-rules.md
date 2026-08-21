@@ -18,6 +18,8 @@ Diese Spezifikation ist der gemeinsame fachliche Vertrag für die Docker- und di
 
 - Gesetzliche Feiertage in Hessen haben Vorrang vor eigenen Sondertagen.
 - Aktive Wochentage bestimmen die Sollzeitverteilung; Samstag und Sonntag können aktiv sein.
+- Eigene Sondertage mit `hours = 0` sind arbeitsfrei. Eigene Sondertage mit `hours > 0` sind Arbeitstage mit eigener Sollzeit.
+- Ein eigener Sondertag ist nur ein kurzer Tag (`is_short_day: true`), wenn `0 < hours < weekly_hours / Anzahl_aktiver_Wochentage`. Eine eigene Sollzeit in Höhe oder oberhalb der regulären Tages-Sollzeit ist kein kurzer Tag.
 - Unvollständige Einträge der Typen `home`, `office` und `dr` zählen nur für zukünftige Tage mit Sollzeit. Für heute und vergangene Tage zählen sie mit 0 Stunden.
 - Unvollständige `planned`-Einträge erhalten weiterhin Sollzeit.
 - Ein GLZ-Override dient als Anker für die weitere Saldenberechnung. Seine Quelle ist `manual` oder `pdf`.
