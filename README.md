@@ -19,6 +19,7 @@ JSON ist ein Austausch-, Export- und Importformat. Die Docker-Variante verwendet
 ## Dokumentation
 
 - Installation und Nutzung: [`Docker/README.md`](Docker/README.md), [`StandAlone/README.md`](StandAlone/README.md)
+- [Testanleitung](docs/testing.md)
 - Docker-Migration, Backup und Wiederherstellung: [`Docker/docs/migrations-and-backups.md`](Docker/docs/migrations-and-backups.md)
 - Automatisierung: [`.github/workflows/`](.github/workflows/)
 

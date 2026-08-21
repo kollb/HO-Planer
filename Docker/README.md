@@ -79,6 +79,9 @@ Docker und Standalone haben unterschiedliche Laufzeitumgebungen, verwenden aber 
 
 Die SQLite-Datenbank bleibt die produktive Datenhaltung der Docker-Variante. JSON dient nur Export, Import und Austausch.
 
+- [Zentrale Testanleitung](../docs/testing.md)
+- [Migration, Backup und Wiederherstellung](docs/migrations-and-backups.md)
+
 ## 🛠️ Tech Stack
 * **Frontend:** Vue.js 3, Vuetify 3, Chart.js, PDF.js (für den Standalone-Import)
 * **Backend:** Flask (Python), SQLAlchemy, SQLite, pdfplumber

@@ -58,6 +58,8 @@ Docker und Standalone haben unterschiedliche Laufzeitumgebungen, verwenden aber 
 
 Die Browser-Speicherung bleibt die produktive Datenhaltung der Standalone-Variante. JSON dient für Export, Import und den Austausch mit Docker.
 
+- [Zentrale Testanleitung](../docs/testing.md)
+
 ## 🛠️ Tech Stack
 Da diese Variante ohne Backend auskommt, passiert die gesamte Magie im Frontend:
 * **UI/Framework:** Vue.js 3 & Vuetify 3 (über CDN geladen)
