@@ -1,6 +1,13 @@
 import pytest
+import json
+from pathlib import Path
+
+import pytest
 from datetime import date
-from logic import normalize_time_str, calculate_net_hours, calculate_gross_time_needed, get_day_info
+from logic import calculate_daily_net_hours, normalize_time_str, calculate_net_hours, calculate_gross_time_needed, get_day_info
+
+SHARED_BREAK_CASES = Path(__file__).resolve().parents[2] / "shared" / "test-cases" / "breaks.json"
+SHARED_HOLIDAY_CASES = Path(__file__).resolve().parents[2] / "shared" / "test-cases" / "holidays.json"
 
 # --- Mocks & Helper Classes ---
 # Wir simulieren die Datenbank-Klassen, damit wir keine echte DB brauchen
@@ -85,6 +92,41 @@ def test_normalize_time_invalid(input_str):
 def test_calculate_net_hours(start, end, expected_net):
     assert calculate_net_hours(start, end) == expected_net
 
+def test_calculate_daily_net_hours_applies_break_once_to_split_blocks():
+    # Zwei Blöcke mit zusammen 8h Brutto: die 30-Minuten-Pause wird nur einmal abgezogen.
+    assert calculate_daily_net_hours([("08:00", "12:00"), ("13:00", "17:00")]) == 7.5
+
+
+def test_calculate_daily_net_hours_applies_45_minutes_to_long_split_day():
+    # Zusammen 10h Brutto: die bestehende 45-Minuten-Regel greift auf die Tagessumme.
+    assert calculate_daily_net_hours([("08:00", "13:00"), ("14:00", "19:00")]) == 9.25
+
+
+def test_shared_break_cases():
+    """Docker erfüllt dieselben zentral definierten Pausenfälle wie Standalone."""
+    cases = json.loads(SHARED_BREAK_CASES.read_text(encoding="utf-8"))["cases"]
+    for case in cases:
+        time_ranges = [(entry["start"], entry["end"]) for entry in case["entries"]]
+        assert calculate_daily_net_hours(time_ranges) == case["expected_net_hours"], case["id"]
+
+
+def test_shared_holiday_cases():
+    """Docker erfüllt die zentral definierten Feiertags- und Wochenendfälle."""
+    cases = json.loads(SHARED_HOLIDAY_CASES.read_text(encoding="utf-8"))["cases"]
+    for case in cases:
+        day = date.fromisoformat(case["date"])
+        settings = MockSettings(
+            weekly_hours=case["weekly_hours"],
+            active_weekdays=",".join(str(value) for value in case["active_weekdays"]),
+        )
+        statutory = {day: case["statutory_holiday"]} if "statutory_holiday" in case else {}
+        custom = case.get("custom_holiday")
+        custom_map = {day: MockCustomHoliday(custom["name"], custom["hours"])} if custom else {}
+        result = get_day_info(day, settings, statutory, custom_map)
+        for field, expected in case["expected"].items():
+            assert result[field] == expected, case["id"]
+
+
 # --- 3. Tests für calculate_gross_time_needed ---
 
 @pytest.mark.parametrize("target_net, expected_gross", [
@@ -144,6 +186,20 @@ def test_day_info_public_holiday():
     assert info["is_workday"] is False
     assert info["target"] == 0.0
     assert info["holiday_name"] == "Weihnachten"
+
+def test_day_info_statutory_holiday_overrides_custom_holiday():
+    d = date(2023, 12, 25)
+    settings = MockSettings()
+    he_holidays = {d: "Weihnachten"}
+    custom_map = {d: MockCustomHoliday("Wäldchestag", 6.0)}
+
+    info = get_day_info(d, settings, he_holidays, custom_map)
+
+    assert info["is_workday"] is False
+    assert info["target"] == 0.0
+    assert info["holiday_name"] == "Weihnachten"
+    assert info["is_short_day"] is False
+
 
 def test_day_info_custom_holiday_full():
     # Ein eigener freier Tag (z.B. Betriebsausflug)

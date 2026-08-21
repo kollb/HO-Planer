@@ -1,0 +1,66 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ho-planer.local/schemas/json-export.schema.json",
+  "title": "HO-Planer Austauschformat",
+  "description": "Versionierter, laufzeitunabhängiger Export- und Importvertrag für Docker und Standalone.",
+  "type": "object",
+  "required": ["format", "version", "exported_at", "settings", "custom_holidays", "entries"],
+  "properties": {
+    "format": { "const": "ho-planer-export" },
+    "version": { "const": 1 },
+    "exported_at": { "type": "string", "format": "date-time" },
+    "settings": {
+      "type": "object",
+      "properties": {
+        "weekly_hours": { "type": "number", "minimum": 0 },
+        "active_weekdays": {
+          "type": "array",
+          "items": { "type": "integer", "minimum": 0, "maximum": 6 },
+          "uniqueItems": true
+        },
+        "ho_quota_percent": { "type": "number", "minimum": 0, "maximum": 100 },
+        "hide_weekends": { "type": "boolean" },
+        "default_start_time": { "$ref": "#/$defs/time" },
+        "auto_convert_planned": { "type": "boolean" }
+      },
+      "additionalProperties": true
+    },
+    "custom_holidays": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/customHoliday" }
+    },
+    "entries": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/entry" }
+    }
+  },
+  "$defs": {
+    "date": { "type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$" },
+    "time": { "type": "string", "pattern": "^([01][0-9]|2[0-3]):[0-5][0-9]$" },
+    "entry": {
+      "type": "object",
+      "required": ["date", "type", "start", "end", "comment", "glz_override", "glz_override_source"],
+      "properties": {
+        "date": { "$ref": "#/$defs/date" },
+        "type": { "enum": ["", "home", "office", "dr", "planned", "sick", "vacation", "glz"] },
+        "start": { "oneOf": [{ "$ref": "#/$defs/time" }, { "const": "" }] },
+        "end": { "oneOf": [{ "$ref": "#/$defs/time" }, { "const": "" }] },
+        "comment": { "type": "string" },
+        "glz_override": { "type": ["number", "null"] },
+        "glz_override_source": { "enum": ["manual", "pdf", null] }
+      },
+      "additionalProperties": false
+    },
+    "customHoliday": {
+      "type": "object",
+      "required": ["date", "name", "hours"],
+      "properties": {
+        "date": { "$ref": "#/$defs/date" },
+        "name": { "type": "string", "minLength": 1 },
+        "hours": { "type": "number", "minimum": 0 }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

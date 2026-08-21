@@ -3,9 +3,8 @@ import re
 from datetime import datetime
 from playwright.sync_api import Page, expect
 
-# URLs für beide Versionen
-BASE_URL_V1 = "http://localhost:5000/"
-BASE_URL_V2 = "http://localhost:5000/beta"
+# Die frühere Beta-Oberfläche ist die produktive Standardansicht.
+BASE_URL = "http://localhost:5000/"
 
 @pytest.fixture(autouse=True)
 def setup_viewport(page: Page):
@@ -16,34 +15,11 @@ def setup_viewport(page: Page):
     yield
 
 # ==========================================
-# TESTS FÜR V1 (Alte index.html)
+# TESTS FÜR DIE PRODUKTIVE STANDARDANSICHT
 # ==========================================
 
-def test_v1_initial_elements_present(page: Page):
-    page.goto(BASE_URL_V1)
-    expect(page.locator(".v-navigation-drawer").get_by_text("HO Planer").first).to_be_visible()
-    expect(page.locator(".v-list-item").filter(has_text="Kalender")).to_be_visible()
-
-def test_v1_status_bar_content(page: Page):
-    page.goto(BASE_URL_V1)
-    status_bar = page.locator(".status-bar").first
-    expect(status_bar).to_be_visible()
-    expect(status_bar.locator(".stat-label").filter(has_text=re.compile(r"Arbeitstage", re.IGNORECASE))).to_be_visible()
-    expect(status_bar.locator(".stat-label").filter(has_text=re.compile(r"Bürostd", re.IGNORECASE))).to_be_visible()
-
-def test_v1_switch_views(page: Page):
-    page.goto(BASE_URL_V1)
-    expect(page.locator("table")).to_be_visible()
-    page.locator(".v-list-item").filter(has_text="Jahresübersicht").click()
-    expect(page.locator("th").filter(has_text="Home Office")).to_be_visible()
-
-
-# ==========================================
-# TESTS FÜR V2 (Neue beta.html)
-# ==========================================
-
-def test_v2_initial_elements_present(page: Page):
-    page.goto(BASE_URL_V2)
+def test_standard_initial_elements_present(page: Page):
+    page.goto(BASE_URL)
     # Titel ist jetzt in der neuen Top-App-Bar
     expect(page.get_by_text("HO Planer").first).to_be_visible()
     
@@ -52,8 +28,8 @@ def test_v2_initial_elements_present(page: Page):
     expect(page.locator("button[title='Serien-Planer']").first).to_be_visible()
     expect(page.locator("button[title='Einstellungen']").first).to_be_visible()
 
-def test_v2_switch_views(page: Page):
-    page.goto(BASE_URL_V2)
+def test_standard_switch_views(page: Page):
+    page.goto(BASE_URL)
     
     # Listenansicht / Timeline (Standard in V2)
     expect(page.locator(".tl-panel")).to_be_visible()
@@ -71,8 +47,8 @@ def test_v2_switch_views(page: Page):
     count = page.locator(".cal-cell").count()
     assert count >= 28
 
-def test_v2_year_navigation(page: Page):
-    page.goto(BASE_URL_V2)
+def test_standard_year_navigation(page: Page):
+    page.goto(BASE_URL)
     page.locator(".view-btn").filter(has_text="Jahr").click()
     current_year = datetime.now().year
     
@@ -80,8 +56,8 @@ def test_v2_year_navigation(page: Page):
     page.locator(".mdi-chevron-right").first.click()
     expect(page.get_by_text(str(current_year + 1)).first).to_be_visible()
 
-def test_v2_bento_dashboard_content(page: Page):
-    page.goto(BASE_URL_V2)
+def test_standard_bento_dashboard_content(page: Page):
+    page.goto(BASE_URL)
     dashboard = page.locator(".bento-grid").first
     expect(dashboard).to_be_visible()
     
@@ -93,14 +69,14 @@ def test_v2_bento_dashboard_content(page: Page):
     # Sicherstellen, dass das Büro-Bento wirklich gelöscht wurde
     expect(dashboard.locator(".bento-label").filter(has_text=re.compile(r"Büro", re.IGNORECASE))).not_to_be_visible()
 
-def test_v2_list_view_new_columns(page: Page):
-    """Prüft ob die 'GLZ Abgleich' Spalte im neuen Hybrid-Grid vorhanden ist."""
-    page.goto(BASE_URL_V2)
+def test_standard_list_view_new_columns(page: Page):
+    """Prüft, ob die Spalte „GLZ Abgleich“ im Hybrid-Grid vorhanden ist."""
+    page.goto(BASE_URL)
     # GEFIXT: Prüft nur noch, ob das Element ins DOM geladen wurde (ignoriert Vuetify Mobile-Breakpoints)
     expect(page.locator(".tl-header").filter(has_text="GLZ Abgleich").first).to_be_attached()
 
-def test_v2_edit_day_dialog_calendar(page: Page):
-    page.goto(BASE_URL_V2)
+def test_standard_edit_day_dialog_calendar(page: Page):
+    page.goto(BASE_URL)
     
     # In V2 öffnet sich der Bearbeitungs-Dialog über einen Klick in den Kalender
     page.locator(".view-btn").filter(has_text="Kalender").click()
@@ -121,8 +97,8 @@ def test_v2_edit_day_dialog_calendar(page: Page):
     # GEFIXT: .first hinzugefügt, da Vuetify für Textfelder immer zwei <label> Tags generiert!
     expect(dialog.get_by_label("Manueller GLZ Abgleich")).to_be_visible()
 
-def test_v2_series_planner_dialog(page: Page):
-    page.goto(BASE_URL_V2)
+def test_standard_series_planner_dialog(page: Page):
+    page.goto(BASE_URL)
     page.locator("button[title='Serien-Planer']").click()
     
     dialog_title = page.locator(".v-card-title").filter(has_text="Serien-Planer")
@@ -136,8 +112,8 @@ def test_v2_series_planner_dialog(page: Page):
     cancel_btn.click()
     expect(dialog_title).not_to_be_visible()
 
-def test_v2_custom_holiday_edit(page: Page):
-    page.goto(BASE_URL_V2)
+def test_standard_custom_holiday_edit(page: Page):
+    page.goto(BASE_URL)
     
     # Einstellungen öffnen
     page.locator("button[title='Einstellungen']").click()

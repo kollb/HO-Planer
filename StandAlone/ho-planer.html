@@ -640,6 +640,8 @@
                       <v-checkbox v-model="settings.active_weekdays" :value="2" label="Mi" density="compact" hide-details color="primary"></v-checkbox>
                       <v-checkbox v-model="settings.active_weekdays" :value="3" label="Do" density="compact" hide-details color="primary"></v-checkbox>
                       <v-checkbox v-model="settings.active_weekdays" :value="4" label="Fr" density="compact" hide-details color="primary"></v-checkbox>
+                      <v-checkbox v-model="settings.active_weekdays" :value="5" label="Sa" density="compact" hide-details color="primary"></v-checkbox>
+                      <v-checkbox v-model="settings.active_weekdays" :value="6" label="So" density="compact" hide-details color="primary"></v-checkbox>
                   </div>
                   
                   <v-switch v-model="settings.hide_weekends" label="Wochenenden ausblenden" color="primary" density="compact" hide-details></v-switch>
@@ -774,6 +776,77 @@
     };
     Store.init();
 
+    const EXPORT_FORMAT = 'ho-planer-export';
+    const EXPORT_VERSION = 1;
+    const EXPORT_SETTINGS = ['weekly_hours', 'active_weekdays', 'ho_quota_percent', 'hide_weekends', 'default_start_time', 'auto_convert_planned'];
+
+    function isExportDate(value) { return /^\d{4}-\d{2}-\d{2}$/.test(String(value || '')); }
+    function normalizeExportTime(value) { return value ? normalizeTimeInput(value) : ''; }
+    function entryIdentity(entry) { return [entry.type || '', entry.start || '', entry.end || '', (entry.comment || '').trim()].join('\u0000'); }
+
+    function buildPortableExport() {
+        const data = Store.get();
+        const entries = [];
+        Object.keys(data.entries || {}).sort().forEach(date => (data.entries[date] || []).forEach(entry => {
+            entries.push({ date, type: entry.type || '', start: normalizeExportTime(entry.start) || '', end: normalizeExportTime(entry.end) || '',
+                comment: (entry.comment || '').trim(), glz_override: entry.glz_override ?? null,
+                glz_override_source: ['manual', 'pdf'].includes(entry.glz_override_source) ? entry.glz_override_source : null });
+        }));
+        return {
+            format: EXPORT_FORMAT, version: EXPORT_VERSION, exported_at: new Date().toISOString(),
+            settings: { ...Store.getSettings() },
+            custom_holidays: Object.values(data.customHolidays || {}).map(holiday => ({ date: holiday.date, name: holiday.name, hours: Number(holiday.hours || 0) })),
+            entries
+        };
+    }
+
+    function mergePortableExport(payload) {
+        if (!payload || payload.format !== EXPORT_FORMAT || payload.version !== EXPORT_VERSION || !Array.isArray(payload.entries) || !Array.isArray(payload.custom_holidays)) {
+            throw new Error('Nicht unterstütztes Exportformat oder unbekannte Formatversion.');
+        }
+        const data = Store.get();
+        const result = { imported_entries: 0, skipped_entries: 0, invalid_entries: 0, imported_custom_holidays: 0, holiday_conflicts: 0, glz_override_conflicts: 0 };
+        payload.entries.forEach(raw => {
+            const date = raw && raw.date;
+            const type = raw && raw.type;
+            const start = normalizeExportTime(raw && raw.start) || '';
+            const end = normalizeExportTime(raw && raw.end) || '';
+            const comment = String((raw && raw.comment) || '').trim();
+            if (!isExportDate(date) || !['home', 'office', 'dr', 'planned', 'sick', 'vacation', 'glz', ''].includes(type) || ((raw.start || raw.end) && (!start || !end))) { result.invalid_entries++; return; }
+            const incoming = { type, start, end, comment, glz_override: raw.glz_override ?? null, glz_override_source: ['manual', 'pdf'].includes(raw.glz_override_source) ? raw.glz_override_source : null };
+            const current = data.entries[date] || [];
+            if (current.some(entry => entryIdentity(entry) === entryIdentity(incoming))) { result.skipped_entries++; return; }
+            const existingOverride = current.find(entry => entry.glz_override !== null && entry.glz_override !== undefined);
+            if (incoming.glz_override !== null && existingOverride && Number(existingOverride.glz_override) !== Number(incoming.glz_override)) { incoming.glz_override = null; incoming.glz_override_source = null; result.glz_override_conflicts++; }
+            current.push(incoming); data.entries[date] = current; result.imported_entries++;
+        });
+        payload.custom_holidays.forEach(raw => {
+            if (!raw || !isExportDate(raw.date) || !String(raw.name || '').trim() || !Number.isFinite(Number(raw.hours || 0))) { result.holiday_conflicts++; return; }
+            const incoming = { date: raw.date, name: String(raw.name).trim(), hours: Number(raw.hours || 0) };
+            const existing = data.customHolidays[incoming.date];
+            if (!existing) { data.customHolidays[incoming.date] = incoming; result.imported_custom_holidays++; }
+            else if (existing.name !== incoming.name || Number(existing.hours || 0) !== incoming.hours) result.holiday_conflicts++;
+        });
+        Store.persist();
+        return result;
+    }
+
+    function portableExportToStore(payload) {
+        const entries = {};
+        (payload.entries || []).forEach(entry => {
+            if (!entry || !isExportDate(entry.date)) return;
+            if (!entries[entry.date]) entries[entry.date] = [];
+            entries[entry.date].push({ type: entry.type || '', start: normalizeExportTime(entry.start) || '', end: normalizeExportTime(entry.end) || '',
+                comment: String(entry.comment || '').trim(), glz_override: entry.glz_override ?? null,
+                glz_override_source: ['manual', 'pdf'].includes(entry.glz_override_source) ? entry.glz_override_source : null });
+        });
+        const customHolidays = {};
+        (payload.custom_holidays || []).forEach(holiday => {
+            if (holiday && isExportDate(holiday.date)) customHolidays[holiday.date] = { date: holiday.date, name: String(holiday.name || ''), hours: Number(holiday.hours || 0) };
+        });
+        return { settings: payload.settings || {}, entries, customHolidays };
+    }
+
     // --- LOGIC PORT ---
     function normalizeTimeInput(t) {
         if(!t) return ""; t = t.toString().trim().replace('.', ':');
@@ -787,24 +860,35 @@
         return `${(h<10?'0':'')+h}:${(m<10?'0':'')+m}`;
     }
 
-    function calculateNetHours(start, end) {
+    function calculateGrossHours(start, end) {
         if(!start || !end) return 0.0;
         const s = normalizeTimeInput(start), e = normalizeTimeInput(end);
         if(!s || !e) return 0.0;
         const [sh, sm] = s.split(':').map(Number); const [eh, em] = e.split(':').map(Number);
-        let startMin = sh*60 + sm; let endMin = eh*60 + em;
-        if (endMin < startMin) endMin += 24*60;
-        
-        const grossHours = (endMin - startMin) / 60.0;
+        let startMin = sh * 60 + sm, endMin = eh * 60 + em;
+        if (endMin < startMin) endMin += 24 * 60;
+        return (endMin - startMin) / 60.0;
+    }
+
+    function calculateNetHoursFromGross(grossHours) {
         let net = grossHours;
-        
         if (grossHours <= 6.0) net = grossHours;
         else if (grossHours <= 6.5) net = 6.0;
         else if (grossHours <= 9.5) net = grossHours - 0.5;
         else if (grossHours <= 9.75) net = 9.0;
         else net = grossHours - 0.75;
-
         return Math.max(0.0, parseFloat(net.toFixed(2)));
+    }
+
+    function calculateNetHours(start, end) {
+        return calculateNetHoursFromGross(calculateGrossHours(start, end));
+    }
+
+    function calculateTimedNetAllocations(entries) {
+        const timedEntries = entries.filter(e => ['home', 'office', 'dr', 'planned'].includes(e.type) && e.start && e.end);
+        const grossHours = timedEntries.reduce((sum, entry) => sum + calculateGrossHours(entry.start, entry.end), 0);
+        const netHours = calculateNetHoursFromGross(grossHours);
+        return { timedEntries, grossHours, netHours };
     }
     
     function calculateGrossTimeNeeded(targetNet) {
@@ -813,24 +897,17 @@
         else return targetNet + 0.75; 
     }
     
-    function calculateTotalDailyNet(entries, infoTarget = 0) {
-        let sum = 0.0;
+    function calculateTotalDailyNet(entries, infoTarget = 0, isFuture = false) {
+        const timed = calculateTimedNetAllocations(entries);
+        let sum = timed.netHours;
         entries.forEach(e => {
-            if(e.type === 'planned') {
-                 if (e.start && e.end) sum += calculateNetHours(e.start, e.end);
-                 else sum += infoTarget;
-            }
-            else if(['home','office','dr'].includes(e.type) && e.start && e.end) {
-                 sum += calculateNetHours(e.start, e.end);
-            }
+            if (e.type === 'planned' && !(e.start && e.end)) sum += infoTarget;
+            else if (['home', 'office', 'dr'].includes(e.type) && !(e.start && e.end) && isFuture) sum += infoTarget;
         });
         return parseFloat(sum.toFixed(2));
     }
     
-    function getHolidayName(dateObj, customHolidays) {
-        const ymd = new Date(dateObj.getTime() - (dateObj.getTimezoneOffset() * 60000)).toISOString().split('T')[0];
-        if(customHolidays[ymd]) return customHolidays[ymd].name;
-        
+    function getHolidayName(dateObj) {
         const d = dateObj.getDate(), m = dateObj.getMonth() + 1, y = dateObj.getFullYear();
         if(m===12 && d===24) return "Heiligabend"; if(m===12 && d===31) return "Silvester"; if(m===1 && d===1) return "Neujahr"; if(m===5 && d===1) return "Tag der Arbeit"; if(m===10 && d===3) return "Tag der Deutschen Einheit"; if(m===12 && d===25) return "1. Weihnachtstag"; if(m===12 && d===26) return "2. Weihnachtstag";
         
@@ -1093,12 +1170,16 @@
             
             let is_workday = false, target = 0.0, hName = "", is_short = false, is_off = false;
             
+            hName = getHolidayName(dateObj);
+            if(hName) {
+                return { is_workday: false, target: 0.0, holiday_name: hName, is_short_day: false, is_off_day: false };
+            }
+
             if(cust) {
                 hName = cust.name;
                 if(cust.hours > 0) { is_workday = true; target = cust.hours; is_short = true; }
             } else {
-                hName = getHolidayName(dateObj, this.customHolidays);
-                if(!hName && is_active) {
+                if(is_active) {
                     is_workday = true;
                     target = activeDays.length > 0 ? (this.settings.weekly_hours / activeDays.length) : 0;
                 }
@@ -1146,18 +1227,9 @@
                 const info = this.getDayInfo(curr);
                 const dayEntries = allEntries[currStr] || [];
                 
-                let isFuture = currStr >= todayStr;
+                let isFuture = currStr > todayStr;
                 
-                let dayNet = 0.0;
-                for (let e of dayEntries) {
-                    if (e.type === 'planned') { 
-                        if (e.start && e.end) dayNet += calculateNetHours(e.start, e.end);
-                        else dayNet += info.target;
-                    } else if (['home', 'office', 'dr'].includes(e.type)) { 
-                        if (e.start && e.end) dayNet += calculateNetHours(e.start, e.end);
-                        else if (isFuture) dayNet += info.target;
-                    }
-                }
+                const dayNet = calculateTotalDailyNet(dayEntries, info.target, isFuture);
                 
                 let isPaidLeave = dayEntries.some(e => ['sick', 'vacation'].includes(e.type));
                 let isGlzDay = dayEntries.some(e => e.type === 'glz');
@@ -1234,7 +1306,7 @@
                 const dateObj = new Date(year, month-1, d);
                 const dateStr = new Date(dateObj.getTime() - (dateObj.getTimezoneOffset() * 60000)).toISOString().split('T')[0];
                 const info = this.getDayInfo(dateObj);
-                let isFuture = dateStr >= todayStr;
+                let isFuture = dateStr > todayStr;
                 
                 if (info.is_workday) { 
                     workdays++; 
@@ -1246,24 +1318,24 @@
 
                 const dayEntries = JSON.parse(JSON.stringify(allEntries[dateStr] || []));
                 
-                let dayNet = 0.0;
                 let dayHoPart = 0, dayOffPart = 0;
                 let dayOverride = null;
                 let dayOverrideSource = null;
+                const timed = calculateTimedNetAllocations(dayEntries);
+                let dayNet = timed.netHours;
 
                 dayEntries.forEach(e => {
                     let h = 0.0;
-                    if(e.type === 'planned') {
-                        if(e.start && e.end) h = calculateNetHours(e.start, e.end);
-                        else h = info.target;
-                    } 
-                    else if(['home','office','dr'].includes(e.type)) {
-                        if(e.start && e.end) h = calculateNetHours(e.start, e.end);
-                        else if(isFuture) h = info.target;
+                    if (timed.timedEntries.includes(e) && timed.grossHours > 0) {
+                        h = timed.netHours * calculateGrossHours(e.start, e.end) / timed.grossHours;
+                    } else if(e.type === 'planned') {
+                        h = info.target;
+                    } else if(['home','office','dr'].includes(e.type) && isFuture) {
+                        h = info.target;
                     }
                     
                     e.net = parseFloat(h.toFixed(2)); 
-                    dayNet += h;
+                    if (!timed.timedEntries.includes(e)) dayNet += h;
                     
                     if(e.glz_override != null) {
                         dayOverride = e.glz_override;
@@ -1359,24 +1431,24 @@
                     
                     const entries = allEntries[dateStr] || [];
                     if(entries.length > 0) {
-                        let isFuture = dateStr >= todayStr;
-                        let dayNet = 0.0;
+                        let isFuture = dateStr > todayStr;
+                        const timed = calculateTimedNetAllocations(entries);
+                        let dayNet = timed.netHours;
                         
                         let hasHo=false, hasOff=false, hasVac=false;
                         let rawHo=0, rawOff=0;
 
                         entries.forEach(e => {
                             let h = 0.0;
-                            if(e.type === 'planned') { 
-                                if (e.start && e.end) h = calculateNetHours(e.start, e.end);
-                                else h = info.target;
-                            }
-                            else if(['home','office','dr'].includes(e.type)) { 
-                                if (e.start && e.end) h = calculateNetHours(e.start, e.end);
-                                else if (isFuture) h = info.target;
+                            if (timed.timedEntries.includes(e) && timed.grossHours > 0) {
+                                h = timed.netHours * calculateGrossHours(e.start, e.end) / timed.grossHours;
+                            } else if(e.type === 'planned') {
+                                h = info.target;
+                            } else if(['home','office','dr'].includes(e.type) && isFuture) {
+                                h = info.target;
                             }
                             
-                            dayNet += h;
+                            if (!timed.timedEntries.includes(e)) dayNet += h;
 
                             if(['home','planned'].includes(e.type)) { hasHo=true; rawHo += h; }
                             if(['office','dr'].includes(e.type)) { hasOff=true; rawOff += h; }
@@ -1658,39 +1730,49 @@
                 this.fileHandle = handle; this.fileName = handle.name; await idbSet('fileHandle', handle); this.storedHandleName = handle.name; await this.loadFileContent(); 
             } catch(e) {} 
         },
-        fallbackLoadJson(event) {
-            const file = event.target.files[0];
-            if (!file) return;
-            const reader = new FileReader();
-            reader.onload = ev => {
-                try {
-                    const json = JSON.parse(ev.target.result);
-                    Store.set(json);
-                    this.loadData();
-                    this.showMsg("Datei geladen", "success");
-                } catch(err) {
-                    this.showMsg("Ungültige JSON Datei", "error");
-                }
-            };
-            reader.readAsText(file);
-            event.target.value = '';
+        downloadJson(payload, filename) {
+            const blob = new Blob([JSON.stringify(payload, null, 2)], {type: 'application/json'});
+            const url = URL.createObjectURL(blob); const a = document.createElement('a');
+            a.href = url; a.download = filename; a.click(); URL.revokeObjectURL(url);
         },
-        async loadFileContent() { const file = await this.fileHandle.getFile(); const text = await file.text(); try { const json = JSON.parse(text); Store.set(json); this.loadData(); } catch(e) { Store.init(); this.saveToFile(); } },
-        async saveToFile() { 
-            if (!window.showSaveFilePicker && !this.fileHandle) {
-                const blob = new Blob([JSON.stringify(Store.get(), null, 2)], {type: 'application/json'});
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = 'ho_planer_backup.json';
-                a.click();
-                URL.revokeObjectURL(url);
-                this.unsavedChanges = false;
-                this.showMsg("Datei heruntergeladen");
+        backupBeforeImport() { this.downloadJson(buildPortableExport(), `ho-planer-backup-vor-import-${new Date().toISOString().slice(0, 10)}.json`); },
+        applyImportedJson(json) {
+            if (json && json.format === EXPORT_FORMAT) {
+                this.backupBeforeImport();
+                const result = mergePortableExport(json);
+                this.loadData();
+                const conflicts = result.holiday_conflicts + result.glz_override_conflicts;
+                this.showMsg(`${result.imported_entries} Einträge ergänzt, ${result.skipped_entries} übersprungen.${conflicts ? ` ${conflicts} Konflikt(e) nicht übernommen.` : ''}`, conflicts ? 'warning' : 'success');
                 return;
             }
-            if(!this.fileHandle) return; 
-            try { const writable = await this.fileHandle.createWritable(); await writable.write(JSON.stringify(Store.get(), null, 2)); await writable.close(); this.unsavedChanges = false; this.showMsg("Datei gespeichert"); } catch(e) { alert("Fehler beim Speichern"); } 
+            if (json && json.settings && json.entries && json.customHolidays) {
+                this.backupBeforeImport();
+                Store.set(json); this.loadData(); this.showMsg('Ältere Standalone-Sicherung geladen.', 'success');
+                return;
+            }
+            throw new Error('Ungültige JSON-Datei');
+        },
+        loadLinkedFile(json) {
+            if (json && json.format === EXPORT_FORMAT && json.version === EXPORT_VERSION) {
+                Store.set(portableExportToStore(json)); this.loadData(); return;
+            }
+            if (json && json.settings && json.entries && json.customHolidays) { Store.set(json); this.loadData(); return; }
+            throw new Error('Ungültige JSON-Datei');
+        },
+        fallbackLoadJson(event) {
+            const file = event.target.files[0]; if (!file) return;
+            const reader = new FileReader();
+            reader.onload = ev => { try { this.applyImportedJson(JSON.parse(ev.target.result)); } catch(err) { this.showMsg(err.message || 'Ungültige JSON-Datei', 'error'); } };
+            reader.readAsText(file); event.target.value = '';
+        },
+        async loadFileContent() { const file = await this.fileHandle.getFile(); const text = await file.text(); try { this.loadLinkedFile(JSON.parse(text)); } catch(e) { Store.init(); this.saveToFile(); } },
+        async saveToFile() {
+            const payload = buildPortableExport();
+            if (!window.showSaveFilePicker && !this.fileHandle) {
+                this.downloadJson(payload, 'ho-planer-export.json'); this.unsavedChanges = false; this.showMsg('Export heruntergeladen'); return;
+            }
+            if(!this.fileHandle) return;
+            try { const writable = await this.fileHandle.createWritable(); await writable.write(JSON.stringify(payload, null, 2)); await writable.close(); this.unsavedChanges = false; this.showMsg('Datei gespeichert'); } catch(e) { alert('Fehler beim Speichern'); }
         }
       }
     });

@@ -1,0 +1,40 @@
+name: Standalone-Tests
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - StandAlone/**
+      - shared/**
+      - .github/workflows/test-standalone.yml
+  pull_request:
+    branches: [main]
+    paths:
+      - StandAlone/**
+      - shared/**
+      - .github/workflows/test-standalone.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: StandAlone
+    steps:
+      - name: Repository auschecken
+        uses: actions/checkout@v4
+      - name: Python einrichten
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.14'
+      - name: Test-Abhängigkeiten installieren
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install pytest-playwright
+          playwright install chromium --with-deps
+      - name: Standalone-Tests ausführen
+        run: python run_tests.py

@@ -6,7 +6,7 @@ Das Besondere an dieser Edition: **Es ist nur eine einzige HTML-Datei.**
 
 ## 🚀 Quickstart (Nutzung)
 
-1. Lade dir die Datei `ho-tracker.html` herunter.
+1. Lade dir die Datei `ho-planer.html` herunter.
 2. Mach einen Doppelklick darauf (öffnet sich in Chrome, Edge, Firefox, Safari etc.).
 3. Fertig. Du kannst das Tool direkt nutzen.
 
@@ -46,6 +46,17 @@ Erkannt werden:
 * **Feiertags-Engine:** Berücksichtigt automatisch alle Feiertage in Hessen bei der Soll-Zeit-Berechnung. Eigene freie Tage (Betriebsausflug, Wäldchestag) lassen sich frei hinzufügen.
 
 ---
+
+## 🔄 Gemeinsamer fachlicher Vertrag
+
+Docker und Standalone haben unterschiedliche Laufzeitumgebungen, verwenden aber denselben versionierten Datenvertrag und dieselben Referenzfälle für Fachregeln:
+
+- [`../shared/contracts/business-rules.md`](../shared/contracts/business-rules.md): verbindliche Berechnungs- und Importregeln
+- [`../shared/contracts/data-model.md`](../shared/contracts/data-model.md): gemeinsames Datenmodell
+- [`../shared/contracts/json-export.schema.json`](../shared/contracts/json-export.schema.json): JSON-Austauschformat, Version 1
+- [`../shared/test-cases/`](../shared/test-cases/): gemeinsame Referenzfälle für Pausen, Feiertage, unvollständige Einträge, GLZ und Import
+
+Die Browser-Speicherung bleibt die produktive Datenhaltung der Standalone-Variante. JSON dient für Export, Import und den Austausch mit Docker.
 
 ## 🛠️ Tech Stack
 Da diese Variante ohne Backend auskommt, passiert die gesamte Magie im Frontend:

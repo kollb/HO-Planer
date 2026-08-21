@@ -1,6 +1,12 @@
 import pytest
-from app import app, db, Settings, WorkEntry, CustomHoliday
+import pytest
 import json
+from pathlib import Path
+from datetime import timedelta
+import io
+from app import app, db, Settings, WorkEntry, CustomHoliday, get_local_now
+
+SHARED_IMPORT_CASES = Path(__file__).resolve().parents[2] / "shared" / "test-cases" / "json-import.json"
 
 @pytest.fixture
 def client():
@@ -45,6 +51,42 @@ def test_create_and_read_entry(client):
         WorkEntry.query.filter_by(date="2024-01-15").delete()
         db.session.commit()
 
+def test_unfinished_actual_entries_count_only_for_future_days(client):
+    """Unvollständige Ist-Einträge erhalten nur an zukünftigen Tagen die Sollzeit."""
+    today = get_local_now().date()
+    tomorrow = today + timedelta(days=1)
+    created_ids = []
+
+    try:
+        for entry_date, entry_type in ((today, "home"), (tomorrow, "office"), (today, "dr")):
+            response = client.post('/api/entry', json={
+                "date": entry_date.isoformat(),
+                "type": entry_type,
+                "start": "",
+                "end": "",
+                "comment": "Heute-Regel-Regressionstest"
+            })
+            assert response.status_code == 200
+            created_ids.append(response.get_json()["id"])
+
+        today_response = client.get(f'/api/month/{today.year}/{today.month:02d}')
+        assert today_response.status_code == 200
+        today_items = {item["date"]: item for item in today_response.get_json()["items"] if item.get("row_type") == "day"}
+
+        today_entries = today_items[today.isoformat()]["entries"]
+        assert next(entry for entry in today_entries if entry["id"] == created_ids[0])["net"] == 0
+        assert next(entry for entry in today_entries if entry["id"] == created_ids[2])["net"] == 0
+
+        tomorrow_response = client.get(f'/api/month/{tomorrow.year}/{tomorrow.month:02d}')
+        assert tomorrow_response.status_code == 200
+        tomorrow_items = {item["date"]: item for item in tomorrow_response.get_json()["items"] if item.get("row_type") == "day"}
+        tomorrow_entry = next(entry for entry in tomorrow_items[tomorrow.isoformat()]["entries"] if entry["id"] == created_ids[1])
+        assert tomorrow_entry["net"] == tomorrow_items[tomorrow.isoformat()]["daily_target"]
+    finally:
+        with app.app_context():
+            WorkEntry.query.filter(WorkEntry.id.in_(created_ids)).delete(synchronize_session=False)
+            db.session.commit()
+
 def test_glz_override_save_and_carryover(client):
     """Prüft ob der GLZ Override gespeichert wird und zukünftige Tage beeinflusst."""
     payload = {
@@ -67,6 +109,57 @@ def test_glz_override_save_and_carryover(client):
     with app.app_context():
         WorkEntry.query.filter_by(date="2024-01-10").delete()
         db.session.commit()
+
+def test_json_export_and_additive_import(client):
+    """Das gemeinsame Austauschformat ergänzt nur neue Einträge und meldet GLZ-Konflikte."""
+    unique_date = "2098-07-15"
+    payload = {
+        "format": "ho-planer-export", "version": 1, "exported_at": "2098-01-01T00:00:00+00:00",
+        "settings": {"weekly_hours": 39}, "custom_holidays": [],
+        "entries": [{"date": unique_date, "type": "home", "start": "08:00", "end": "16:30", "comment": "JSON-Test", "glz_override": 4.5, "glz_override_source": "manual"}]
+    }
+    try:
+        exported = client.get('/api/export/json')
+        assert exported.status_code == 200
+        assert exported.get_json()['format'] == 'ho-planer-export'
+        assert exported.get_json()['version'] == 1
+
+        response = client.post('/api/import/json', data={'file': (io.BytesIO(json.dumps(payload).encode('utf-8')), 'export.json')}, content_type='multipart/form-data')
+        assert response.status_code == 200
+        assert response.get_json()['imported_entries'] == 1
+
+        duplicate = client.post('/api/import/json', data={'file': (io.BytesIO(json.dumps(payload).encode('utf-8')), 'export.json')}, content_type='multipart/form-data')
+        assert duplicate.status_code == 200
+        assert duplicate.get_json()['skipped_entries'] == 1
+    finally:
+        with app.app_context():
+            WorkEntry.query.filter_by(date=unique_date).delete()
+            db.session.commit()
+
+
+def test_json_import_uses_shared_contract_case(client):
+    """Der API-Import erfüllt den zentral definierten additiven Importfall."""
+    case = json.loads(SHARED_IMPORT_CASES.read_text(encoding="utf-8"))["cases"][0]
+    unique_date = case["incoming_entries"][0]["date"]
+    payload = {
+        "format": "ho-planer-export", "version": 1, "exported_at": "2098-01-01T00:00:00+00:00",
+        "settings": {}, "custom_holidays": [], "entries": case["incoming_entries"],
+    }
+    try:
+        response = client.post(
+            "/api/import/json",
+            data={"file": (io.BytesIO(json.dumps(payload).encode("utf-8")), "export.json")},
+            content_type="multipart/form-data",
+        )
+        assert response.status_code == 200
+        result = response.get_json()
+        assert result["imported_entries"] == case["expected"]["imported_entries"]
+        assert result["skipped_entries"] == case["expected"]["skipped_entries"]
+    finally:
+        with app.app_context():
+            WorkEntry.query.filter_by(date=unique_date).delete()
+            db.session.commit()
+
 
 def test_edit_custom_holiday(client):
     """Prüft ob ein bestehender Feiertag überschrieben wird (auch bei Datumsänderung)."""

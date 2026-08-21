@@ -1,0 +1,45 @@
+{
+  "contract_version": 1,
+  "description": "Referenzfälle für gesetzliche Feiertage, eigene Sondertage und aktive Wochenendtage.",
+  "cases": [
+    {
+      "id": "statutory-holiday-overrides-custom-holiday",
+      "date": "2023-12-25",
+      "weekly_hours": 40,
+      "active_weekdays": [0, 1, 2, 3, 4],
+      "statutory_holiday": "Weihnachten",
+      "custom_holiday": {"name": "Wäldchestag", "hours": 6.0},
+      "expected": {"is_workday": false, "target": 0.0, "holiday_name": "Weihnachten", "is_short_day": false}
+    },
+    {
+      "id": "custom-full-day-off",
+      "date": "2023-06-15",
+      "weekly_hours": 40,
+      "active_weekdays": [0, 1, 2, 3, 4],
+      "custom_holiday": {"name": "Betriebsausflug", "hours": 0.0},
+      "expected": {"is_workday": false, "target": 0.0, "holiday_name": "Betriebsausflug"}
+    },
+    {
+      "id": "custom-short-day",
+      "date": "2023-05-30",
+      "weekly_hours": 40,
+      "active_weekdays": [0, 1, 2, 3, 4],
+      "custom_holiday": {"name": "Wäldchestag", "hours": 6.0},
+      "expected": {"is_workday": true, "target": 6.0, "holiday_name": "Wäldchestag", "is_short_day": true}
+    },
+    {
+      "id": "active-saturday",
+      "date": "2023-10-07",
+      "weekly_hours": 12,
+      "active_weekdays": [5, 6],
+      "expected": {"is_workday": true, "target": 6.0}
+    },
+    {
+      "id": "active-sunday",
+      "date": "2023-10-08",
+      "weekly_hours": 12,
+      "active_weekdays": [5, 6],
+      "expected": {"is_workday": true, "target": 6.0}
+    }
+  ]
+}

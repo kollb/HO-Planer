@@ -1,0 +1,12 @@
+{
+  "contract_version": 1,
+  "description": "Referenzfälle für unvollständige Einträge ohne Start- und Endzeit.",
+  "cases": [
+    {"id": "today-home-is-zero", "relative_day": "today", "type": "home", "expected_mode": "zero"},
+    {"id": "today-office-is-zero", "relative_day": "today", "type": "office", "expected_mode": "zero"},
+    {"id": "today-dr-is-zero", "relative_day": "today", "type": "dr", "expected_mode": "zero"},
+    {"id": "future-home-uses-target", "relative_day": "future", "type": "home", "expected_mode": "target"},
+    {"id": "past-office-is-zero", "relative_day": "past", "type": "office", "expected_mode": "zero"},
+    {"id": "planned-uses-target", "relative_day": "today", "type": "planned", "expected_mode": "target"}
+  ]
+}

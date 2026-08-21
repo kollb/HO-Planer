@@ -1,7 +1,15 @@
 import pytest
+import json
 import os
 import re
+from pathlib import Path
+
+import pytest
 from playwright.sync_api import Page, expect
+
+SHARED_BREAK_CASES = Path(__file__).resolve().parents[1] / "shared" / "test-cases" / "breaks.json"
+SHARED_HOLIDAY_CASES = Path(__file__).resolve().parents[1] / "shared" / "test-cases" / "holidays.json"
+SHARED_IMPORT_CASES = Path(__file__).resolve().parents[1] / "shared" / "test-cases" / "json-import.json"
 
 BASE_URL = "http://localhost:8000/ho-planer.html"
 PRIVATE_DIR = "testfiles"
@@ -42,6 +50,92 @@ def test_js_calculate_net_hours(page: Page):
     for start, end, expected in test_cases:
         result = page.evaluate(f"calculateNetHours('{start}', '{end}')")
         assert abs(result - expected) < 0.01
+
+def test_shared_break_cases(page: Page):
+    """Standalone erfüllt dieselben zentral definierten Pausenfälle wie Docker."""
+    cases = json.loads(SHARED_BREAK_CASES.read_text(encoding="utf-8"))["cases"]
+    for case in cases:
+        result = page.evaluate("entries => calculateTotalDailyNet(entries)", case["entries"])
+        assert result == case["expected_net_hours"], case["id"]
+
+
+def test_statutory_holiday_overrides_custom_holiday(page: Page):
+    """Gesetzliche Feiertage haben Vorrang vor eigenen Sondertagen."""
+    result = page.evaluate("""() => {
+        window.vm.customHolidays = {
+            '2023-12-25': { date: '2023-12-25', name: 'Wäldchestag', hours: 6.0 }
+        };
+        return window.vm.getDayInfo(new Date(2023, 11, 25));
+    }""")
+
+    assert result['is_workday'] is False
+    assert result['target'] == 0
+    assert result['holiday_name'] == '1. Weihnachtstag'
+    assert result['is_short_day'] is False
+
+
+def test_portable_json_import_is_additive(page: Page):
+    """Der gemeinsame JSON-Import erfüllt den zentral definierten additiven Referenzfall."""
+    case = json.loads(SHARED_IMPORT_CASES.read_text(encoding="utf-8"))["cases"][0]
+    payload = {
+        "format": "ho-planer-export", "version": 1, "exported_at": "2098-01-01T00:00:00Z",
+        "settings": {}, "custom_holidays": [], "entries": case["incoming_entries"],
+    }
+    first = page.evaluate("payload => mergePortableExport(payload)", payload)
+    second = page.evaluate("payload => mergePortableExport(payload)", payload)
+    stored = page.evaluate("() => Store.getEntries()['2098-07-15']")
+    assert first['imported_entries'] == case["expected"]["imported_entries"]
+    assert first['skipped_entries'] == case["expected"]["skipped_entries"]
+    assert second['skipped_entries'] == 1
+    assert len(stored) == 1
+
+
+# --- GUI TESTS (V2 UI) ---
+def test_unfinished_actual_entries_count_only_for_future_days(page: Page):
+    """Heute ist ein Ist-Tag; nur zukünftige unvollständige Ist-Einträge erhalten Sollzeit."""
+    dates = page.evaluate("""() => {
+        const today = new Date();
+        const tomorrow = new Date(today);
+        tomorrow.setDate(tomorrow.getDate() + 1);
+        const toYmd = value => value.toISOString().split('T')[0];
+        return { today: toYmd(today), tomorrow: toYmd(tomorrow) };
+    }""")
+
+    page.evaluate("""({ today, tomorrow }) => {
+        localStorage.setItem('bbk_data', JSON.stringify({
+            settings: {
+                weekly_hours: 39,
+                active_weekdays: [0, 1, 2, 3, 4],
+                ho_quota_percent: 60,
+                hide_weekends: false,
+                default_start_time: '08:00',
+                auto_convert_planned: true
+            },
+            entries: {
+                [today]: [
+                    { type: 'home', start: '', end: '', comment: '' },
+                    { type: 'dr', start: '', end: '', comment: '' }
+                ],
+                [tomorrow]: [{ type: 'office', start: '', end: '', comment: '' }]
+            },
+            customHolidays: {}
+        }));
+    }""", dates)
+    page.reload()
+
+    result = page.evaluate("""({ today, tomorrow }) => {
+        const dayItems = Object.fromEntries(
+            window.vm.items.filter(item => item.row_type === 'day').map(item => [item.date, item])
+        );
+        return {
+            todayNet: dayItems[today].total_net,
+            tomorrowNet: dayItems[tomorrow].total_net,
+            tomorrowTarget: dayItems[tomorrow].daily_target
+        };
+    }""", dates)
+
+    assert result['todayNet'] == 0
+    assert result['tomorrowNet'] == result['tomorrowTarget']
 
 # --- GUI TESTS (V2 UI) ---
 def test_v2_gui_create_standard_entry(page: Page):

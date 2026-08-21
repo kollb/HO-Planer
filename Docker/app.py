@@ -1,11 +1,12 @@
 #1805206
 
-from flask import Flask, jsonify, request, send_file
+from flask import Flask, Response, jsonify, redirect, request, send_file, url_for
 from flask_cors import CORS
 from models import db, Settings, CustomHoliday, WorkEntry
-from logic import calculate_net_hours, get_day_info, normalize_time_str, calculate_gross_time_needed
+from logic import calculate_daily_net_hours, calculate_gross_hours, get_day_info, normalize_time_str, calculate_gross_time_needed
+import json
 import os
-import shutil
+import sqlite3
 import time
 from datetime import datetime, date, timedelta
 import holidays
@@ -49,34 +50,46 @@ def get_local_now():
 # Globaler RAM-Cache, um Festplatten-I/O bei jedem Request zu vermeiden
 LAST_BACKUP_DATE_STR = None
 
+def create_sqlite_backup(backup_file):
+    """Erstellt eine konsistente SQLite-Sicherung, auch wenn die Datenbank gerade genutzt wird."""
+    if not os.path.exists(db_path):
+        return False
+
+    source = destination = None
+    try:
+        source = sqlite3.connect(db_path)
+        destination = sqlite3.connect(backup_file)
+        source.backup(destination)
+        return True
+    finally:
+        if destination is not None:
+            destination.close()
+        if source is not None:
+            source.close()
+
+
 def perform_daily_backup():
     global LAST_BACKUP_DATE_STR
     today_str = str(get_local_now().date())
-    
-    # Blitz-Check im RAM: Haben wir heute schon gebackupt/geprüft?
+
     if LAST_BACKUP_DATE_STR == today_str:
         return
-        
+
     backup_file = os.path.join(backup_dir, f'db_backup_{today_str}.db')
-    
-    # Nur auf die Platte greifen, wenn der RAM-Check negativ war
     if not os.path.exists(backup_file) and os.path.exists(db_path):
         try:
-            shutil.copy2(db_path, backup_file)
-            app.logger.info(f"Tägliches Datenbank-Backup erstellt: {backup_file}")
-            now = time.time()
-            for f in os.listdir(backup_dir):
-                f_path = os.path.join(backup_dir, f)
-                if os.path.isfile(f_path):
-                    if os.stat(f_path).st_mtime < now - (180 * 86400):
+            if create_sqlite_backup(backup_file):
+                app.logger.info(f"Tägliches Datenbank-Backup erstellt: {backup_file}")
+                now = time.time()
+                for f in os.listdir(backup_dir):
+                    f_path = os.path.join(backup_dir, f)
+                    if os.path.isfile(f_path) and os.stat(f_path).st_mtime < now - (180 * 86400):
                         os.remove(f_path)
                         app.logger.info(f"Altes Backup gelöscht (>180 Tage): {f}")
-            # Nach erfolgreichem Backup den RAM-Status aktualisieren
-            LAST_BACKUP_DATE_STR = today_str
+                LAST_BACKUP_DATE_STR = today_str
         except Exception as e:
             app.logger.error(f"Fehler beim DB-Backup: {e}", exc_info=True)
     else:
-        # Falls das Backup durch einen Neustart schon existiert, merken wir uns das für heute im RAM
         LAST_BACKUP_DATE_STR = today_str
 
 @app.before_request
@@ -188,16 +201,18 @@ def get_glz_carryover(year, month, settings, custom_map):
         info = get_day_info(curr, settings, he_hols, custom_map)
         day_entries = entries_by_date.get(str(curr), [])
         
-        is_future = str(curr) >= today_str
+        is_future = str(curr) > today_str
         
-        day_net = 0.0
+        timed_entries = [
+            e for e in day_entries
+            if e.type in ["planned", "home", "office", "dr"] and e.start_time and e.end_time
+        ]
+        day_net = calculate_daily_net_hours([(e.start_time, e.end_time) for e in timed_entries])
         for e in day_entries:
-            if e.type == 'planned': 
-                if e.start_time and e.end_time: day_net += calculate_net_hours(e.start_time, e.end_time)
-                else: day_net += info["target"]
-            elif e.type in ["home", "office", "dr"]: 
-                if e.start_time and e.end_time: day_net += calculate_net_hours(e.start_time, e.end_time)
-                elif is_future: day_net += info["target"]
+            if e.type == 'planned' and not (e.start_time and e.end_time):
+                day_net += info["target"]
+            elif e.type in ["home", "office", "dr"] and not (e.start_time and e.end_time) and is_future:
+                day_net += info["target"]
         
         is_paid_leave = any(e.type in ['sick', 'vacation'] for e in day_entries)
         is_glz_day = any(e.type == 'glz' for e in day_entries)
@@ -334,9 +349,7 @@ def index():
 
 @app.route('/beta')
 def beta_index():
-    root_path = os.path.join(basedir, 'beta.html')
-    if os.path.exists(root_path): return send_file(root_path)
-    return app.send_static_file('beta.html')
+    return redirect(url_for('index'))
 
 @app.route('/api/settings', methods=['GET', 'POST'])
 def handle_settings():
@@ -402,7 +415,7 @@ def get_month_data(year, month):
         iso_week = date_obj.isocalendar()[1]
         info = get_day_info(date_obj, settings, he_holidays, custom_map)
         
-        is_future = date_str >= today_str
+        is_future = date_str > today_str
         
         if info["is_workday"]: 
             workdays += 1
@@ -417,15 +430,21 @@ def get_month_data(year, month):
         day_override = None
         day_override_source = None
         
+        timed_entries = [
+            e for e in day_entries
+            if e.type in ["planned", "home", "office", "dr"] and e.start_time and e.end_time
+        ]
+        timed_gross_hours = sum(calculate_gross_hours(e.start_time, e.end_time) for e in timed_entries)
+        timed_net_hours = calculate_daily_net_hours([(e.start_time, e.end_time) for e in timed_entries])
         frontend_entries = []
         for e in day_entries:
             hours = 0.0
-            if e.type == 'planned': 
-                if e.start_time and e.end_time: hours = calculate_net_hours(e.start_time, e.end_time)
-                else: hours = info["target"]
-            elif e.type in ["home", "office", "dr"]: 
-                if e.start_time and e.end_time: hours = calculate_net_hours(e.start_time, e.end_time)
-                elif is_future: hours = info["target"]
+            if e in timed_entries and timed_gross_hours > 0:
+                hours = timed_net_hours * calculate_gross_hours(e.start_time, e.end_time) / timed_gross_hours
+            elif e.type == 'planned':
+                hours = info["target"]
+            elif e.type in ["home", "office", "dr"] and is_future:
+                hours = info["target"]
             
             glz_over = getattr(e, 'glz_override', None)
             glz_source = getattr(e, 'glz_override_source', None)
@@ -532,27 +551,38 @@ def get_year_data(year):
                 wd_count += 1
                 target_month += inf["target"]
         
-        for e in m_entries:
-            h = 0.0
-            is_future = e.date >= today_str
-            
-            if e.type == 'planned':
-                if e.start_time and e.end_time: h = calculate_net_hours(e.start_time, e.end_time)
-                else: h = get_day_info(datetime.strptime(e.date, "%Y-%m-%d").date(), settings, he_holidays, custom_map)["target"]
-            elif e.type in ['home', 'office', 'dr']:
-                if e.start_time and e.end_time: h = calculate_net_hours(e.start_time, e.end_time)
-                elif is_future: h = get_day_info(datetime.strptime(e.date, "%Y-%m-%d").date(), settings, he_holidays, custom_map)["target"]
-            
-            if e.type in ['home', 'planned']: 
-                ho_h += h
-                d_ho.add(e.date)
-            elif e.type in ['office', 'dr']: 
-                off_h += h
-                d_off.add(e.date)
-            elif e.type == 'vacation':
-                d_obj = datetime.strptime(e.date, "%Y-%m-%d").date()
-                if get_day_info(d_obj, settings, he_holidays, custom_map)["is_workday"]:
-                    d_vac.add(e.date)
+        entries_by_date = {}
+        for entry in m_entries:
+            entries_by_date.setdefault(entry.date, []).append(entry)
+
+        for entry_date, day_entries in entries_by_date.items():
+            timed_entries = [
+                entry for entry in day_entries
+                if entry.type in ["planned", "home", "office", "dr"] and entry.start_time and entry.end_time
+            ]
+            timed_gross_hours = sum(calculate_gross_hours(entry.start_time, entry.end_time) for entry in timed_entries)
+            timed_net_hours = calculate_daily_net_hours([(entry.start_time, entry.end_time) for entry in timed_entries])
+            is_future = entry_date > today_str
+
+            for entry in day_entries:
+                h = 0.0
+                if entry in timed_entries and timed_gross_hours > 0:
+                    h = timed_net_hours * calculate_gross_hours(entry.start_time, entry.end_time) / timed_gross_hours
+                elif entry.type == 'planned':
+                    h = get_day_info(datetime.strptime(entry_date, "%Y-%m-%d").date(), settings, he_holidays, custom_map)["target"]
+                elif entry.type in ['home', 'office', 'dr'] and is_future:
+                    h = get_day_info(datetime.strptime(entry_date, "%Y-%m-%d").date(), settings, he_holidays, custom_map)["target"]
+
+                if entry.type in ['home', 'planned']:
+                    ho_h += h
+                    d_ho.add(entry_date)
+                elif entry.type in ['office', 'dr']:
+                    off_h += h
+                    d_off.add(entry_date)
+                elif entry.type == 'vacation':
+                    d_obj = datetime.strptime(entry_date, "%Y-%m-%d").date()
+                    if get_day_info(d_obj, settings, he_holidays, custom_map)["is_workday"]:
+                        d_vac.add(entry_date)
         
         data.append({ 
             "month": m, "workdays": wd_count, "days_ho": len(d_ho), "days_office": len(d_off), 
@@ -719,6 +749,171 @@ def delete_custom_holiday(id):
         db.session.delete(h)
         db.session.commit()
     return jsonify({"success": True})
+
+def create_import_backup():
+    """Erstellt unmittelbar vor einem expliziten JSON-Überschreiben ein SQLite-Backup."""
+    timestamp = get_local_now().strftime('%Y%m%d_%H%M%S')
+    backup_file = os.path.join(backup_dir, f'db_before_json_import_{timestamp}.db')
+    if not os.path.exists(db_path):
+        return None
+    if not create_sqlite_backup(backup_file):
+        raise RuntimeError("SQLite-Backup vor JSON-Import konnte nicht erstellt werden.")
+    app.logger.info("Datenbank-Backup vor JSON-Import erstellt: %s", backup_file)
+    return os.path.basename(backup_file)
+
+
+def serialize_export():
+    settings = Settings.query.first()
+    active_weekdays = [int(value) for value in (settings.active_weekdays or '').split(',') if value.strip().isdigit()]
+    return {
+        "format": "ho-planer-export",
+        "version": 1,
+        "exported_at": get_local_now().isoformat(),
+        "settings": {
+            "weekly_hours": settings.weekly_hours,
+            "active_weekdays": active_weekdays,
+            "ho_quota_percent": settings.ho_quota_percent,
+            "hide_weekends": settings.hide_weekends,
+            "default_start_time": settings.default_start_time,
+            "auto_convert_planned": settings.auto_convert_planned,
+        },
+        "custom_holidays": [
+            {"date": holiday.date, "name": holiday.name, "hours": holiday.hours or 0.0}
+            for holiday in CustomHoliday.query.order_by(CustomHoliday.date).all()
+        ],
+        "entries": [
+            {
+                "date": entry.date,
+                "type": entry.type,
+                "start": entry.start_time or "",
+                "end": entry.end_time or "",
+                "comment": entry.comment or "",
+                "glz_override": entry.glz_override,
+                "glz_override_source": entry.glz_override_source,
+            }
+            for entry in WorkEntry.query.order_by(WorkEntry.date, WorkEntry.id).all()
+        ],
+    }
+
+
+def normalized_import_entry(raw_entry):
+    if not isinstance(raw_entry, dict):
+        return None
+    entry_date = raw_entry.get('date')
+    entry_type = raw_entry.get('type', '')
+    start = normalize_time_str(raw_entry.get('start', ''))
+    end = normalize_time_str(raw_entry.get('end', ''))
+    comment = str(raw_entry.get('comment') or '').strip()
+    if not is_valid_date(entry_date) or entry_type not in VALID_TYPES:
+        return None
+    if not is_valid_time(start) or not is_valid_time(end):
+        return None
+    override = raw_entry.get('glz_override')
+    try:
+        override = float(override) if override is not None and str(override).strip() != '' else None
+    except (TypeError, ValueError):
+        return None
+    source = raw_entry.get('glz_override_source')
+    return {"date": entry_date, "type": entry_type, "start": start or '', "end": end or '', "comment": comment,
+            "glz_override": override, "glz_override_source": source if source in ('manual', 'pdf') else None}
+
+
+@app.route('/api/export/json', methods=['GET'])
+def export_json():
+    payload = json.dumps(serialize_export(), ensure_ascii=False, indent=2)
+    filename = f"ho-planer-export-{get_local_now().date().isoformat()}.json"
+    return Response(payload, mimetype='application/json', headers={'Content-Disposition': f'attachment; filename={filename}'})
+
+
+@app.route('/api/import/json', methods=['POST'])
+def import_json():
+    if 'file' not in request.files:
+        return jsonify({"success": False, "message": "Keine JSON-Datei ausgewählt."}), 400
+
+    try:
+        payload = json.load(request.files['file'])
+    except (json.JSONDecodeError, UnicodeDecodeError):
+        return jsonify({"success": False, "message": "Ungültige JSON-Datei."}), 400
+
+    if not isinstance(payload, dict) or payload.get('format') != 'ho-planer-export' or payload.get('version') != 1:
+        return jsonify({"success": False, "message": "Nicht unterstütztes Exportformat oder unbekannte Formatversion."}), 400
+    if not isinstance(payload.get('entries', []), list) or not isinstance(payload.get('custom_holidays', []), list):
+        return jsonify({"success": False, "message": "Ungültige Datenstruktur in der Exportdatei."}), 400
+
+    overwrite = request.form.get('overwrite') == 'true'
+    result = {"imported_entries": 0, "skipped_entries": 0, "invalid_entries": 0,
+              "entry_conflicts": 0, "imported_custom_holidays": 0, "skipped_custom_holidays": 0,
+              "holiday_conflicts": 0, "glz_override_conflicts": 0, "settings_imported": False,
+              "backup_created": None}
+
+    try:
+        if overwrite:
+            result['backup_created'] = create_import_backup()
+
+        for raw_entry in payload['entries']:
+            entry_data = normalized_import_entry(raw_entry)
+            if entry_data is None:
+                result['invalid_entries'] += 1
+                continue
+
+            identical = WorkEntry.query.filter_by(
+                date=entry_data['date'], type=entry_data['type'], start_time=entry_data['start'],
+                end_time=entry_data['end'], comment=entry_data['comment']
+            ).first()
+            if identical:
+                if entry_data['glz_override'] is not None and identical.glz_override != entry_data['glz_override']:
+                    if overwrite:
+                        identical.glz_override = entry_data['glz_override']
+                        identical.glz_override_source = entry_data['glz_override_source']
+                    else:
+                        result['glz_override_conflicts'] += 1
+                result['skipped_entries'] += 1
+                continue
+
+            existing_override = WorkEntry.query.filter_by(date=entry_data['date']).filter(WorkEntry.glz_override.isnot(None)).first()
+            if entry_data['glz_override'] is not None and existing_override and existing_override.glz_override != entry_data['glz_override']:
+                if overwrite:
+                    existing_override.glz_override = entry_data['glz_override']
+                    existing_override.glz_override_source = entry_data['glz_override_source']
+                    entry_data['glz_override'] = None
+                else:
+                    entry_data['glz_override'] = None
+                    result['glz_override_conflicts'] += 1
+
+            db.session.add(WorkEntry(date=entry_data['date'], type=entry_data['type'], start_time=entry_data['start'],
+                                     end_time=entry_data['end'], comment=entry_data['comment'],
+                                     glz_override=entry_data['glz_override'], glz_override_source=entry_data['glz_override_source']))
+            result['imported_entries'] += 1
+
+        for raw_holiday in payload['custom_holidays']:
+            if not isinstance(raw_holiday, dict) or not is_valid_date(raw_holiday.get('date')) or not str(raw_holiday.get('name') or '').strip():
+                result['holiday_conflicts'] += 1
+                continue
+            try:
+                hours = float(raw_holiday.get('hours', 0))
+            except (TypeError, ValueError):
+                result['holiday_conflicts'] += 1
+                continue
+            existing = CustomHoliday.query.filter_by(date=raw_holiday['date']).first()
+            if not existing:
+                db.session.add(CustomHoliday(date=raw_holiday['date'], name=str(raw_holiday['name']).strip(), hours=hours))
+                result['imported_custom_holidays'] += 1
+            elif existing.name == str(raw_holiday['name']).strip() and (existing.hours or 0.0) == hours:
+                result['skipped_custom_holidays'] += 1
+            elif overwrite:
+                existing.name = str(raw_holiday['name']).strip()
+                existing.hours = hours
+            else:
+                result['holiday_conflicts'] += 1
+
+        db.session.commit()
+        message = f"{result['imported_entries']} Einträge ergänzt, {result['skipped_entries']} bereits vorhandene Einträge übersprungen."
+        return jsonify({"success": True, "message": message, **result})
+    except Exception as error:
+        db.session.rollback()
+        app.logger.error("JSON-Import fehlgeschlagen: %s", error, exc_info=True)
+        return jsonify({"success": False, "message": "Fehler beim JSON-Import."}), 500
+
 
 @app.route('/api/import/pdf', methods=['POST'])
 def import_pdf():

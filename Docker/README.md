@@ -68,6 +68,17 @@ Die App erreichst du dann unter `http://localhost:5000`.
 
 ---
 
+## 🔄 Gemeinsamer fachlicher Vertrag
+
+Docker und Standalone haben unterschiedliche Laufzeitumgebungen, verwenden aber denselben versionierten Datenvertrag und dieselben Referenzfälle für Fachregeln:
+
+- [`../shared/contracts/business-rules.md`](../shared/contracts/business-rules.md): verbindliche Berechnungs- und Importregeln
+- [`../shared/contracts/data-model.md`](../shared/contracts/data-model.md): gemeinsames Datenmodell
+- [`../shared/contracts/json-export.schema.json`](../shared/contracts/json-export.schema.json): JSON-Austauschformat, Version 1
+- [`../shared/test-cases/`](../shared/test-cases/): gemeinsame Referenzfälle für Pausen, Feiertage, unvollständige Einträge, GLZ und Import
+
+Die SQLite-Datenbank bleibt die produktive Datenhaltung der Docker-Variante. JSON dient nur Export, Import und Austausch.
+
 ## 🛠️ Tech Stack
 * **Frontend:** Vue.js 3, Vuetify 3, Chart.js, PDF.js (für den Standalone-Import)
 * **Backend:** Flask (Python), SQLAlchemy, SQLite, pdfplumber

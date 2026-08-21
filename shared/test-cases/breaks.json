@@ -1,0 +1,47 @@
+{
+  "contract_version": 1,
+  "description": "Verbindliche Referenzfälle für die ArbZG-Pausenberechnung. Die Pause wird auf die Summe aller zeitlich erfassten Arbeitsblöcke eines Tages angewendet.",
+  "cases": [
+    {
+      "id": "single-six-hours",
+      "entries": [{ "type": "home", "start": "08:00", "end": "14:00" }],
+      "expected_net_hours": 6.0
+    },
+    {
+      "id": "single-six-and-a-half-hours",
+      "entries": [{ "type": "home", "start": "08:00", "end": "14:30" }],
+      "expected_net_hours": 6.0
+    },
+    {
+      "id": "single-nine-and-a-half-hours",
+      "entries": [{ "type": "office", "start": "08:00", "end": "17:30" }],
+      "expected_net_hours": 9.0
+    },
+    {
+      "id": "single-nine-and-three-quarter-hours",
+      "entries": [{ "type": "office", "start": "08:00", "end": "17:45" }],
+      "expected_net_hours": 9.0
+    },
+    {
+      "id": "split-eight-hours",
+      "entries": [
+        { "type": "home", "start": "08:00", "end": "12:00" },
+        { "type": "office", "start": "13:00", "end": "17:00" }
+      ],
+      "expected_net_hours": 7.5
+    },
+    {
+      "id": "split-ten-hours",
+      "entries": [
+        { "type": "home", "start": "08:00", "end": "13:00" },
+        { "type": "office", "start": "14:00", "end": "19:00" }
+      ],
+      "expected_net_hours": 9.25
+    },
+    {
+      "id": "night-shift",
+      "entries": [{ "type": "dr", "start": "20:00", "end": "05:00" }],
+      "expected_net_hours": 8.5
+    }
+  ]
+}

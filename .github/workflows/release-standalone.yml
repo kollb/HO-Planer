@@ -1,0 +1,49 @@
+name: Standalone-Release erstellen
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Repository auschecken
+        uses: actions/checkout@v4
+      - name: Release-Paket erzeugen
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist/ho-planer-standalone
+          cp StandAlone/ho-planer.html dist/ho-planer-standalone/ho-planer.html
+          cp StandAlone/README.md dist/ho-planer-standalone/README.md
+          cp StandAlone/daten.json dist/ho-planer-standalone/daten.json
+          cp StandAlone/ho-planer.html dist/ho-planer-standalone.html
+          (
+            cd dist
+            zip -r ho-planer-standalone.zip ho-planer-standalone
+            sha256sum ho-planer-standalone.html ho-planer-standalone.zip > SHA256SUMS.txt
+          )
+      - name: Paket als Workflow-Artefakt hochladen
+        uses: actions/upload-artifact@v4
+        with:
+          name: ho-planer-standalone
+          path: |
+            dist/ho-planer-standalone.html
+            dist/ho-planer-standalone.zip
+            dist/SHA256SUMS.txt
+          if-no-files-found: error
+      - name: GitHub-Release veröffentlichen
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          files: |
+            dist/ho-planer-standalone.html
+            dist/ho-planer-standalone.zip
+            dist/SHA256SUMS.txt

@@ -26,50 +26,48 @@ def normalize_time_str(t_str):
     except ValueError:
         return None
 
-def calculate_net_hours(start_str, end_str):
-    """
-    Berechnet die Netto-Arbeitszeit. 
-    WICHTIG: Zieht Pausen gemäß Arbeitszeitgesetz ab inkl. dynamischer Kappungsgrenzen.
-    """
+def calculate_gross_hours(start_str, end_str):
+    """Berechnet die Bruttozeit eines einzelnen Arbeitsblocks."""
     start_str = normalize_time_str(start_str)
     end_str = normalize_time_str(end_str)
-    
     if not start_str or not end_str:
         return 0.0
-
     try:
         fmt = "%H:%M"
         t_start = datetime.strptime(start_str, fmt)
         t_end = datetime.strptime(end_str, fmt)
-        
         if t_end < t_start:
-            # Fall für Nachtschicht (falls relevant), sonst passiert hier nichts Schlimmes
             t_end += timedelta(days=1)
-            
-        diff = t_end - t_start
-        # Wichtig: total_seconds gibt float zurück
-        hours_worked = diff.total_seconds() / 3600.0
-        
-        # Pausenkappung nach ArbZG:
-        if hours_worked <= 6.0:
-            net_hours = hours_worked
-        elif hours_worked <= 6.5:
-            # Präsenz zwischen 6.0h und 6.5h -> Netto wird auf 6.0h gedeckelt (füllt die 30 Min. Pause)
-            net_hours = 6.0
-        elif hours_worked <= 9.5:
-            # Präsenz bis 9.5h -> 30 Min Pause abziehen (ergibt max. 9.0h Netto)
-            net_hours = hours_worked - 0.5
-        elif hours_worked <= 9.75:
-            # Präsenz zwischen 9.5h und 9.75h -> Netto wird auf 9.0h gedeckelt (füllt die restlichen 15 Min.)
-            net_hours = 9.0
-        else:
-            # Präsenz über 9.75h -> Volle 45 Min Pause abziehen
-            net_hours = hours_worked - 0.75
-            
-        return max(0.0, round(net_hours, 2))
-    except Exception as e:
-        print(f"Fehler bei Zeitberechnung: {e}") # Logging hilft im Docker Container
+        return max(0.0, (t_end - t_start).total_seconds() / 3600.0)
+    except Exception as error:
+        print(f"Fehler bei Zeitberechnung: {error}")
         return 0.0
+
+
+def calculate_net_hours_from_gross(hours_worked):
+    """Wendet die bestehende ArbZG-Pausenkappung auf eine Brutto-Stundensumme an."""
+    if hours_worked <= 6.0:
+        net_hours = hours_worked
+    elif hours_worked <= 6.5:
+        net_hours = 6.0
+    elif hours_worked <= 9.5:
+        net_hours = hours_worked - 0.5
+    elif hours_worked <= 9.75:
+        net_hours = 9.0
+    else:
+        net_hours = hours_worked - 0.75
+    return max(0.0, round(net_hours, 2))
+
+
+def calculate_net_hours(start_str, end_str):
+    """Berechnet die Nettozeit eines einzelnen Blocks für die Einzelanzeige."""
+    return calculate_net_hours_from_gross(calculate_gross_hours(start_str, end_str))
+
+
+def calculate_daily_net_hours(time_ranges):
+    """Berechnet die Nettozeit aus der Summe aller zeitlich erfassten Arbeitsblöcke eines Tages."""
+    gross_hours = sum(calculate_gross_hours(start, end) for start, end in time_ranges)
+    return calculate_net_hours_from_gross(gross_hours)
 
 def calculate_gross_time_needed(target_net_hours):
     """
@@ -89,6 +87,15 @@ def get_day_info(date_obj, settings, he_holidays, custom_map):
     Liefert Feiertags- und Soll-Stunden-Infos.
     """
     iso_date_str = str(date_obj)
+    if date_obj in he_holidays:
+        return {
+            "is_workday": False,
+            "target": 0.0,
+            "holiday_name": he_holidays[date_obj],
+            "is_short_day": False,
+            "is_off_day": False
+        }
+
     cust = custom_map.get(date_obj)
     if cust:
         return {
@@ -96,15 +103,6 @@ def get_day_info(date_obj, settings, he_holidays, custom_map):
             "target": cust.hours if cust.hours else 0.0,
             "holiday_name": cust.name,
             "is_short_day": (cust.hours > 0 and cust.hours < (settings.weekly_hours / 5)),
-            "is_off_day": False
-        }
-
-    if date_obj in he_holidays:
-        return {
-            "is_workday": False,
-            "target": 0.0,
-            "holiday_name": he_holidays[date_obj],
-            "is_short_day": False,
             "is_off_day": False
         }
 
