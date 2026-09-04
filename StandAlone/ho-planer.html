@@ -1251,9 +1251,11 @@
     }
     function normalizePortableHoliday(raw) {
         if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return { error: 'invalid_object' };
-        const hours = finiteExportNumber(raw.hours === undefined ? 0 : raw.hours);
+        // Reihenfolge der Prüfungen ist mit der Docker-Variante abgestimmt,
+        // damit beide Varianten dieselben Fehlercodes melden (Parität).
         if (!isExportDate(raw.date)) return { error: 'invalid_date' };
         if (typeof raw.name !== 'string' || !raw.name.trim()) return { error: 'invalid_name' };
+        const hours = finiteExportNumber(raw.hours === undefined ? 0 : raw.hours);
         if (hours === null || hours < 0) return { error: 'invalid_hours' };
         return { holiday: { date: raw.date, name: raw.name.trim(), hours } };
     }

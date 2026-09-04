@@ -6,7 +6,7 @@ Diese Liste enthält ausschließlich noch offene Arbeiten. Ein Punkt wird erst n
 
 - [X] **Standalone-Teststarter unter Windows reparieren:** Der aktuelle Lauf mit `py StandAlone/run_tests.py` bricht vor dem Serverstart mit `UnicodeEncodeError` an Emoji-Konsolenausgaben ab. Ausgabe ASCII-/codepage-sicher machen und danach die vollständige Suite ausführen.
 - [X] **Standalone-Testumgebung reproduzierbar machen:** Im aktuell verwendeten `py`-Interpreter fehlt zudem `pytest`; Teststarter müssen fehlende Testpakete und Browser-Binaries eindeutig vor dem Start melden.
-- [ ] **Fachliche Fehler zuerst absichern:** echte Kalenderdaten validieren, Austauschzeiten strikt validieren und nicht-endliche Zahlen, negative Sonderstunden sowie ungültige GLZ-Quellen beim JSON-Import ablehnen – in Docker und Standalone identisch.
+- [X] **Fachliche Fehler zuerst absichern:** echte Kalenderdaten validieren, Austauschzeiten strikt validieren und nicht-endliche Zahlen, negative Sonderstunden sowie ungültige GLZ-Quellen beim JSON-Import ablehnen – in Docker und Standalone identisch.
 - [ ] **Datenverlust beim PDF-Import verhindern:** Nachtschichten akzeptieren und PDF-Import blockweise/additiv mergen, statt durch Tageslogik gültige Daten zu verwerfen oder bestehende Einträge zu überschreiben.
 - [ ] **Parität herstellen:** Jahresendoption, Feiertagshelper, Serienplanung und GLZ-Ankerverhalten in beiden Varianten über gemeinsame Referenzfälle absichern.
 

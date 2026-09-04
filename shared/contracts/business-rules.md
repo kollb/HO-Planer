@@ -38,6 +38,8 @@ Diese Spezifikation ist der gemeinsame fachliche Vertrag für die Docker- und di
 - Ein Austauschdatum muss ein echtes ISO-Kalenderdatum im Format `YYYY-MM-DD` sein. Austauschzeiten sind ausschließlich leer oder im exakten Format `HH:MM` zulässig.
 - GLZ-Overrides und Sonderstunden müssen endliche Zahlen sein. Sonderstunden dürfen nicht negativ sein; als GLZ-Overridequellen sind nur `manual`, `pdf` oder `null` zulässig.
 - Ein gültiger Importcontainer wird partiell verarbeitet: Ungültige Einzelobjekte werden übersprungen, valide Nachbarobjekte bleiben importierbar. Für ungültige Einträge liefern beide Varianten neutrale Detailcodes im Format `entries[index]: code`, beispielsweise `invalid_date`, `invalid_time`, `invalid_glz_override` oder `invalid_glz_override_source`.
+- Für eigene Feiertage gilt dieselbe Regel mit dem Präfix `custom_holidays[index]:` und den Codes `invalid_object`, `invalid_date`, `invalid_name` sowie `invalid_hours`. Beide Varianten prüfen in derselben Reihenfolge (Datum, Name, Stunden) und melden damit identische Codes.
+- Verbindliche Referenzfälle liegen in `shared/test-cases/json-import.json`. Docker und Standalone führen dieselbe Datei aus; ein Fall ist erst erledigt, wenn er in beiden Suiten grün ist.
 
 ## PDF-Import
 

@@ -394,15 +394,29 @@ def test_shared_json_import_cases(page: Page):
         page.evaluate("() => Store.set({ settings: {}, entries: {}, customHolidays: {} })")
         for entry in case["existing_entries"]:
             page.evaluate("entry => Store.saveDayEntries(entry.date, [{ ...entry }])", entry)
+        if case.get("existing_custom_holidays"):
+            page.evaluate(
+                "holidays => { const data = Store.get(); data.customHolidays = { ...data.customHolidays, ...holidays }; Store.set(data); }",
+                {holiday["date"]: {"date": holiday["date"], "name": holiday["name"], "hours": holiday.get("hours", 0)}
+                 for holiday in case["existing_custom_holidays"]},
+            )
         payload = {
             "format": "ho-planer-export", "version": 1, "exported_at": "2098-01-01T00:00:00Z",
-            "settings": {}, "custom_holidays": [], "entries": case["incoming_entries"],
+            "settings": {},
+            "custom_holidays": case.get("incoming_custom_holidays", []),
+            "entries": case["incoming_entries"],
         }
         result = page.evaluate("payload => mergePortableExport(payload)", payload)
         assert result["imported_entries"] == case["expected"]["imported_entries"], case["id"]
         assert result["skipped_entries"] == case["expected"]["skipped_entries"], case["id"]
         if "invalid_entries" in case["expected"]:
             assert result["invalid_entries"] == case["expected"]["invalid_entries"], case["id"]
+        # Sondertage: derselbe Zählername in beiden Varianten.
+        if "imported_custom_holidays" in case["expected"]:
+            assert result["imported_custom_holidays"] == case["expected"]["imported_custom_holidays"], case["id"]
+        if "holiday_conflicts" in case["expected"]:
+            assert result["holiday_conflicts"] == case["expected"]["holiday_conflicts"], case["id"]
+        if "details" in case["expected"]:
             assert result["details"] == case["expected"]["details"], case["id"]
 
 
