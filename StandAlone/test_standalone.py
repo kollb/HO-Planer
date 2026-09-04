@@ -418,24 +418,24 @@ def test_shared_pdf_merge_cases(page: Page):
 def test_shared_glz_anchor_round_trip(page: Page):
     """GLZ-Anker behalten beim Browser-Export und -Import Wert sowie Quelle."""
     cases = json.loads(SHARED_GLZ_CASES.read_text(encoding="utf-8"))["cases"]
-        # Zwei Referenzfälle enthalten bewusst keinen Anker: ohne Anker beginnt die
-        # Berechnung beim ersten Eintrag des Zieljahres. Geprüft wird das in
-        # test_glz_carryover_without_anchor_starts_at_first_target_year_entry;
-        # hier zählen nur die Ankerfälle.
-        anchor_cases = [case for case in cases if "expected_anchor" in case]
-        assert len(anchor_cases) == 3, "Die Ankerfälle der gemeinsamen Referenzdatei fehlen."
+    # Zwei Referenzfälle enthalten bewusst keinen Anker: ohne Anker beginnt die
+    # Berechnung beim ersten Eintrag des Zieljahres. Geprüft wird das in
+    # test_glz_carryover_without_anchor_starts_at_first_target_year_entry;
+    # hier zählen nur die Ankerfälle.
+    anchor_cases = [case for case in cases if "expected_anchor" in case]
+    assert len(anchor_cases) == 3, "Die Ankerfälle der gemeinsamen Referenzdatei fehlen."
 
-        for case in anchor_cases:
-            page.evaluate("() => Store.set({ settings: {}, entries: {}, customHolidays: {} })")
-            payload = {
-                "format": "ho-planer-export", "version": 1, "exported_at": "2098-01-01T00:00:00Z",
-                "settings": {}, "custom_holidays": [], "entries": case["entries"],
-            }
-            page.evaluate("payload => mergePortableExport(payload)", payload)
-            exported = page.evaluate("() => buildPortableExport()")
-            anchor = case["expected_anchor"]
-            exported_anchor = next(entry for entry in exported["entries"] if entry["date"] == anchor["date"] and entry["glz_override"] == anchor["value"])
-            assert exported_anchor["glz_override_source"] == anchor["source"], case["id"]
+    for case in anchor_cases:
+        page.evaluate("() => Store.set({ settings: {}, entries: {}, customHolidays: {} })")
+        payload = {
+            "format": "ho-planer-export", "version": 1, "exported_at": "2098-01-01T00:00:00Z",
+            "settings": {}, "custom_holidays": [], "entries": case["entries"],
+        }
+        page.evaluate("payload => mergePortableExport(payload)", payload)
+        exported = page.evaluate("() => buildPortableExport()")
+        anchor = case["expected_anchor"]
+        exported_anchor = next(entry for entry in exported["entries"] if entry["date"] == anchor["date"] and entry["glz_override"] == anchor["value"])
+        assert exported_anchor["glz_override_source"] == anchor["source"], case["id"]
 
 
 def test_shared_incomplete_entry_cases(page: Page):
@@ -585,8 +585,10 @@ def test_v2_gui_switch_views(page: Page):
     expect(page.locator(".bento-grid").first).to_be_visible()
     
     page.locator(".view-btn").filter(has_text="Jahr").click()
-    expect(page.locator("th").filter(has_text="Urlaub")).to_be_visible()
-    expect(page.locator("canvas#donutChart")).to_be_attached()
+    # Jahresansicht: Monatstabelle mit den vier Kennzahlen und Balkendiagramm
+    expect(page.locator("th").filter(has_text="Homeoffice-Quote")).to_be_visible()
+    expect(page.locator("th").filter(has_text="Planung")).to_be_visible()
+    expect(page.locator("canvas#barChart")).to_be_attached()
     
     page.locator(".view-btn").filter(has_text="Timeline").click()
     expect(page.locator(".tl-panel").first).to_be_visible()

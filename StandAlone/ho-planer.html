@@ -1112,7 +1112,10 @@
             if(migrated) this.persist();
         },
         get() { return this.data; },
-        set(newData) { this.data = newData; this.init(); localStorage.setItem('bbk_data', JSON.stringify(this.data)); },
+        // Zuerst persistieren, dann initialisieren: init() liest den Stand aus dem
+        // localStorage zurück. Würde erst initialisiert, bliebe beim Laden einer Datei
+        // oder beim Zurücksetzen in Tests der alte Stand erhalten.
+        set(newData) { localStorage.setItem('bbk_data', JSON.stringify(newData)); this.init(); },
         replaceData(newData) {
             this.data = JSON.parse(JSON.stringify(newData));
             if (!this.data.settings) this.data.settings = {};
@@ -1293,6 +1296,16 @@
             throw new Error('Nicht unterstütztes Exportformat oder unbekannte Formatversion.');
         }
         const data = targetData;
+        // Konfliktquelle sind ausschließlich Anker, die vor diesem Import gespeichert
+        // waren. Zwei neue Einträge desselben Imports kollidieren nicht miteinander:
+        // bei mehreren Ankern an einem Tag ist der zuletzt gespeicherte maßgeblich
+        // (shared/test-cases/glz.json, "multiple-anchors-on-same-day...").
+        const existingOverrides = {};
+        for (const [existingDate, existingList] of Object.entries(data.entries || {})) {
+            existingOverrides[existingDate] = existingList.find(
+                entry => entry.glz_override !== null && entry.glz_override !== undefined
+            ) || null;
+        }
         const result = { imported_entries: 0, skipped_entries: 0, invalid_entries: 0, imported_custom_holidays: 0, holiday_conflicts: 0, glz_override_conflicts: 0, details: [], changed: false };
         payload.entries.forEach((raw, index) => {
             const normalized = normalizePortableEntry(raw);
@@ -1300,7 +1313,7 @@
             const { date, ...incoming } = normalized.entry;
             const current = data.entries[date] || [];
             if (current.some(entry => entryIdentity(entry) === entryIdentity(incoming))) { result.skipped_entries++; return; }
-            const existingOverride = current.find(entry => entry.glz_override !== null && entry.glz_override !== undefined);
+            const existingOverride = existingOverrides[date] || null;
             if (incoming.glz_override !== null && existingOverride && Number(existingOverride.glz_override) !== Number(incoming.glz_override)) { incoming.glz_override = null; incoming.glz_override_source = null; result.glz_override_conflicts++; }
             current.push(incoming); data.entries[date] = current; result.imported_entries++; result.changed = true;
         });
