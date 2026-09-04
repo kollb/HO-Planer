@@ -194,6 +194,11 @@
     .tl-date-cell { display: flex; align-items: baseline; gap: 8px; white-space: nowrap; overflow: hidden; }
     .tl-date-num { font-size: 1rem; font-weight: 700; color: var(--ho-text); }
     .tl-date-day { font-size: 0.9rem; font-weight: 500; color: var(--ho-muted); }
+    /* Kalenderwoche als Merkmal des Tages (Variante B). Sie steht bewusst
+       leise neben Datum und Wochentag: wer tief in einer Woche liest, sieht
+       die Zugehörigkeit auch dann, wenn der Wochenkopf weitergezogen ist. */
+    .tl-date-kw { flex: none; font-size: 0.62rem; font-weight: 600; letter-spacing: 0.3px;
+                  color: var(--ho-muted); opacity: 0.65; }
     .tl-holiday-badge { font-size: 0.65rem; font-weight: 600; color: #ef4444; letter-spacing: -0.2px; background: rgba(239, 68, 68, 0.15); padding: 2px 6px; border-radius: 4px;}
     .worktime-warning {
         display: inline-flex;
@@ -212,11 +217,22 @@
     /* Wochenkopf: die Zusammenfassung eröffnet ihre Woche als Abschnitt und
        bleibt beim Scrollen stehen, statt zwischen den Tagen zu liegen. Der
        Abstand öffnet nach oben (neue Woche) und schließt nach unten (Tage). */
+    /* Der Wochenblock (Variante C): ein Rahmen fasst Kopf und Tage einer Woche
+       zusammen. Der negative Außenabstand wird innen wieder ausgeglichen,
+       damit Spalten, Punkte und Zeitachse exakt dort bleiben, wo sie waren. */
+    .tl-week {
+        margin: 0 calc(var(--ho-space-3) * -1) var(--ho-space-4);
+        padding: var(--ho-space-2) var(--ho-space-3) var(--ho-space-3);
+        border: 1px solid var(--ho-border);
+        border-radius: var(--ho-radius-md);
+        background: color-mix(in srgb, var(--ho-surface) 40%, transparent);
+    }
+
     .tl-week-sum {
         display: flex;
         align-items: center;
         gap: var(--ho-space-3);
-        margin: var(--ho-space-5) 0 var(--ho-space-2) 48px;
+        margin: var(--ho-space-1) 0 var(--ho-space-2) 48px;
         padding: var(--ho-space-2) 0;
         border-top: 1px solid var(--ho-border);
         color: var(--ho-muted);
@@ -264,6 +280,7 @@
     .tl-week-sum__delta { padding-left: var(--ho-space-3); border-left: 1px solid var(--ho-border); }
     @media (max-width: 600px) {
         .tl-week-sum { margin-left: 0; }
+        .tl-week { margin: 0 0 var(--ho-space-4); padding: var(--ho-space-2); background: none; }
         .tl-week-sum__progress { width: 76px; }
     }
 
@@ -562,6 +579,7 @@
                                 <div v-for="item in block.days" :key="'tl-day-'+item.date"
                                      class="position-relative tl-day-card"
                                      :class="{'is-today': isToday(item.date)}"
+                                     :data-kw="item.iso_week"
                                      :role="isCompact ? 'button' : null"
                                      :tabindex="isCompact ? 0 : null"
                                      :aria-label="isCompact ? 'Tag ' + item.day_num + ' bearbeiten' : null"
@@ -578,6 +596,7 @@
                                             <template v-if="index === 0">
                                                 <span class="tl-date-num" :class="{'text-primary': isToday(item.date)}">[[ item.day_num ]].</span>
                                                 <span class="tl-date-day">[[ getGermanDayShort(item.weekday_index) ]]</span>
+                                                <span class="tl-date-kw">KW [[ item.iso_week ]]</span>
                                                 <span v-if="item.is_holiday" class="tl-holiday-badge">[[ item.holiday_name ]]</span>
                                                 <span v-if="item.total_net > 10" class="worktime-warning" title="Achtung: Tagesarbeitszeit über 10 Stunden (ArbZG)"><v-icon size="12">mdi-alert-outline</v-icon>Über 10 h</span>
                                             </template>

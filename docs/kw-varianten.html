@@ -87,9 +87,9 @@
   <p class="lead">Drei strukturell verschiedene Antworten auf dieselbe Frage · Daten: September 2026</p>
 
   <div class="note" style="background: rgba(16,185,129,.10); border-color: rgba(16,185,129,.35);">
-    <b style="color: var(--success);">Umsetzungsstand: Variante A mit Sticky umgesetzt</b>
-    <p style="color:#cbd5e1">Die Zusammenfassung steht jetzt <em>vor</em> den Tagen ihrer Woche und bleibt beim Scrollen unter Spalten- und App-Kopf stehen. Die Einschubzeile zwischen den Tagen ist entfallen. Jede Woche ist dafür ein eigener Abschnitt — sonst sammeln sich alle Köpfe an derselben Klebeposition und überdecken sich. Alle vier Daten bleiben erhalten: Kalenderwoche, Ist von Soll, Abweichung, Fortschrittsbalken — an den Berechnungen wurde nichts geändert.</p>
-    <p style="color:#cbd5e1">Dabei sind zwei Fehler aufgefallen, die das Kleben bisher verhinderten und mitbehoben wurden: <code>body { overflow-y: overlay }</code> machte den Body zum Scroll-Container und hob <code>position: sticky</code> im ganzen Dokument auf; der Spaltenkopf war zusätzlich unsichtbar, weil Vuetify die Klasse <code>d-md-grid</code> nicht kennt und <code>d-none</code> deshalb immer gewann.</p>
+    <b style="color: var(--success);">Umsetzungsstand: Kombination aus A, B und C umgesetzt</b>
+    <p style="color:#cbd5e1">Umgesetzt ist eine Verbindung der drei Entwürfe: <b>A</b> stellt die Zusammenfassung als klebenden Kopf vor ihre Woche, <b>C</b> fasst Kopf und Tage der Woche in einem Rahmen zum Block zusammen, und <b>B</b> ergänzt die Kalenderwoche als Merkmal an jedem einzelnen Tag. Damit bleibt die Woche auch dort erkennbar, wo der Kopf gerade nicht steht — etwa tief in einer Woche auf dem Smartphone. Alle vier Daten bleiben erhalten: Kalenderwoche, Ist von Soll, Abweichung, Fortschrittsbalken — an den Berechnungen wurde nichts geändert. Der Blockrahmen nimmt außen 12 px und gibt sie innen zurück, damit Spalten, Tagespunkte und Zeitachse unverändert ausgerichtet bleiben.</p>
+    <p style="color:#cbd5e1">Dabei sind Fehler aufgefallen, die das Kleben bisher verhinderten und mitbehoben wurden: <code>body { overflow-y: overlay }</code> machte den Body zum Scroll-Container und hob <code>position: sticky</code> im ganzen Dokument auf; der Spaltenkopf war zusätzlich unsichtbar, weil Vuetify die Klasse <code>d-md-grid</code> nicht kennt und <code>d-none</code> deshalb immer gewann.</p>
   </div>
 
   <h2><span class="num">00</span>Ausgangslage</h2>
