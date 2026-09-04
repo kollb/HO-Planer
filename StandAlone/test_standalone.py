@@ -18,6 +18,18 @@ SHARED_PDF_MERGE_CASES = Path(__file__).resolve().parents[1] / "shared" / "test-
 BASE_URL = "http://localhost:8000/ho-planer.html"
 PRIVATE_DIR = "testfiles"
 
+# Aktionen liegen an genau einer Stelle: im Menü des Floating Action Buttons.
+QUICK_ACTION_FAB = ".quick-action-fab"
+QUICK_ACTION_ITEMS = ".v-menu .v-list-item"
+
+
+def open_quick_actions(page: Page):
+    """Öffnet das Aktionsmenü des FAB und liefert seine Einträge."""
+    page.locator(QUICK_ACTION_FAB).click()
+    items = page.locator(QUICK_ACTION_ITEMS)
+    expect(items.first).to_be_visible()
+    return items
+
 # --- FIXTURES ---
 @pytest.fixture(autouse=True)
 def setup_viewport(page: Page):
@@ -557,8 +569,8 @@ def test_add_custom_holiday_rejects_invalid_input_before_persisting(page: Page):
 
 
 def test_v2_gui_settings_custom_holiday(page: Page):
-    # Einstellungen über das Icon in der Kopfzeile öffnen
-    page.locator("button[title='Einstellungen']").click()
+    # Einstellungen über das Aktionsmenü öffnen
+    open_quick_actions(page).filter(has_text="Einstellungen").click()
     today = page.evaluate("toLocalIsoDate(new Date())")
     
     dialog = page.locator(".v-dialog .v-card").filter(has_text="Einstellungen")
@@ -648,3 +660,52 @@ def test_v2_pdf_import_missing_booking(page: Page):
     # Neues Wording prüfen
     comment_field = row.locator("input[placeholder='Notiz...']")
     expect(comment_field).to_have_value(re.compile("Fehlt im PDF", re.IGNORECASE))
+
+# --- Angleichung an die Docker-Oberfläche -------------------------------
+
+def test_kopfzeile_enthält_keine_doppelten_aktionen(page: Page):
+    """Die Kopfzeile trägt Orientierung, nicht die Aktionen."""
+    app_bar = page.locator(".v-app-bar")
+    for label in ("PDF", "Serien", "Einstellungen", "Aktionen öffnen"):
+        expect(app_bar.locator(f"[title*='{label}']")).to_have_count(0)
+
+    # Speicherstatus und Farbschema bleiben sichtbar
+    expect(app_bar.locator("[title*='Farbschema']")).to_be_visible()
+    expect(page.locator(".v-app-bar .dot")).to_be_visible()
+
+
+def test_aktionsmenü_bietet_jede_aktion_einmal(page: Page):
+    actions = open_quick_actions(page)
+    for label in ("Tag erfassen", "Serienplanung", "PDF importieren", "JSON importieren", "JSON exportieren", "Einstellungen"):
+        expect(actions.filter(has_text=label)).to_be_visible()
+    expect(actions).to_have_count(6)
+
+
+def test_drawer_ist_gegliedert(page: Page):
+    page.locator("button[aria-label='Navigation öffnen']").click()
+    drawer = page.locator(".v-navigation-drawer")
+    expect(drawer).to_be_visible()
+    for group in ("Ansichten", "Erfassen & planen", "Daten", "Darstellung & System"):
+        expect(drawer.locator(".v-list-subheader").filter(has_text=group)).to_be_visible()
+    expect(drawer.locator(".v-list-item").filter(has_text="Datei öffnen/anlegen")).to_be_visible()
+
+
+def test_theme_umschalter_wechselt_und_bleibt(page: Page):
+    first = page.evaluate("() => document.documentElement.dataset.theme")
+    page.locator(".v-app-bar button[aria-label*='Farbschema']").click()
+    second = page.evaluate("() => document.documentElement.dataset.theme")
+    assert second in ("light", "dark")
+    assert second != first
+    assert page.evaluate("() => Store.getSettings().theme") == second
+
+
+def test_mobile_tageskarte_ist_das_bedienelement(page: Page):
+    page.set_viewport_size({"width": 390, "height": 844})
+    page.reload()
+    page.wait_for_timeout(800)
+
+    expect(page.locator(".tl-day-edit")).to_have_count(0)
+    card = page.locator(".tl-day-card").first
+    expect(card).to_have_attribute("role", "button")
+    card.locator(".tl-date-cell").first.click()
+    expect(page.locator(".v-dialog .v-card").first).to_be_visible()
