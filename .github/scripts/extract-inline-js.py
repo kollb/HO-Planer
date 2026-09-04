@@ -2,7 +2,7 @@
 """Löst die Inline-Skripte der beiden Oberflächen aus den HTML-Dateien.
 
 CodeQL wertet .html nicht aus. Die Skriptblöcke werden deshalb vor der Analyse
-in .codeql-inline-js/ geschrieben, damit auch das JavaScript der Oberflächen
+in codeql-inline-js/ geschrieben, damit auch das JavaScript der Oberflächen
 geprüft wird. Das Verzeichnis ist generiert und liegt in der .gitignore.
 """
 
@@ -11,7 +11,7 @@ import sys
 from pathlib import Path
 
 QUELLEN = ("Docker/static/index.html", "StandAlone/ho-planer.html")
-ZIEL = Path(".codeql-inline-js")
+ZIEL = Path("codeql-inline-js")
 
 # Blöcke ohne src-Attribut: nur die stehen wirklich inline im Dokument.
 MUSTER = re.compile(r"<script(?![^>]*\bsrc=)[^>]*>(.*?)</script>", re.S)

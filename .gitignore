@@ -7,4 +7,4 @@ Docker/tests/testfiles/
 venv/
 
 # Von der CodeQL-Analyse generiert (siehe .github/scripts/extract-inline-js.py)
-.codeql-inline-js/
+codeql-inline-js/
