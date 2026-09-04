@@ -21,7 +21,7 @@ def normalize_time_str(t_str):
         else:
             return None
         
-        if h > 23 or m > 59: return None
+        if h < 0 or m < 0 or h > 23 or m > 59: return None
         return f"{h:02d}:{m:02d}"
     except ValueError:
         return None

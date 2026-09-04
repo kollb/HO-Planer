@@ -12,6 +12,7 @@ Die Varianten verwenden unterschiedliche Persistenztechniken, aber dieselben fac
 | `hide_weekends` | Boolean | Darstellungsoption |
 | `default_start_time` | `HH:MM` | Startzeit für automatische Umwandlungen |
 | `auto_convert_planned` | Boolean | Automatische Planungsumwandlung |
+| `christmas_eve_and_new_years_eve_off` | Boolean, Standard `true` | Heiligabend und Silvester als arbeitsfreie Tage behandeln |
 
 ## Arbeitszeiteintrag
 

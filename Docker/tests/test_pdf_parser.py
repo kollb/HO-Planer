@@ -1,7 +1,8 @@
 import pytest
 import os
 from datetime import date
-from app import MAX_PDF_PAGES, parse_pdf_content
+from types import SimpleNamespace
+from app import MAX_PDF_PAGES, merge_pdf_entries, parse_pdf_content
 
 
 class FakePdf:
@@ -83,6 +84,42 @@ def test_pdf_parser_requires_glz_context(monkeypatch):
 
     assert entries[0]['glz_override'] is None
     assert any('ohne GLZ-Kontext' in warning for warning in report['warnings'])
+
+
+def test_pdf_parser_accepts_night_shift(monkeypatch):
+    page = FakePage(
+        'Monat: Februar 2026',
+        [[['03 DI Mobil 22:00 02:00']]],
+    )
+    monkeypatch.setattr('app.pdfplumber.open', lambda _file: FakeContentPdf([page]))
+
+    entries, report = parse_pdf_content(object(), include_report=True)
+
+    assert entries[0]['type'] == 'home'
+    assert entries[0]['start'] == '22:00'
+    assert entries[0]['end'] == '02:00'
+    assert not any('Endzeit vor Startzeit' in warning for warning in report['warnings'])
+
+
+def test_merge_pdf_entries_adds_blocks_and_preserves_existing_data():
+    existing = [
+        SimpleNamespace(type='home', start_time='08:00', end_time='12:00', comment='Bestehend', glz_override=2.0),
+        SimpleNamespace(type='office', start_time='13:00', end_time='17:00', comment='', glz_override=None),
+    ]
+    incoming = [
+        {'type': 'home', 'start': '08:00', 'end': '12:00', 'comment': 'Neu', 'glz_override': 3.0},
+        {'type': 'dr', 'start': '18:00', 'end': '22:00', 'comment': 'Reise', 'glz_override': 3.0},
+    ]
+
+    result = merge_pdf_entries(existing, incoming)
+
+    assert result['skipped_duplicates'] == 1
+    assert result['comment_hints'] == 1
+    assert result['glz_override_conflicts'] == 2
+    assert result['entries_to_add'] == [
+        {'type': 'dr', 'start': '18:00', 'end': '22:00', 'comment': 'Reise', 'glz_override': None}
+    ]
+    assert existing[0].comment == 'Bestehend'
 
 PRIVATE_DIR = os.path.join(os.path.dirname(__file__), "testfiles")
 

@@ -5,6 +5,16 @@ Dieses Repository enthält zwei technische Varianten derselben Arbeitszeit-, Hom
 - [`Docker/`](Docker/): Flask-, SQLite- und Docker-Variante für NAS oder Server.
 - [`StandAlone/`](StandAlone/): einzelne HTML-Datei für die lokale Nutzung im Browser ohne Server.
 
+## Architekturübersicht
+
+| Aspekt | Docker-Variante | Standalone-Variante |
+| --- | --- | --- |
+| Laufzeit | Flask-Anwendung im Docker-Container oder lokal mit Python | einzelne HTML-Datei im Browser, ohne eigenen Server |
+| Persistenz | SQLite unter `/app/data/database.db` in einem persistenten Docker-Volume | Browser-`localStorage`; ergänzend IndexedDB und File System Access API für lokale Dateien |
+| Betrieb | für vertrauenswürdiges LAN/NAS; Datenbank, Logs und Backups müssen extern gesichert werden | für eine einzelne Browser-Installation; Browserdaten können durch Bereinigung, Profilwechsel oder Geräteverlust verloren gehen |
+| Datenaustausch | versionierter JSON-Export/-Import | derselbe versionierte JSON-Export/-Import |
+| Laufzeitabhängigkeiten | Python-Pakete im Container | aktuell zusätzlich CDNs für UI-, Diagramm- und PDF-Bibliotheken; für den Erststart ist Internetzugriff erforderlich |
+
 ## Gemeinsame Verträge
 
 Die Laufzeitumgebungen unterscheiden sich bewusst: Python/Flask und Browser-JavaScript können Fachcode nicht unmittelbar als dieselbe Bibliothek ausführen. Fachliche Gleichheit wird deshalb über versionierte, gemeinsame Verträge und Referenzfälle abgesichert:

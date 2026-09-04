@@ -1,6 +1,8 @@
 import pytest
 import re
 from datetime import datetime
+
+import pytest
 from playwright.sync_api import Page, expect
 
 # Die frühere Beta-Oberfläche ist die produktive Standardansicht.
@@ -105,6 +107,8 @@ def test_standard_series_planner_dialog(page: Page):
     expect(dialog_title).to_be_visible()
     
     expect(page.locator("label").filter(has_text="Mo").first).to_be_visible()
+    expect(page.locator("label").filter(has_text="Sa").first).to_be_visible()
+    expect(page.locator("label").filter(has_text="So").first).to_be_visible()
     
     # Schließen
     dialog_card = page.locator(".v-card").filter(has=dialog_title)
@@ -119,6 +123,7 @@ def test_standard_custom_holiday_edit(page: Page):
     page.locator("button[title='Einstellungen']").click()
     dialog = page.locator(".v-dialog .v-card").filter(has_text="Einstellungen")
     expect(dialog).to_be_visible()
+    expect(dialog.get_by_label("Heiligabend und Silvester arbeitsfrei")).to_be_visible()
     
     # Wäldchestag laden (als Testdaten)
     dialog.locator("button").filter(has_text="Wäldchestag").click()
@@ -143,3 +148,30 @@ def test_standard_custom_holiday_edit(page: Page):
     # Fenster wieder schließen
     dialog.locator("button").filter(has_text="Speichern & Schließen").click()
     expect(dialog).not_to_be_visible()
+
+
+def test_standard_custom_holiday_save_error_is_visible(page: Page):
+    """Eine API-Validierungsfehlermeldung beim Speichern bleibt für Nutzende sichtbar."""
+    def reject_custom_holiday_save(route):
+        if route.request.method == "POST":
+            route.fulfill(
+                status=400,
+                content_type="application/json",
+                body='{"success": false, "message": "Sondertag konnte nicht gespeichert werden."}',
+            )
+        else:
+            route.continue_()
+
+    page.route("**/api/custom-holidays", reject_custom_holiday_save)
+    page.goto(BASE_URL)
+    page.locator("button[title='Einstellungen']").click()
+    dialog = page.locator(".v-dialog .v-card").filter(has_text="Einstellungen")
+    expect(dialog).to_be_visible()
+
+    page.get_by_label("Bez.").fill("Test Sondertag")
+    date_field = dialog.locator("input[type='date']")
+    date_field.fill("2026-09-01")
+    page.get_by_label("Std.").fill("6")
+    dialog.locator(".mdi-content-save").locator("..").click()
+
+    expect(page.locator(".v-snackbar").filter(has_text="Sondertag konnte nicht gespeichert werden.")).to_be_visible()

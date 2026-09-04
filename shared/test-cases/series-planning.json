@@ -1,0 +1,76 @@
+{
+  "contract_version": 1,
+  "description": "Referenzfälle für Serienplanung anhand der zentralen Tageslogik.",
+  "cases": [
+    {
+      "id": "active-weekend-is-plannable",
+      "start": "2023-10-07",
+      "end": "2023-10-07",
+      "weekly_hours": 12,
+      "active_weekdays": [5, 6],
+      "weekdays": [5],
+      "type": "office",
+      "expected": {
+        "planned_dates": ["2023-10-07"],
+        "target": 6.0
+      }
+    },
+    {
+      "id": "statutory-holiday-is-skipped",
+      "start": "2024-05-01",
+      "end": "2024-05-01",
+      "weekly_hours": 40,
+      "active_weekdays": [0, 1, 2, 3, 4],
+      "weekdays": [2],
+      "type": "office",
+      "expected": {
+        "planned_dates": []
+      }
+    },
+    {
+      "id": "custom-day-off-is-skipped",
+      "start": "2023-10-02",
+      "end": "2023-10-02",
+      "weekly_hours": 40,
+      "active_weekdays": [0, 1, 2, 3, 4],
+      "weekdays": [0],
+      "type": "office",
+      "custom_holiday": {
+        "name": "Betriebsruhe",
+        "hours": 0
+      },
+      "expected": {
+        "planned_dates": []
+      }
+    },
+    {
+      "id": "positive-custom-holiday-is-plannable",
+      "start": "2023-10-04",
+      "end": "2023-10-04",
+      "weekly_hours": 40,
+      "active_weekdays": [0, 1, 2, 3, 4],
+      "weekdays": [2],
+      "type": "office",
+      "custom_holiday": {
+        "name": "Sonderarbeitstag",
+        "hours": 4
+      },
+      "expected": {
+        "planned_dates": ["2023-10-04"],
+        "target": 4.0
+      }
+    },
+    {
+      "id": "inactive-weekday-is-skipped",
+      "start": "2023-10-02",
+      "end": "2023-10-02",
+      "weekly_hours": 32,
+      "active_weekdays": [1, 2, 3, 4],
+      "weekdays": [0],
+      "type": "office",
+      "expected": {
+        "planned_dates": []
+      }
+    }
+  ]
+}

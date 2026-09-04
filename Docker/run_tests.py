@@ -1,32 +1,64 @@
+import importlib.util
 import os
 import subprocess
 import sys
 import tempfile
 import time
 from pathlib import Path
-
-import requests
+from urllib.error import URLError
+from urllib.request import urlopen
 
 
 PROJECT_DIR = Path(__file__).resolve().parent
+BASE_URL = "http://127.0.0.1:5000"
+REQUIRED_MODULES = ("flask", "flask_sqlalchemy", "holidays", "pdfplumber", "pytest", "playwright", "pytest_playwright")
 
 
-def wait_for_server(url, timeout=10):
-    """Wartet aktiv, bis der Testserver erfolgreich antwortet."""
-    start_time = time.time()
-    while time.time() - start_time < timeout:
+def preflight():
+    missing = [module for module in REQUIRED_MODULES if importlib.util.find_spec(module) is None]
+    if missing:
+        print("INFRASTRUCTURE ERROR: Missing Python packages: " + ", ".join(missing))
+        print("Install the dependencies declared in Docker/requirements.txt, then retry.")
+        return False
+
+    try:
+        from playwright.sync_api import sync_playwright
+
+        with sync_playwright() as playwright:
+            if not Path(playwright.chromium.executable_path).is_file():
+                print("INFRASTRUCTURE ERROR: Playwright Chromium browser binary is missing.")
+                print("Install the configured Chromium browser, then retry.")
+                return False
+    except Exception as error:
+        print(f"INFRASTRUCTURE ERROR: Playwright browser preflight failed: {error}")
+        return False
+    return True
+
+
+def wait_for_server(url, server_process, timeout=10):
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        if server_process.poll() is not None:
+            return False
         try:
-            response = requests.get(url, timeout=1)
-            if response.ok:
-                return True
-        except requests.RequestException:
-            pass
-        time.sleep(0.25)
+            with urlopen(url, timeout=1) as response:
+                if response.status == 200:
+                    return True
+        except URLError:
+            time.sleep(0.25)
     return False
 
 
+def server_output(log_file):
+    output = log_file.read_text(encoding="utf-8", errors="replace").strip()
+    return output or "<server produced no output; port 5000 may already be occupied>"
+
+
 def run_tests():
-    print("🚀 Starte isolierte Flask-Test-Umgebung...")
+    print("Starting isolated Flask test environment...")
+    if not preflight():
+        return 2
+
     with tempfile.TemporaryDirectory(prefix="ho-planer-tests-") as test_data_dir:
         env = os.environ.copy()
         env["HO_PLANER_DATA_DIR"] = test_data_dir
@@ -41,30 +73,33 @@ def run_tests():
                 env=env,
             )
             try:
-                base_url = "http://127.0.0.1:5000"
-                print(f"⏳ Warte auf Flask-Testserver ({base_url})...")
-                if not wait_for_server(base_url):
-                    print("❌ Server antwortet nicht. Server-Ausgabe:")
+                print(f"Waiting for Flask test server at {BASE_URL}...")
+                if not wait_for_server(BASE_URL, server_process):
                     output.flush()
-                    print(log_file.read_text(encoding="utf-8"))
+                    print("INFRASTRUCTURE ERROR: Flask test server did not become reachable.")
+                    print(server_output(log_file))
                     return 1
 
-                print("🧪 Führe Pytest mit separater SQLite-Datei aus...")
+                print("Running pytest with an isolated SQLite database...")
                 result = subprocess.call(
                     [sys.executable, "-m", "pytest", "tests"],
                     cwd=PROJECT_DIR,
                     env=env,
                 )
-                print("\n✅ ALLE TESTS BESTANDEN!" if result == 0 else "\n❌ TESTS FEHLGESCHLAGEN.")
+                print("ALL TESTS PASSED." if result == 0 else "TESTS FAILED.")
                 return result
             finally:
-                print("🛑 Stoppe Flask-Testserver...")
+                print("Stopping Flask test server...")
                 server_process.terminate()
                 try:
                     server_process.wait(timeout=2)
                 except subprocess.TimeoutExpired:
                     server_process.kill()
                     server_process.wait()
+                output.flush()
+                if server_process.returncode not in (0, -15):
+                    print("Server output:")
+                    print(server_output(log_file))
 
 
 if __name__ == "__main__":

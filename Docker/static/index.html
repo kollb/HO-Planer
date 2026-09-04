@@ -16,35 +16,96 @@
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
   <style>
+    :root {
+      --ho-background: #0f172a;
+      --ho-surface: #1e293b;
+      --ho-primary: #3b82f6;
+      --ho-success: #10b981;
+      --ho-warning: #f59e0b;
+      --ho-error: #ef4444;
+      --ho-office: #818cf8;
+      --ho-vacation: #d946ef;
+      --ho-info: #0ea5e9;
+      --ho-text: #f8fafc;
+      --ho-muted: #94a3b8;
+      --ho-border: rgba(255, 255, 255, 0.05);
+      --ho-surface-variant: #334155;
+      --ho-radius-sm: 6px;
+      --ho-radius-md: 10px;
+      --ho-radius-lg: 20px;
+      --ho-shadow-sm: 0 2px 4px rgba(0, 0, 0, 0.2);
+      --ho-shadow-md: 0 10px 25px -5px rgba(0, 0, 0, 0.3);
+      --ho-shadow: var(--ho-shadow-md);
+      --ho-space-1: 4px;
+      --ho-space-2: 8px;
+      --ho-space-3: 12px;
+      --ho-space-4: 16px;
+      --ho-space-5: 24px;
+      --ho-space-6: 32px;
+    }
+    :root[data-theme="light"] {
+      --ho-background: #f8fafc;
+      --ho-surface: #ffffff;
+      --ho-primary: #2563eb;
+      --ho-success: #059669;
+      --ho-warning: #d97706;
+      --ho-error: #dc2626;
+      --ho-text: #0f172a;
+      --ho-muted: #475569;
+      --ho-border: rgba(15, 23, 42, 0.14);
+      --ho-shadow-sm: 0 2px 4px rgba(15, 23, 42, 0.12);
+      --ho-shadow-md: 0 10px 25px -5px rgba(15, 23, 42, 0.16);
+      --ho-shadow: var(--ho-shadow-md);
+      --ho-surface-variant: #e2e8f0;
+    }
     [v-cloak] { display: none !important; }
+    #runtime-error { max-width: 680px; margin: 4rem auto; padding: 1.5rem; color: var(--ho-text); background: var(--ho-surface); border: 1px solid var(--ho-error); border-radius: var(--ho-radius-md); }
 
-    body { font-family: 'Inter', sans-serif; background-color: #0f172a; color: #f8fafc; overflow-y: overlay;}
+    body { font-family: 'Inter', sans-serif; background-color: var(--ho-background); color: var(--ho-text); overflow-y: overlay;}
+    .quick-action-fab { position: fixed; right: 24px; bottom: 88px; z-index: 20; box-shadow: var(--ho-shadow); }
+    .budget-warning { color: var(--ho-error); font-weight: 700; margin-top: 6px; }
+    @media (min-width: 960px) { .quick-action-fab { bottom: 28px; } }
     .mono-num { font-family: 'JetBrains Mono', monospace; letter-spacing: -0.5px; }
-    .glass-effect { background: rgba(30, 41, 59, 0.4) !important; backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); border: 1px solid rgba(255, 255, 255, 0.05) !important; }
+    .glass-effect { background: color-mix(in srgb, var(--ho-surface) 82%, transparent) !important; backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); border: 1px solid var(--ho-border) !important; }
+
+    /* Gemeinsame Material-3-Oberflächen für Vuetify-Komponenten */
+    .v-overlay .v-card.glass-effect,
+    .v-menu .v-list.glass-effect { background: var(--ho-surface) !important; border-radius: var(--ho-radius-lg) !important; box-shadow: var(--ho-shadow-md); }
+    .v-overlay .v-card-title { color: var(--ho-text); border-bottom: 1px solid var(--ho-border); }
+    .v-overlay .v-card-text { color: var(--ho-text); }
+    .v-field { --v-field-border-opacity: 1; --v-field-border-width: 1px; }
+    .v-field__outline { color: var(--ho-border) !important; }
+    .v-field--focused .v-field__outline { color: var(--ho-primary) !important; }
+    .v-label, .v-field__input { color: var(--ho-text) !important; }
+    .v-chip { border-radius: var(--ho-radius-md) !important; }
+    .v-table { color: var(--ho-text); }
+    .v-table thead tr { background: color-mix(in srgb, var(--ho-surface-variant) 45%, transparent); }
+    .v-table tbody tr:not(:last-child) td { border-bottom-color: var(--ho-border) !important; }
+    .v-table tfoot { background: color-mix(in srgb, var(--ho-surface-variant) 70%, var(--ho-background)); }
 
     /* Top Nav Segmented Controls */
-    .view-toggle { background: rgba(15, 23, 42, 0.5); border-radius: 10px; padding: 4px; border: 1px solid rgba(255,255,255,0.05); display: flex; gap: 4px;}
-    .view-btn { padding: 4px 16px; border-radius: 6px; font-size: 0.85rem; font-weight: 500; cursor: pointer; transition: all 0.2s; color: #94a3b8; }
-    .view-btn:hover { color: #f8fafc; }
-    .view-btn.active { background: #1e293b; color: #f8fafc; box-shadow: 0 2px 4px rgba(0,0,0,0.2); border: 1px solid rgba(255,255,255,0.05); }
+    .view-toggle { background: rgba(15, 23, 42, 0.5); border-radius: var(--ho-radius-md); padding: var(--ho-space-1); border: 1px solid var(--ho-border); display: flex; gap: var(--ho-space-1);}
+    .view-btn { padding: var(--ho-space-1) var(--ho-space-4); border-radius: var(--ho-radius-sm); font-size: 0.85rem; font-weight: 500; cursor: pointer; transition: all 0.2s; color: var(--ho-muted); }
+    .view-btn:hover { color: var(--ho-text); }
+    .view-btn.active { background: var(--ho-surface); color: var(--ho-text); box-shadow: var(--ho-shadow-sm); border: 1px solid var(--ho-border); }
 
     /* BENTO GRID */
-    .bento-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 24px; }
-    .bento-card { border-radius: 20px; padding: 16px 20px; transition: transform 0.2s, box-shadow 0.2s; display: flex; flex-direction: column; justify-content: space-between; position: relative; overflow: hidden; height: 110px;}
-    .bento-card:hover { transform: translateY(-2px); box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.3); }
-    .bento-card.budget-card { grid-column: span 2; }
+    .bento-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--ho-space-4); margin-bottom: var(--ho-space-5); }
+    .bento-card { border-radius: var(--ho-radius-lg); padding: var(--ho-space-4) 20px; transition: transform 0.2s, box-shadow 0.2s; display: flex; flex-direction: column; justify-content: space-between; position: relative; overflow: hidden; height: 110px;}
+    .bento-card:hover { transform: translateY(-2px); box-shadow: var(--ho-shadow-md); }
+    .bento-card.budget-card { grid-column: 1 / -1; }
 
-    .bento-label { font-size: 0.75rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; color: #94a3b8; display: flex; align-items: center; margin-bottom: 8px;}
-    .bento-value { font-size: 1.7rem; font-weight: 700; line-height: 1; color: #f8fafc; }
-    .bento-sub { font-size: 0.8rem; color: #64748b; margin-top: 2px; }
+    .bento-label { font-size: 0.75rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; color: var(--ho-muted); display: flex; align-items: center; margin-bottom: var(--ho-space-2);}
+    .bento-value { font-size: 1.7rem; font-weight: 700; line-height: 1; color: var(--ho-text); }
+    .bento-sub { font-size: 0.8rem; color: var(--ho-muted); margin-top: 2px; }
 
-    .progress-track { width: 100%; height: 8px; background: rgba(0,0,0,0.3); border-radius: 4px; overflow: hidden; margin-top: 10px;}
-    .progress-fill { height: 100%; background: linear-gradient(90deg, #10b981 0%, #3b82f6 50%, #f59e0b 100%); border-radius: 4px; transition: width 1s cubic-bezier(0.4, 0, 0.2, 1); }
+    .progress-track { width: 100%; height: var(--ho-space-2); background: color-mix(in srgb, var(--ho-background) 70%, transparent); border-radius: var(--ho-radius-sm); overflow: hidden; margin-top: var(--ho-radius-md);}
+    .progress-fill { height: 100%; background: linear-gradient(90deg, var(--ho-success) 0%, var(--ho-primary) 50%, var(--ho-warning) 100%); border-radius: var(--ho-radius-sm); transition: width 1s cubic-bezier(0.4, 0, 0.2, 1); }
 
     /* HYBRID TIMELINE-GRID */
     .timeline-wrapper { width: 100%; max-width: 1100px; margin: 0 auto; }
-    .tl-panel { border-radius: 20px; padding: 20px; position: relative; }
-    .tl-spine { position: absolute; left: 39px; top: 50px; bottom: 20px; width: 2px; background: rgba(255,255,255,0.05); z-index: 1; }
+    .tl-panel { border-radius: var(--ho-radius-lg); padding: 20px; position: relative; }
+    .tl-spine { position: absolute; left: 39px; top: 50px; bottom: 20px; width: 2px; background: var(--ho-border); z-index: 1; }
 
     .tl-header {
         display: grid;
@@ -58,9 +119,35 @@
         font-weight: 600;
         text-transform: uppercase;
         letter-spacing: 0.5px;
-        color: #64748b;
-        border-bottom: 1px solid rgba(255,255,255,0.05);
+        color: var(--ho-muted);
+        border-bottom: 1px solid var(--ho-border);
+        position: sticky;
+        top: 64px;
+        z-index: 5;
+        background: color-mix(in srgb, var(--ho-surface) 96%, transparent);
+        box-shadow: 0 1px 0 var(--ho-border), 0 8px 12px color-mix(in srgb, var(--ho-background) 35%, transparent);
     }
+
+    .tl-day-summary {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: center;
+        width: fit-content;
+        max-width: calc(100% - 64px);
+        gap: var(--ho-space-3);
+        margin: 4px auto 12px;
+        padding: 5px var(--ho-space-3);
+        color: var(--ho-muted);
+        background: color-mix(in srgb, var(--ho-background) 55%, transparent);
+        border: 1px solid var(--ho-border);
+        border-radius: 999px;
+        font-size: 0.72rem;
+    }
+    .tl-summary-item { display: inline-flex; align-items: center; gap: 3px; }
+    .tl-summary-label { color: var(--ho-muted); font-weight: 600; }
+    .tl-summary-value { color: var(--ho-text); font-family: 'JetBrains Mono', monospace; font-weight: 700; }
+    .tl-summary-value.is-positive { color: var(--ho-success); }
+    .tl-summary-value.is-negative { color: var(--ho-error); }
 
     .tl-row {
         position: relative;
@@ -71,10 +158,10 @@
         min-height: 36px;
         padding-left: 48px;
         padding-right: 16px;
-        border-radius: 8px;
+        border-radius: var(--ho-radius-sm);
         transition: background 0.1s;
     }
-    .tl-row:hover { background: rgba(255,255,255,0.05); }
+    .tl-row:hover { background: color-mix(in srgb, var(--ho-surface-variant) 55%, transparent); }
     .tl-row.is-off-day { opacity: 0.4; }
 
     .tl-dot {
@@ -82,35 +169,79 @@
         left: 16px;
         top: 50%;
         transform: translateY(-50%);
-        width: 8px;
-        height: 8px;
+        width: var(--ho-space-2);
+        height: var(--ho-space-2);
         border-radius: 50%;
-        background: #1e293b;
-        border: 2px solid #334155;
+        background: var(--ho-surface);
+        border: 2px solid var(--ho-surface-variant);
         z-index: 2;
         transition: all 0.2s;
     }
-    .is-today .tl-dot { background: #3b82f6; border-color: #0ea5e9; box-shadow: 0 0 10px rgba(59, 130, 246, 0.6); }
+    .is-today .tl-dot { background: var(--ho-primary); border-color: var(--ho-primary); box-shadow: 0 0 10px color-mix(in srgb, var(--ho-primary) 60%, transparent); }
 
     .tl-date-cell { display: flex; align-items: baseline; gap: 8px; white-space: nowrap; overflow: hidden; }
-    .tl-date-num { font-size: 1rem; font-weight: 700; color: #f8fafc; }
-    .tl-date-day { font-size: 0.9rem; font-weight: 500; color: #94a3b8; }
+    .tl-date-num { font-size: 1rem; font-weight: 700; color: var(--ho-text); }
+    .tl-date-day { font-size: 0.9rem; font-weight: 500; color: var(--ho-muted); }
     .tl-holiday-badge { font-size: 0.65rem; font-weight: 600; color: #ef4444; letter-spacing: -0.2px; background: rgba(239, 68, 68, 0.15); padding: 2px 6px; border-radius: 4px;}
+    .worktime-warning {
+        display: inline-flex;
+        align-items: center;
+        gap: 3px;
+        color: var(--ho-error);
+        background: color-mix(in srgb, var(--ho-error) 14%, transparent);
+        border: 1px solid color-mix(in srgb, var(--ho-error) 35%, var(--ho-border));
+        border-radius: var(--ho-radius-sm);
+        padding: 2px 5px;
+        font-size: 0.68rem;
+        font-weight: 700;
+        white-space: nowrap;
+    }
 
     .tl-week-sum {
-        display: flex;
+        display: inline-flex;
         align-items: center;
-        font-size: 0.85rem;
-        font-weight: 600;
-        color: #94a3b8;
-        margin: 6px 0 12px 48px;
-        padding: 4px 14px;
-        background: rgba(0,0,0,0.25);
-        border: 1px solid rgba(255,255,255,0.05);
-        border-radius: 12px;
-        width: fit-content;
+        gap: var(--ho-space-3);
+        margin: var(--ho-space-2) 0 var(--ho-space-4) 48px;
+        padding: var(--ho-space-2) var(--ho-space-4);
+        background: color-mix(in srgb, var(--ho-surface) 76%, transparent);
+        border: 1px solid var(--ho-border);
+        border-radius: var(--ho-radius-sm);
+        color: var(--ho-muted);
         position: relative;
         z-index: 2;
+    }
+    .tl-week-sum__week {
+        color: var(--ho-text);
+        font-size: 0.75rem;
+        font-weight: 700;
+        letter-spacing: 0.04em;
+        white-space: nowrap;
+    }
+    .tl-week-sum__progress {
+        width: 112px;
+        height: 6px;
+        overflow: hidden;
+        background: color-mix(in srgb, var(--ho-muted) 20%, transparent);
+        border-radius: 999px;
+    }
+    .tl-week-sum__progress-bar {
+        display: block;
+        height: 100%;
+        background: var(--ho-primary);
+        border-radius: inherit;
+        transition: width 160ms ease;
+    }
+    .tl-week-sum__hours,
+    .tl-week-sum__delta {
+        font-size: 0.78rem;
+        font-weight: 700;
+        white-space: nowrap;
+    }
+    .tl-week-sum__hours { color: var(--ho-text); }
+    .tl-week-sum__delta { padding-left: var(--ho-space-3); border-left: 1px solid var(--ho-border); }
+    @media (max-width: 600px) {
+        .tl-week-sum { margin-left: 0; }
+        .tl-week-sum__progress { width: 76px; }
     }
 
     .hover-input { background: transparent; border: 1px solid transparent; color: inherit; outline: none; transition: all 0.1s; border-radius: 6px; padding: 0 8px; width: 100%; font-family: 'JetBrains Mono', monospace; font-size: 0.95rem; height: 30px;}
@@ -122,6 +253,27 @@
     .hover-select option { background: #1e293b; color: #f8fafc; }
 
     .glz-input { width: 65px; text-align: right; cursor: pointer; padding: 0 4px !important; }
+    .day-dialog-section + .day-dialog-section {
+        margin-top: var(--ho-space-5);
+        padding-top: var(--ho-space-4);
+        border-top: 1px solid var(--ho-border);
+    }
+    .day-dialog-section__title {
+        display: flex;
+        align-items: center;
+        gap: var(--ho-space-2);
+        margin-bottom: var(--ho-space-1);
+        color: var(--ho-text);
+        font-size: 0.82rem;
+        font-weight: 700;
+        letter-spacing: 0.02em;
+    }
+    .day-dialog-section__hint {
+        margin-bottom: var(--ho-space-3);
+        color: var(--ho-muted);
+        font-size: 0.76rem;
+        line-height: 1.4;
+    }
     .glz-input::placeholder { color: inherit; opacity: 1; }
     .glz-input:focus::placeholder { opacity: 0.3; }
 
@@ -138,41 +290,48 @@
     .text-bright { color: #f8fafc; }
     .text-neutral { color: #f8fafc !important; }
 
-    .type-home { color: #10b981; background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.2); }
-    .type-home::before { background: #10b981; }
+    .type-home { --status-color: var(--ho-success); --status-surface: color-mix(in srgb, var(--ho-success) 14%, transparent); }
+    .type-office { --status-color: var(--ho-office); --status-surface: color-mix(in srgb, var(--ho-office) 14%, transparent); }
+    .type-planned { --status-color: var(--ho-primary); --status-surface: color-mix(in srgb, var(--ho-primary) 14%, transparent); }
+    .type-sick { --status-color: var(--ho-error); --status-surface: color-mix(in srgb, var(--ho-error) 14%, transparent); }
+    .type-vacation { --status-color: var(--ho-vacation); --status-surface: color-mix(in srgb, var(--ho-vacation) 14%, transparent); }
+    .type-dr { --status-color: var(--ho-info); --status-surface: color-mix(in srgb, var(--ho-info) 14%, transparent); }
 
-    .type-office { color: #818cf8; background: rgba(129, 140, 248, 0.1); border: 1px solid rgba(129, 140, 248, 0.2); }
-    .type-office::before { background: #818cf8; }
-
-    .type-planned { color: #3b82f6; background: rgba(59, 130, 246, 0.1); border: 1px dashed rgba(59, 130, 246, 0.3); }
-    .type-planned::before { background: #3b82f6; }
-
-    .type-sick { color: #ef4444; background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.2); }
-    .type-sick::before { background: #ef4444; }
-
-    .type-vacation { color: #d946ef; background: rgba(217, 70, 239, 0.1); border: 1px solid rgba(217, 70, 239, 0.2); }
-    .type-vacation::before { background: #d946ef; }
-
-    .type-dr { color: #0ea5e9; background: rgba(14, 165, 233, 0.1); border: 1px solid rgba(14, 165, 233, 0.2); }
-    .type-dr::before { background: #0ea5e9; }
+    .tl-row[class*="type-"] .tl-col-status { color: var(--status-color); background: var(--status-surface); border: 1px solid color-mix(in srgb, var(--status-color) 35%, var(--ho-border)); border-radius: var(--ho-radius-sm); }
+    .tl-row.type-planned .tl-col-status { border-style: dashed; }
+    .tl-row.has-holiday .tl-date-cell { color: var(--ho-error); }
+    .cal-pill { color: var(--status-color, var(--ho-text)); background: var(--status-surface, var(--ho-surface-variant)); border: 1px solid color-mix(in srgb, var(--status-color, var(--ho-border)) 35%, var(--ho-border)); }
+    .cal-pill::before { background: var(--status-color, var(--ho-muted)); }
+    .cal-pill.type-planned { border-style: dashed; }
 
     /* Kalender & Rest */
-    .cal-grid-wrapper { border-radius: 20px; overflow-x: auto; border: 1px solid rgba(255,255,255,0.05); background: rgba(15,23,42,0.5); padding: 1px; max-width: 1100px; margin: 0 auto;}
-    .cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 1px; background: rgba(255,255,255,0.05); }
-    .cal-header-cell { text-align: center; font-size: 0.8rem; font-weight: 600; text-transform: uppercase; color: #64748b; padding: 12px 0; background: rgba(30,41,59,0.3); border-bottom: 1px solid rgba(255,255,255,0.05); }
-    .cal-cell { background: #0f172a; min-height: 100px; padding: 12px; cursor: pointer; transition: background 0.2s; display: flex; flex-direction: column; gap: 4px;}
-    .cal-cell:hover { background: rgba(30,41,59,0.8); }
-    .cal-cell.is-today { background: rgba(59, 130, 246, 0.05); border: 1px solid #3b82f6;}
-    .cal-cell.is-off-day { background: repeating-linear-gradient(45deg, #0f172a, #0f172a 10px, rgba(30,41,59,0.3) 10px, rgba(30,41,59,0.3) 20px); opacity: 0.6; }
+    .cal-grid-wrapper { border-radius: var(--ho-radius-lg); overflow-x: auto; border: 1px solid var(--ho-border); background: color-mix(in srgb, var(--ho-background) 55%, transparent); padding: 1px; max-width: 1100px; margin: 0 auto;}
+    .cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 1px; background: var(--ho-border); }
+    .cal-header-cell { text-align: center; font-size: 0.8rem; font-weight: 600; text-transform: uppercase; color: var(--ho-muted); padding: var(--ho-space-3) 0; background: color-mix(in srgb, var(--ho-surface-variant) 35%, transparent); border-bottom: 1px solid var(--ho-border); }
+    .cal-cell { background: var(--ho-background); min-height: 100px; padding: var(--ho-space-3); cursor: pointer; transition: background 0.2s; display: flex; flex-direction: column; gap: var(--ho-space-1);}
+    .cal-cell:hover { background: var(--ho-surface-variant); }
+    .cal-cell.is-today { background: color-mix(in srgb, var(--ho-primary) 8%, var(--ho-background)); border: 1px solid var(--ho-primary);}
+    .cal-cell.is-off-day { background: repeating-linear-gradient(45deg, var(--ho-background), var(--ho-background) 10px, color-mix(in srgb, var(--ho-surface-variant) 30%, transparent) 10px, color-mix(in srgb, var(--ho-surface-variant) 30%, transparent) 20px); opacity: 0.6; }
 
-    .cal-date-num { font-size: 1.1rem; font-weight: 600; color: #94a3b8; }
-    .cal-cell.is-today .cal-date-num { color: #3b82f6; }
+    .cal-date-num { font-size: 1.1rem; font-weight: 600; color: var(--ho-muted); }
+    .cal-cell.is-today .cal-date-num { color: var(--ho-primary); }
 
-    .cal-pill { display: inline-flex; align-items: center; gap: 6px; padding: 2px 8px; border-radius: 12px; font-size: 0.75rem; font-weight: 600; width: fit-content; text-transform: uppercase; letter-spacing: 0.5px;}
+    .cal-pill { display: inline-flex; align-items: center; gap: var(--ho-space-1); padding: 2px var(--ho-space-2); border-radius: var(--ho-radius-md); font-size: 0.75rem; font-weight: 600; width: fit-content; text-transform: uppercase; letter-spacing: 0.5px;}
     .cal-pill::before { content: ''; display: block; width: 6px; height: 6px; border-radius: 50%; }
+    .cal-holiday { color: var(--ho-error); font-weight: 700; line-height: 1.1; font-size: 0.75rem; }
+    .cal-hours { color: var(--ho-muted); font-size: 0.72rem; line-height: 1.2; }
+    .cal-hours.is-over-limit { color: var(--ho-error); font-weight: 700; }
+    .cal-summary { display: flex; flex-wrap: wrap; gap: var(--ho-space-1); margin-top: var(--ho-space-1); color: var(--ho-muted); font-size: 0.7rem; }
+    .cal-summary-item { display: inline-flex; align-items: center; gap: 2px; }
+    .period-toolbar { display: flex; align-items: center; justify-content: center; gap: var(--ho-space-2); width: fit-content; max-width: 100%; margin: 0 auto var(--ho-space-4); padding: 4px var(--ho-space-2); background: color-mix(in srgb, var(--ho-surface) 88%, transparent); border: 1px solid var(--ho-border); border-radius: 999px; box-shadow: var(--ho-shadow-sm); }
+    .period-toolbar__label { min-width: 132px; text-align: center; color: var(--ho-text); font-size: 0.9rem; font-weight: 700; }
 
     /* Force text to not wrap in year view to enable scroll */
     .year-table th, .year-table td { white-space: nowrap !important; }
+    .year-row { cursor: pointer; transition: background 0.2s ease; }
+    .year-row:hover, .year-row:focus { background: var(--ho-surface-variant); outline: none; }
+    .year-month-details { display: flex; flex-direction: column; gap: 2px; margin-top: 4px; font-size: 0.7rem; color: var(--ho-muted); }
+    .year-holidays { overflow: hidden; text-overflow: ellipsis; max-width: 180px; }
 
     @media (max-width: 1200px) {
         .bento-grid { grid-template-columns: repeat(2, 1fr); }
@@ -186,7 +345,13 @@
         .bento-card.budget-card { grid-column: span 2; }
 
         .tl-header { display: none; }
-        .tl-spine { left: 24px; top: 10px; bottom: 10px;}
+        .tl-day-card { margin-bottom: var(--ho-space-3); padding: var(--ho-space-2); background: color-mix(in srgb, var(--ho-surface) 90%, transparent); border: 1px solid var(--ho-border); border-radius: var(--ho-radius-lg); box-shadow: var(--ho-shadow-sm); }
+        .tl-day-card.is-today { border-color: var(--ho-primary); }
+        .tl-day-summary { margin: var(--ho-space-2) 0 0; gap: var(--ho-space-1) var(--ho-space-2); }
+        .tl-summary-item { padding-right: var(--ho-space-2); border-right: 1px solid var(--ho-border); }
+        .tl-summary-item:last-child { border-right: 0; }
+        .tl-day-edit { width: 100%; min-height: 44px; margin-top: var(--ho-space-2); }
+        .tl-spine { display: none; }
 
         .tl-row {
             display: flex;
@@ -211,11 +376,31 @@
   </style>
 </head>
 <body>
+  <section id="runtime-error" role="alert" aria-live="assertive" hidden>
+    <h1>HO-Planer konnte nicht geladen werden</h1>
+    <p id="runtime-error-details"></p>
+  </section>
   <div id="app" v-cloak>
     <v-app style="background: transparent;">
+      <v-navigation-drawer v-model="navDrawer" temporary width="300" class="glass-effect">
+        <v-list nav density="comfortable" class="pt-4">
+          <v-list-subheader>Ansichten</v-list-subheader>
+          <v-list-item prepend-icon="mdi-format-list-bulleted" title="Timeline" :active="viewMode === 'list'" @click="selectView('list')"></v-list-item>
+          <v-list-item prepend-icon="mdi-calendar-month" title="Kalender" :active="viewMode === 'calendar'" @click="selectView('calendar')"></v-list-item>
+          <v-list-item prepend-icon="mdi-calendar-range" title="Jahresübersicht" :active="viewMode === 'year'" @click="selectView('year')"></v-list-item>
+          <v-divider class="my-3"></v-divider>
+          <v-list-subheader>Schnellaktionen</v-list-subheader>
+          <v-list-item prepend-icon="mdi-calendar-plus" title="Heutigen Tag erfassen" @click="navDrawer = false; openTodayEntry()"></v-list-item>
+          <v-list-item prepend-icon="mdi-calendar-multiple" title="Serienplanung" @click="navDrawer = false; openSeriesDialog()"></v-list-item>
+          <v-list-item prepend-icon="mdi-file-pdf-box" title="PDF importieren" @click="navDrawer = false; triggerPdfImport()"></v-list-item>
+          <v-list-item prepend-icon="mdi-file-code-outline" title="JSON importieren" @click="navDrawer = false; triggerJsonImport()"></v-list-item>
+          <v-list-item prepend-icon="mdi-cog" title="Einstellungen" @click="navDrawer = false; dialogSettings = true"></v-list-item>
+        </v-list>
+      </v-navigation-drawer>
 
       <v-app-bar class="glass-effect" elevation="0" border="bottom" density="comfortable" :height="$vuetify.display.mobile ? 56 : 64">
         <v-container class="d-flex align-center pa-0 px-4" style="max-width: 1100px; width: 100%;">
+            <v-btn icon="mdi-menu" variant="text" size="small" class="mr-1" aria-label="Navigation öffnen" @click="navDrawer = true"></v-btn>
             <div class="d-flex align-center mr-2 mr-md-6">
                 <v-avatar color="rgba(59, 130, 246, 0.1)" size="36" class="mr-2 mr-sm-3 border" style="border-color: rgba(59, 130, 246, 0.3) !important;">
                     <v-icon color="#3b82f6" size="small">mdi-laptop</v-icon>
@@ -237,11 +422,14 @@
             <v-spacer></v-spacer>
 
             <div class="d-flex align-center gap-1">
-                <v-btn icon="mdi-file-pdf-box" variant="text" color="#94a3b8" size="small" @click="$refs.pdfInput.click()" title="PDF Import"></v-btn>
+                <v-btn icon="mdi-dots-vertical" variant="text" size="small" class="d-flex d-md-none" aria-label="Aktionen öffnen" @click="actionSheet = true"></v-btn>
+                <div class="d-none d-md-flex align-center gap-1">
+                <v-btn icon="mdi-file-pdf-box" variant="text" color="#94a3b8" size="small" @click="triggerPdfImport" title="PDF Import"></v-btn>
                 <v-btn icon="mdi-calendar-multiple" variant="text" color="#94a3b8" size="small" @click="openSeriesDialog()" title="Serien-Planer"></v-btn>
                 <v-btn icon="mdi-cog" variant="text" color="#94a3b8" size="small" @click="dialogSettings = true" title="Einstellungen"></v-btn>
                 <v-btn variant="tonal" size="small" color="#64748b" class="ml-2 d-none d-sm-flex" style="font-size: 0.75rem; height: 32px;" href="/" title="Zurück zu V1">Exit Beta</v-btn>
                 <v-btn variant="tonal" size="small" color="#64748b" class="ml-1 d-flex d-sm-none" style="min-width: 32px; padding: 0;" href="/" title="Zurück zu V1"><v-icon size="small">mdi-exit-to-app</v-icon></v-btn>
+                </div>
             </div>
         </v-container>
       </v-app-bar>
@@ -249,12 +437,27 @@
       <v-main>
         <v-container class="pt-6 pb-12" style="max-width: 1100px; width: 100%;">
 
+            <div v-if="viewMode !== 'year'" class="period-toolbar" aria-label="Monatsnavigation">
+                <v-btn icon="mdi-chevron-left" variant="text" size="small" aria-label="Vorheriger Monat" @click="changeMonth(-1)"></v-btn>
+                <span class="period-toolbar__label">[[ getGermanMonthName(currentMonth) ]] [[ currentYear ]]</span>
+                <v-btn icon="mdi-calendar-today" variant="text" size="small" aria-label="Aktuellen Monat öffnen" @click="currentDate = new Date(); loadMonthData()"></v-btn>
+                <v-btn icon="mdi-chevron-right" variant="text" size="small" aria-label="Nächster Monat" @click="changeMonth(1)"></v-btn>
+            </div>
+
             <div class="bento-grid" v-if="viewMode !== 'year'">
                 <div class="bento-card glass-effect" style="border-top: 2px solid #3b82f6 !important;">
                     <div class="bento-label"><v-icon size="small" class="mr-2" color="#3b82f6">mdi-calendar-check</v-icon> Arbeitstage</div>
                     <div>
                         <div class="bento-value mono-num">[[ stats.workdays_month ]]</div>
                         <div class="bento-sub">In diesem Monat</div>
+                    </div>
+                </div>
+
+                <div class="bento-card glass-effect" style="border-top: 2px solid #8b5cf6 !important;">
+                    <div class="bento-label"><v-icon size="small" class="mr-2" color="#8b5cf6">mdi-timer-check-outline</v-icon> Arbeitszeit</div>
+                    <div>
+                        <div class="bento-value mono-num">[[ formatNum(stats.total_work_made) ]] <span style="font-size: 1rem; opacity: 0.5; color: #94a3b8;">/ [[ formatNum(stats.work_hours_target) ]] h</span></div>
+                        <div class="bento-sub">Istzeit / Sollzeit</div>
                     </div>
                 </div>
 
@@ -271,11 +474,7 @@
                 <div class="bento-card budget-card glass-effect" style="border-top: 2px solid #0ea5e9 !important;">
                     <div class="d-flex justify-space-between align-center mb-1">
                         <div class="bento-label mb-0"><v-icon size="small" class="mr-2" color="#0ea5e9">mdi-laptop</v-icon> Home Office Budget</div>
-                        <div class="d-flex align-center rounded-pill px-1" style="height: 38px; background: rgba(0,0,0,0.25); border: 1px solid rgba(255,255,255,0.05);">
-                            <v-btn icon variant="plain" size="small" @click="changeMonth(-1)" style="width: 34px; height: 34px;"><v-icon size="small">mdi-chevron-left</v-icon></v-btn>
-                            <span class="font-weight-bold text-slate mx-2" style="font-size: 0.85rem;">[[ getGermanMonthName(currentMonth) ]] [[ currentYear ]]</span>
-                            <v-btn icon variant="plain" size="small" @click="changeMonth(1)" style="width: 34px; height: 34px;"><v-icon size="small">mdi-chevron-right</v-icon></v-btn>
-                        </div>
+                        <span class="text-caption text-slate mono-num">[[ Math.round(quotaPercentage) ]]% genutzt</span>
                     </div>
 
                     <div>
@@ -284,11 +483,11 @@
                                 [[ formatOneDecimal(budgetRemainingDays) ]] <span style="font-size: 0.9rem; opacity: 0.5; font-family: 'Inter', sans-serif;">Tage übrig</span>
                                 <span class="text-caption text-slate mono-num ml-1" style="font-size: 0.8rem !important; opacity: 0.6;">([[ formatNum(budgetRemainingHours) ]] h)</span>
                             </div>
-                            <div class="text-caption text-slate mono-num" style="font-size: 0.8rem !important;">[[ Math.round(quotaPercentage) ]]% genutzt</div>
                         </div>
                         <div class="progress-track">
                             <div class="progress-fill" :style="{width: Math.min(quotaPercentage, 100) + '%', background: quotaPercentage > 100 ? '#ef4444' : ''}"></div>
                         </div>
+                        <div v-if="quotaPercentage > 100" class="text-caption budget-warning">Budget um [[ formatNum(Math.abs(budgetRemainingHours)) ]] h überschritten.</div>
                     </div>
                 </div>
             </div>
@@ -318,10 +517,10 @@
 
                             <template v-for="(item, idx) in items" :key="item.date ? 'tl-day-'+item.date : 'tl-sum-'+idx">
 
-                                <div v-if="item && item.row_type === 'day' && (!settings.hide_weekends || !isWeekend(item))" class="position-relative" :class="{'is-today': isToday(item.date)}">
+                                <div v-if="item && item.row_type === 'day' && (!settings.hide_weekends || !isWeekend(item))" class="position-relative tl-day-card" :class="{'is-today': isToday(item.date)}">
 
                                     <div v-for="(entry, index) in item.entries" :key="index"
-                                         class="tl-row" :class="{'is-off-day': item.is_off_day}">
+                                         class="tl-row" :class="['type-' + entry.type, {'is-off-day': item.is_off_day, 'has-holiday': item.is_holiday}]">
 
                                         <div v-if="index === 0" class="tl-dot d-none d-md-block"></div>
 
@@ -330,7 +529,7 @@
                                                 <span class="tl-date-num" :class="{'text-primary': isToday(item.date)}">[[ item.day_num ]].</span>
                                                 <span class="tl-date-day">[[ getGermanDayShort(item.weekday_index) ]]</span>
                                                 <span v-if="item.is_holiday" class="tl-holiday-badge">[[ item.holiday_name ]]</span>
-                                                <v-icon v-if="item.total_net > 10" size="small" color="error" class="ml-1" title="Achtung: Tagesarbeitszeit > 10h (ArbZG)">mdi-alert-outline</v-icon>
+                                                <span v-if="item.total_net > 10" class="worktime-warning" title="Achtung: Tagesarbeitszeit über 10 Stunden (ArbZG)"><v-icon size="12">mdi-alert-outline</v-icon>Über 10 h</span>
                                             </template>
                                         </div>
 
@@ -395,13 +594,16 @@
                                             <i v-else class="mdi mdi-close action-icon" title="Löschen" @click="deleteEntry(item, index)"></i>
                                         </div>
                                     </div>
+                                    <v-btn class="tl-day-edit d-md-none" variant="tonal" color="primary" prepend-icon="mdi-pencil" @click="openEditDialog(item)">Tag bearbeiten</v-btn>
                                 </div>
 
                                 <div v-else-if="item && item.row_type === 'summary'" class="tl-week-sum">
-                                    <span class="mr-3 text-uppercase text-slate" style="font-size: 0.8rem;">KW [[ item.iso_week ]]</span>
-                                    <span class="mono-num font-weight-bold" style="font-size: 0.95rem;" :class="getWeeklyColor(item)">
-                                        [[ formatNum(item.sum) ]] / [[ formatNum(item.target) ]] <span style="font-size: 0.8rem; font-weight: normal; opacity: 0.7;">h</span>
+                                    <span class="tl-week-sum__week">KW [[ item.iso_week ]]</span>
+                                    <span class="tl-week-sum__progress" :aria-label="`Fortschritt: ${formatNum(item.sum)} von ${formatNum(item.target)} Stunden`">
+                                        <span class="tl-week-sum__progress-bar" :style="{ width: `${item.target > 0 ? Math.min(100, Math.max(0, item.sum / item.target * 100)) : 0}%` }"></span>
                                     </span>
+                                    <span class="tl-week-sum__hours mono-num">[[ formatNum(item.sum) ]] von [[ formatNum(item.target) ]] h</span>
+                                    <span class="tl-week-sum__delta mono-num" :class="getWeeklyColor(item)">[[ item.sum - item.target > 0 ? '+' : '' ]][[ formatNum(item.sum - item.target) ]] h</span>
                                 </div>
 
                             </template>
@@ -421,18 +623,18 @@
                                              @click="openEditDialog(item)">
                                             <div class="d-flex justify-space-between align-start">
                                                 <span class="cal-date-num mono-num">[[ item.day_num ]]</span>
-                                                <div v-if="item.total_net > 0 || item.main_type === 'planned'" class="text-caption d-flex align-center mono-num" :class="item.total_net > 10 ? 'text-error font-weight-bold' : 'text-slate'">
-                                                    [[ formatNum(item.total_net) ]]h
-                                                    <v-icon v-if="item.total_net > 10" size="12" class="ml-1" title="Achtung: > 10h (ArbZG)">mdi-alert</v-icon>
+                                                <div v-if="item.total_net > 0 || item.main_type === 'planned'" class="cal-hours mono-num" :class="{'is-over-limit': item.total_net > 10}">
+                                                    [[ formatNum(item.total_net) ]] h
                                                 </div>
                                             </div>
-                                            <div v-if="item.is_holiday" class="text-error font-weight-bold mt-1 text-truncate" style="line-height: 1.1; font-size: 0.75rem !important;" :title="item.holiday_name">[[ item.holiday_name ]]</div>
+                                            <div v-if="item.total_net > 10" class="worktime-warning" title="Achtung: Tagesarbeitszeit über 10 Stunden (ArbZG)"><v-icon size="12">mdi-alert-outline</v-icon>Über 10 h</div>
+                                            <div v-if="item.is_holiday" class="cal-holiday mt-1 text-truncate" :title="item.holiday_name">[[ item.holiday_name ]]</div>
                                             <div class="mt-auto d-flex flex-column gap-1">
                                                 <div v-if="item.main_type" class="cal-pill" :class="'type-' + item.main_type">
-                                                    [[ getTypeName(item.main_type, item.date) ]]
+                                                    [[ item.main_type === 'planned' ? 'Geplant' : getTypeName(item.main_type, item.date) ]]
                                                 </div>
-                                                <div v-if="item.entries && item.entries.length > 1" class="text-slate mt-1" style="font-size: 0.75rem !important;">
-                                                    + [[ item.entries.length - 1 ]] Split(s)
+                                                <div v-if="item.entries && item.entries.length > 1" class="cal-summary" :title="item.entries.length + ' Einträge'">
+                                                    <span class="cal-summary-item"><v-icon size="12">mdi-source-branch</v-icon>[[ item.entries.length ]]</span>
                                                 </div>
                                             </div>
                                         </div>
@@ -444,15 +646,36 @@
 
                     <div v-if="viewMode === 'year'">
                         <v-row class="mb-4">
-                            <v-col cols="12" md="4">
-                                <div class="bento-card glass-effect h-100" style="min-height: 250px; border-top: 2px solid #10b981 !important;">
-                                    <div class="bento-label">Verteilung</div>
-                                    <div style="height: 200px; position: relative;"><canvas id="donutChart"></canvas></div>
+                            <v-col cols="6" md="3">
+                                <div class="bento-card glass-effect h-100">
+                                    <div class="bento-label">Homeoffice</div>
+                                    <div class="bento-value mono-num">[[ yearTotalHo ]] <span class="text-caption text-slate">Tage</span></div>
                                 </div>
                             </v-col>
-                            <v-col cols="12" md="8">
+                            <v-col cols="6" md="3">
+                                <div class="bento-card glass-effect h-100">
+                                    <div class="bento-label">HO-Quote</div>
+                                    <div class="bento-value mono-num">[[ formatNum(yearQuotaPercentage) ]]<span class="text-caption text-slate">%</span></div>
+                                </div>
+                            </v-col>
+                            <v-col cols="6" md="3">
+                                <div class="bento-card glass-effect h-100">
+                                    <div class="bento-label">Arbeitszeit</div>
+                                    <div class="bento-value mono-num">[[ formatNum(yearTotalHoHours + yearTotalOfficeHours) ]] <span class="text-caption text-slate">/ [[ formatNum(yearTotalWorkTarget) ]] h</span></div>
+                                </div>
+                            </v-col>
+                            <v-col cols="6" md="3">
+                                <div class="bento-card glass-effect h-100">
+                                    <div class="bento-label">Planung offen</div>
+                                    <div class="bento-value mono-num">[[ yearTotalOpenWorkdays ]] <span class="text-caption text-slate">Tage</span></div>
+                                </div>
+                            </v-col>
+                        </v-row>
+                        <v-row class="mb-4">
+                            <v-col cols="12">
                                 <div class="bento-card glass-effect h-100" style="min-height: 250px; border-top: 2px solid #3b82f6 !important;">
-                                    <div class="bento-label">HO Verlauf</div>
+                                    <div class="bento-label">Homeoffice-Nutzung pro Monat</div>
+                                    <div class="text-caption text-slate mb-3">Klicke in der Tabelle auf einen Monat, um die Tagesplanung zu öffnen.</div>
                                     <div style="height: 200px; position: relative;"><canvas id="barChart"></canvas></div>
                                 </div>
                             </v-col>
@@ -465,43 +688,29 @@
                                         <thead>
                                             <tr style="background: rgba(0,0,0,0.2);">
                                                 <th class="text-left font-weight-bold text-slate">Monat</th>
-                                                <th class="text-center font-weight-bold text-slate">Home Office</th>
-                                                <th class="text-center font-weight-bold text-slate">Büro</th>
-                                                <th class="text-center font-weight-bold text-slate">Urlaub</th>
-                                                <th class="text-center font-weight-bold text-slate">Budget Nutzung</th>
-                                                <th class="text-center font-weight-bold text-slate">Arbeitsstunden</th>
+                                                <th class="text-center font-weight-bold text-slate">Homeoffice-Quote</th>
+                                                <th class="text-center font-weight-bold text-slate">Arbeitszeit</th>
+                                                <th class="text-center font-weight-bold text-slate">Planung</th>
                                             </tr>
                                         </thead>
                                         <tbody>
-                                            <tr v-for="stat in yearData" :key="stat.month" class="border-b" style="border-color: rgba(255,255,255,0.05) !important;">
-                                                <td class="font-weight-bold" style="font-size: 0.95rem;">[[ getGermanMonthName(stat.month) ]]</td>
-                                                <td class="text-center"><span class="cal-pill type-home mono-num" v-if="stat.days_ho > 0" style="font-size: 0.85rem;">[[ stat.days_ho ]] T.</span><span v-else class="text-slate">-</span></td>
-                                                <td class="text-center"><span class="cal-pill type-office mono-num" v-if="stat.days_office > 0" style="font-size: 0.85rem;">[[ stat.days_office ]] T.</span><span v-else class="text-slate">-</span></td>
-                                                <td class="text-center"><span class="cal-pill type-vacation mono-num" v-if="stat.days_vacation > 0" style="font-size: 0.85rem;">[[ stat.days_vacation ]] T.</span><span v-else class="text-slate">-</span></td>
+                                            <tr v-for="stat in yearData" :key="stat.month" class="year-row border-b" tabindex="0" role="button" :aria-label="getGermanMonthName(stat.month) + ' im Kalender öffnen'" style="border-color: rgba(255,255,255,0.05) !important;" @click="openYearMonth(stat.month)" @keydown.enter.prevent="openYearMonth(stat.month)" @keydown.space.prevent="openYearMonth(stat.month)">
+                                                <td class="font-weight-bold" style="font-size: 0.95rem;"><v-icon size="16" class="mr-1">mdi-calendar-month</v-icon>[[ getGermanMonthName(stat.month) ]]</td>
                                                 <td class="text-center">
                                                     <div class="d-flex align-center justify-center">
                                                         <div style="width: 100px" class="mr-3"><v-progress-linear :model-value="stat.ho_hours_allowed ? (stat.ho_hours_made / stat.ho_hours_allowed)*100 : 0" color="#3b82f6" height="6" rounded bg-opacity="0.2"></v-progress-linear></div>
-                                                        <div class="text-caption mono-num text-slate" style="font-size: 0.85rem !important;">[[ formatNum(stat.ho_hours_made) ]] / [[ formatNum(stat.ho_hours_allowed) ]]h</div>
+                                                        <div class="text-caption mono-num text-slate">[[ stat.ho_hours_allowed ? formatNum((stat.ho_hours_made / stat.ho_hours_allowed) * 100) : '0,00' ]]%</div>
                                                     </div>
                                                 </td>
-                                                <td class="text-center text-slate mono-num" style="font-size: 0.85rem;">
-                                                    <div class="d-flex align-center justify-center" v-if="(stat.ho_hours_made + stat.office_hours_made) > 0 || stat.work_hours_target > 0">
-                                                        <div class="text-right" style="width: 50px;">[[ formatNum(stat.ho_hours_made + stat.office_hours_made) ]]</div>
-                                                        <div class="text-center mx-1" style="width: 10px;">/</div>
-                                                        <div class="text-right" style="width: 50px;">[[ formatNum(stat.work_hours_target) ]]</div>
-                                                        <div class="ml-1 text-left" style="width: 15px;">h</div>
-                                                    </div>
-                                                    <span v-else>-</span>
-                                                </td>
+                                                <td class="text-center text-slate mono-num">[[ formatNum(stat.ho_hours_made + stat.office_hours_made) ]] / [[ formatNum(stat.work_hours_target) ]] h</td>
+                                                <td class="text-center"><span class="cal-pill type-planned mono-num">[[ stat.open_workdays ]] offen</span></td>
                                             </tr>
                                         </tbody>
                                         <tfoot style="background: rgba(15, 23, 42, 0.8);" class="font-weight-bold border-t">
                                             <tr>
                                                 <td class="text-left py-3 text-body-1 text-bright">GESAMT</td>
-                                                <td class="text-center"><span class="cal-pill type-home mono-num text-bright" style="font-size: 0.9rem;">[[ yearTotalHo ]] T.</span></td>
-                                                <td class="text-center"><span class="cal-pill type-office mono-num text-bright" style="font-size: 0.9rem;">[[ yearTotalOffice ]] T.</span></td>
-                                                <td class="text-center"><span class="cal-pill type-vacation mono-num text-bright" style="font-size: 0.9rem;">[[ yearTotalVacation ]] T.</span></td>
-                                                <td class="text-center"></td>
+                                                <td class="text-center"><span class="cal-pill type-home mono-num text-bright">[[ yearTotalHo ]] HO-Tage</span></td>
+                                                <td class="text-center"><span class="text-slate mono-num">[[ yearTotalOffice ]] Büro · [[ yearTotalVacation ]] Urlaub</span></td>
                                                 <td class="text-center"></td>
                                             </tr>
                                         </tfoot>
@@ -531,6 +740,19 @@
         </v-btn>
       </v-bottom-navigation>
 
+      <v-menu location="top end">
+        <template v-slot:activator="{ props }">
+          <v-btn v-bind="props" class="quick-action-fab" icon="mdi-plus" color="primary" size="large" title="Schnellaktionen"></v-btn>
+        </template>
+        <v-list density="comfortable" class="glass-effect" style="background: #1e293b !important;">
+          <v-list-item prepend-icon="mdi-calendar-plus" title="Tag erfassen" @click="openTodayEntry"></v-list-item>
+          <v-list-item prepend-icon="mdi-calendar-multiple" title="Serienplanung" @click="openSeriesDialog()"></v-list-item>
+          <v-list-item prepend-icon="mdi-file-pdf-box" title="PDF importieren" @click="triggerPdfImport"></v-list-item>
+          <v-list-item prepend-icon="mdi-file-code-outline" title="JSON importieren" @click="triggerJsonImport"></v-list-item>
+          <v-list-item prepend-icon="mdi-cog" title="Einstellungen" @click="dialogSettings = true"></v-list-item>
+        </v-list>
+      </v-menu>
+
       <v-snackbar v-model="snackbar.show" :color="snackbar.color" :timeout="4000" location="top" rounded="pill">
          [[ snackbar.text ]]
       </v-snackbar>
@@ -542,6 +764,9 @@
                 <v-chip size="small" color="#64748b" variant="tonal">[[ getGermanDay(editingDay.weekday_index) ]]</v-chip>
             </v-card-title>
             <v-card-text class="pt-4">
+                <section class="day-dialog-section" aria-labelledby="day-entry-heading">
+                <div id="day-entry-heading" class="day-dialog-section__title"><v-icon size="16">mdi-calendar-edit</v-icon> Erfassung</div>
+                <div class="day-dialog-section__hint">Status, Arbeitszeiten und Notizen für diesen Tag pflegen.</div>
                 <div v-for="(entry, index) in editingDay.entries" :key="index" class="mb-4 pa-3 rounded-lg" style="background: rgba(0,0,0,0.2); border: 1px solid rgba(255,255,255,0.05);">
                     <div class="d-flex justify-space-between mb-2">
                         <select v-model="entry.type" class="hover-select bg-transparent font-weight-bold" style="width: auto;" @change="debouncedSave(editingDay.date, entry)">
@@ -550,21 +775,65 @@
                         <v-btn icon="mdi-delete" size="small" variant="text" color="error" @click="deleteEntry(editingDay, index)"></v-btn>
                     </div>
                     <v-row dense>
-                        <v-col cols="6"><v-text-field v-if="needsTimeInput(entry.type)" v-model="entry.start" label="Start" variant="underlined" density="compact" hide-details class="mono-num" @update:model-value="debouncedSave(editingDay.date, entry)"></v-text-field></v-col>
-                        <v-col cols="6"><v-text-field v-if="needsTimeInput(entry.type)" v-model="entry.end" label="Ende" variant="underlined" density="compact" hide-details class="mono-num" @update:model-value="debouncedSave(editingDay.date, entry)"></v-text-field></v-col>
+                        <v-col cols="6"><v-text-field v-if="needsTimeInput(entry.type)" v-model="entry.start" label="Start" variant="underlined" density="compact" :error-messages="getTimeInputError(entry.start)" class="mono-num" @update:model-value="debouncedSave(editingDay.date, entry)"></v-text-field></v-col>
+                        <v-col cols="6"><v-text-field v-if="needsTimeInput(entry.type)" v-model="entry.end" label="Ende" variant="underlined" density="compact" :error-messages="getTimeInputError(entry.end)" class="mono-num" @update:model-value="debouncedSave(editingDay.date, entry)"></v-text-field></v-col>
                         <v-col cols="12"><v-text-field v-model="entry.comment" label="Notiz" variant="underlined" density="compact" hide-details @update:model-value="debouncedSave(editingDay.date, entry)"></v-text-field></v-col>
                     </v-row>
                 </div>
                 <v-btn variant="text" size="small" color="primary" @click="addEntryToDay(editingDay)" prepend-icon="mdi-plus">Split hinzufügen</v-btn>
+                </section>
 
-                <v-divider class="my-4 opacity-20"></v-divider>
-                <v-text-field v-if="editingDay.entries && editingDay.entries.length > 0" v-model="editingDay.entries[0].glz_override" label="Manueller GLZ Abgleich" placeholder="z.B. -2,50" variant="outlined" density="compact" hide-details @update:model-value="editingDay.entries[0].glz_override_source = 'manual'; debouncedSave(editingDay.date, editingDay.entries[0])"></v-text-field>
+                <section class="day-dialog-section" aria-labelledby="day-glz-heading">
+                <div id="day-glz-heading" class="day-dialog-section__title"><v-icon size="16">mdi-scale-balance</v-icon> GLZ-Abgleich</div>
+                <div class="day-dialog-section__hint">Nur eintragen, wenn der berechnete Saldo korrigiert werden soll.</div>
+                <v-text-field v-if="editingDay.entries && editingDay.entries.length > 0" v-model="editingDay.entries[0].glz_override" label="Manueller GLZ Abgleich" placeholder="z.B. -2,50" variant="outlined" density="compact" :error-messages="getGlzOverrideError(editingDay.entries[0].glz_override)" @update:model-value="editingDay.entries[0].glz_override_source = 'manual'; debouncedSave(editingDay.date, editingDay.entries[0])"></v-text-field>
+                </section>
+
+                <section class="day-dialog-section" aria-labelledby="day-transfer-heading">
+                <div id="day-transfer-heading" class="day-dialog-section__title"><v-icon size="16">mdi-calendar-arrow-right</v-icon> Tagesdaten übertragen</div>
+                <div class="day-dialog-section__hint">Einträge in einen anderen Tag kopieren oder verschieben.</div>
+                <v-row dense>
+                    <v-col cols="7"><v-text-field v-model="transferDialog.target_date" type="date" label="Zieldatum" variant="outlined" density="compact" :error-messages="getDateInputError(transferDialog.target_date)"></v-text-field></v-col>
+                    <v-col cols="5"><v-select v-model="transferDialog.operation" :items="[{title: 'Kopieren', value: 'copy'}, {title: 'Verschieben', value: 'move'}]" label="Aktion" variant="outlined" density="compact" hide-details></v-select></v-col>
+                </v-row>
+                <v-btn class="mt-3" variant="tonal" size="small" color="primary" prepend-icon="mdi-calendar-arrow-right" :disabled="!transferDialog.target_date" @click="startTransfer">Übertragen</v-btn>
+                </section>
             </v-card-text>
             <v-card-actions class="px-5 pb-5"><v-spacer></v-spacer><v-btn variant="flat" color="primary" @click="dialogEditDay = false">Fertig</v-btn></v-card-actions>
         </v-card>
       </v-dialog>
 
+      <v-dialog v-model="transferConflict.show" max-width="480">
+        <v-card class="glass-effect" rounded="xl" style="background: #1e293b !important;">
+          <v-card-title class="py-3 border-b text-bright d-flex align-center text-body-1"><v-icon start color="warning" size="small">mdi-alert</v-icon> Zielkonflikt</v-card-title>
+          <v-card-text class="pt-4 text-slate">Das Zieldatum enthält bereits [[ transferConflict.data ? transferConflict.data.target_entries : 0 ]] Einträge. Wähle ausdrücklich, wie fortgefahren werden soll.</v-card-text>
+          <v-card-actions class="px-4 pb-4"><v-spacer></v-spacer>
+            <v-btn variant="text" color="slate" size="small" @click="transferConflict.show = false">Abbrechen</v-btn>
+            <v-btn variant="tonal" color="primary" size="small" @click="confirmTransfer('merge')">Zusammenführen</v-btn>
+            <v-btn variant="flat" color="warning" size="small" @click="confirmTransfer('overwrite')">Überschreiben</v-btn>
+          </v-card-actions>
+        </v-card>
+      </v-dialog>
+
       <input type="file" ref="pdfInput" style="display: none" accept=".pdf" @change="uploadPdf">
+      <input type="file" ref="jsonInput" style="display: none" accept=".json,application/json" @change="previewJsonImport">
+      <v-dialog v-model="jsonImport.show" max-width="520">
+        <v-card v-if="jsonImport.preview" class="glass-effect" rounded="xl" style="background: #1e293b !important;">
+          <v-card-title class="py-3 border-b text-bright text-body-1"><v-icon start color="primary" size="small">mdi-file-code-outline</v-icon> JSON-Import prüfen</v-card-title>
+          <v-card-text class="pt-4 text-slate">
+            <p class="text-caption mb-3">Die Datei wird erst nach der Bestätigung additiv übernommen.</p>
+            <v-list density="compact" class="bg-transparent">
+              <v-list-item title="Gültige Einträge" :subtitle="String(jsonImport.preview.valid_entries)"></v-list-item>
+              <v-list-item title="Duplikate" :subtitle="String(jsonImport.preview.skipped_entries)"></v-list-item>
+              <v-list-item title="Ungültige Objekte" :subtitle="String(jsonImport.preview.invalid_entries)"></v-list-item>
+              <v-list-item title="Gültige Sondertage" :subtitle="String(jsonImport.preview.valid_custom_holidays)"></v-list-item>
+              <v-list-item title="Feiertagskonflikte" :subtitle="String(jsonImport.preview.holiday_conflicts)"></v-list-item>
+              <v-list-item title="GLZ-Konflikte" :subtitle="String(jsonImport.preview.glz_override_conflicts)"></v-list-item>
+            </v-list>
+          </v-card-text>
+          <v-card-actions class="px-4 pb-4"><v-spacer></v-spacer><v-btn variant="text" color="slate" @click="jsonImport.show = false">Abbrechen</v-btn><v-btn variant="flat" color="primary" @click="confirmJsonImport">Importieren</v-btn></v-card-actions>
+        </v-card>
+      </v-dialog>
       <v-dialog v-model="importDialog.show" max-width="400">
           <v-card class="glass-effect" rounded="xl" style="background: #1e293b !important;">
               <v-card-title class="py-3 border-b text-bright d-flex align-center text-body-1"><v-icon start color="primary" size="small">mdi-file-pdf-box</v-icon> PDF Import</v-card-title>
@@ -583,20 +852,48 @@
         <v-card class="glass-effect" rounded="xl" style="background: #1e293b !important;">
             <v-card-title class="py-3 border-b text-bright d-flex align-center text-body-1"><v-icon start color="primary" size="small">mdi-calendar-multiple</v-icon> Serien-Planer</v-card-title>
             <v-card-text class="pt-4">
+                <div class="text-caption text-slate mb-2">Wochenvorlage wählen, Vorschau prüfen und anschließend ausdrücklich speichern.</div>
+                <div class="d-flex flex-wrap ga-2 mb-3">
+                    <v-chip size="small" variant="tonal" @click="applyWeekTemplate('standard')">Standardwoche</v-chip>
+                    <v-chip size="small" color="indigo" variant="tonal" @click="applyWeekTemplate('office')">Bürowoche</v-chip>
+                    <v-chip size="small" color="success" variant="tonal" @click="applyWeekTemplate('home')">Homeoffice-Woche</v-chip>
+                    <v-chip size="small" color="purple" variant="tonal" @click="applyWeekTemplate('vacation')">Urlaubswoche</v-chip>
+                </div>
                 <v-row density="compact">
-                    <v-col cols="6"><v-text-field v-model="seriesDialog.start" label="Von" type="date" variant="outlined" density="compact"></v-text-field></v-col>
-                    <v-col cols="6"><v-text-field v-model="seriesDialog.end" label="Bis" type="date" variant="outlined" density="compact"></v-text-field></v-col>
+                    <v-col cols="6"><v-text-field v-model="seriesDialog.start" label="Von" type="date" variant="outlined" density="compact" :error-messages="seriesValidationErrors.start"></v-text-field></v-col>
+                    <v-col cols="6"><v-text-field v-model="seriesDialog.end" label="Bis" type="date" variant="outlined" density="compact" :error-messages="seriesValidationErrors.end"></v-text-field></v-col>
                 </v-row>
                 <div class="mb-3 d-flex justify-space-between rounded-lg pa-1 mt-1" style="background: rgba(0,0,0,0.2);">
-                    <v-checkbox v-for="(day, idx) in ['Mo','Di','Mi','Do','Fr']" :key="idx" v-model="seriesDialog.weekdays" :value="idx" :label="day" density="compact" hide-details color="primary"></v-checkbox>
+                    <v-checkbox v-for="(day, idx) in ['Mo','Di','Mi','Do','Fr','Sa','So']" :key="idx" v-model="seriesDialog.weekdays" :value="idx" :label="day" density="compact" hide-details color="primary"></v-checkbox>
                 </div>
-                <v-select v-model="seriesDialog.type" :items="baseTypes" label="Status setzen auf" item-title="title" item-value="value" variant="outlined" density="compact"></v-select>
+                <div v-if="seriesValidationErrors.weekdays" class="text-caption text-error mb-3">[[ seriesValidationErrors.weekdays ]]</div>
+                <v-select v-model="seriesDialog.type" :items="seriesTypes" label="Status setzen auf" item-title="title" item-value="value" variant="outlined" density="compact" :error-messages="seriesValidationErrors.type"></v-select>
                 <v-checkbox v-model="seriesDialog.overwrite" label="Vorhandene überschreiben" density="compact" color="warning" hide-details></v-checkbox>
+                <div v-if="quotaPercentage > 100" class="text-caption budget-warning mt-3"><v-icon size="14">mdi-alert-outline</v-icon> Das Homeoffice-Budget des aktuell ausgewählten Monats ist bereits um [[ formatNum(Math.abs(budgetRemainingHours)) ]] h überschritten. Die Planung bleibt möglich.</div>
             </v-card-text>
             <v-card-actions class="px-4 pb-4"><v-spacer></v-spacer>
                 <v-btn variant="text" color="slate" size="small" @click="seriesDialog.show = false">Abbrechen</v-btn>
-                <v-btn variant="flat" color="primary" size="small" @click="saveSeriesPlan">Ausführen</v-btn>
+                <v-btn variant="flat" color="primary" size="small" :disabled="!seriesDialog.type" @click="saveSeriesPlan">Vorschau</v-btn>
             </v-card-actions>
+        </v-card>
+      </v-dialog>
+
+      <v-dialog v-model="seriesPreview.show" max-width="520">
+        <v-card v-if="seriesPreview.data" class="glass-effect" rounded="xl" style="background: #1e293b !important;">
+          <v-card-title class="py-3 border-b text-bright text-body-1"><v-icon start color="warning" size="small">mdi-calendar-search</v-icon> Serienplanung prüfen</v-card-title>
+          <v-card-text class="pt-4">
+            <p class="text-caption text-slate mb-3">Die Planung wird erst nach der Bestätigung gespeichert.</p>
+            <v-list density="compact" class="bg-transparent">
+              <v-list-item title="Neu geplant" :subtitle="seriesPreview.data.created_dates.join(', ') || 'Keine'"></v-list-item>
+              <v-list-item title="Vorhandene Einträge übersprungen" :subtitle="seriesPreview.data.skipped_existing_dates.join(', ') || 'Keine'"></v-list-item>
+              <v-list-item v-if="seriesDialog.overwrite" title="Zu überschreibende Tage" :subtitle="seriesPreview.data.overwritten_dates.join(', ') || 'Keine'"></v-list-item>
+              <v-list-item title="Ausgeschlossen" :subtitle="seriesPreview.data.excluded_dates.join(', ') || 'Keine'"></v-list-item>
+            </v-list>
+          </v-card-text>
+          <v-card-actions class="px-4 pb-4"><v-spacer></v-spacer>
+            <v-btn variant="text" color="slate" size="small" @click="seriesPreview.show = false">Zurück</v-btn>
+            <v-btn variant="flat" color="primary" size="small" @click="confirmSeriesPlan">Jetzt speichern</v-btn>
+          </v-card-actions>
         </v-card>
       </v-dialog>
 
@@ -608,6 +905,7 @@
               <v-col cols="12"><div class="text-caption text-uppercase text-slate mb-1 font-weight-bold">Allgemein</div></v-col>
               <v-col cols="6"><v-text-field v-model.number="settings.weekly_hours" label="Wochenstunden (Vertrag)" type="number" density="compact" variant="outlined"></v-text-field></v-col>
               <v-col cols="6"><v-text-field v-model.number="settings.ho_quota_percent" label="HO Quote %" type="number" density="compact" variant="outlined"></v-text-field></v-col>
+              <v-col cols="12"><div class="text-caption text-uppercase text-slate mb-1 font-weight-bold">Darstellung</div><v-select v-model="settings.theme" :items="[{ title: 'Dunkel', value: 'dark' }, { title: 'Hell', value: 'light' }]" label="Farbschema" density="compact" variant="outlined" hide-details></v-select></v-col>
 
               <v-col cols="12" class="mt-0 pt-0">
                   <div class="text-caption mb-1 text-slate font-weight-bold">Reguläre Arbeitstage</div>
@@ -632,6 +930,9 @@
                       </v-col>
                       <v-col cols="6">
                           <v-switch v-model="settings.auto_convert_planned" label="Planung auto-umwandeln" color="primary" density="compact" hide-details></v-switch>
+                      </v-col>
+                      <v-col cols="12">
+                          <v-switch v-model="settings.christmas_eve_and_new_years_eve_off" label="Heiligabend und Silvester arbeitsfrei" color="primary" density="compact" hide-details></v-switch>
                       </v-col>
                   </v-row>
               </v-col>
@@ -670,11 +971,39 @@
         </v-card>
       </v-dialog>
 
+      <v-bottom-navigation v-model="viewMode" class="d-md-none" color="primary" grow>
+        <v-btn value="list" @click="selectView('list')"><v-icon>mdi-format-list-bulleted</v-icon><span>Timeline</span></v-btn>
+        <v-btn value="calendar" @click="selectView('calendar')"><v-icon>mdi-calendar-month</v-icon><span>Kalender</span></v-btn>
+        <v-btn value="year" @click="selectView('year')"><v-icon>mdi-calendar-range</v-icon><span>Jahr</span></v-btn>
+      </v-bottom-navigation>
+      <v-bottom-sheet v-model="actionSheet">
+        <v-card class="glass-effect" rounded="t-xl">
+          <v-card-title class="text-body-1">Schnellaktionen</v-card-title>
+          <v-list class="bg-transparent">
+            <v-list-item prepend-icon="mdi-calendar-plus" title="Heutigen Tag erfassen" @click="actionSheet = false; openTodayEntry()"></v-list-item>
+            <v-list-item prepend-icon="mdi-calendar-multiple" title="Serienplanung" @click="actionSheet = false; openSeriesDialog()"></v-list-item>
+            <v-list-item prepend-icon="mdi-file-pdf-box" title="PDF importieren" @click="actionSheet = false; triggerPdfImport()"></v-list-item>
+            <v-list-item prepend-icon="mdi-file-code-outline" title="JSON importieren" @click="actionSheet = false; triggerJsonImport()"></v-list-item>
+            <v-list-item prepend-icon="mdi-cog" title="Einstellungen" @click="actionSheet = false; dialogSettings = true"></v-list-item>
+          </v-list>
+        </v-card>
+      </v-bottom-sheet>
+
     </v-app>
   </div>
 
   <script>
-    let activeCharts = { donut: null, bar: null };
+    function showRuntimeError(message) {
+      const app = document.getElementById('app');
+      const error = document.getElementById('runtime-error');
+      const details = document.getElementById('runtime-error-details');
+      if (app) app.style.display = 'none';
+      if (details) details.textContent = message;
+      if (error) error.hidden = false;
+    }
+
+    try {
+    let activeCharts = { bar: null };
     const { createApp } = Vue;
     const { createVuetify } = Vuetify;
 
@@ -694,6 +1023,19 @@
                         success: '#10b981',
                         warning: '#f59e0b',
                     }
+                },
+                bentoLight: {
+                    dark: false,
+                    colors: {
+                        background: '#f8fafc',
+                        surface: '#ffffff',
+                        primary: '#2563eb',
+                        secondary: '#475569',
+                        error: '#dc2626',
+                        info: '#0284c7',
+                        success: '#059669',
+                        warning: '#d97706',
+                    }
                 }
             }
         }
@@ -703,11 +1045,16 @@
       data() { return {
           isSaving: false, saveTimeout: null,
           viewMode: 'list', currentDate: new Date(), items: [], yearData: [],
-          stats: { total_ho_made: 0, total_ho_allowed: 1, total_office_made: 0, total_work_made: 0, avg_per_week: 0, workdays_month: 0, current_glz: 0 },
-          settings: { weekly_hours: 39, active_weekdays: [0,1,2,3,4], ho_quota_percent: 60, hide_weekends: false, default_start_time: '08:00', auto_convert_planned: true },
+          stats: { total_ho_made: 0, total_ho_allowed: 1, total_office_made: 0, total_work_made: 0, work_hours_target: 0, avg_per_week: 0, workdays_month: 0, current_glz: 0 },
+          settings: { weekly_hours: 39, active_weekdays: [0,1,2,3,4], ho_quota_percent: 60, hide_weekends: false, default_start_time: '08:00', auto_convert_planned: true, christmas_eve_and_new_years_eve_off: true, theme: 'dark' },
           dialogSettings: false, dialogEditDay: false, editingDay: null,
+          navDrawer: false, actionSheet: false,
           importDialog: { show: false, overwrite: false, file: null },
+          jsonImport: { show: false, file: null, preview: null },
           seriesDialog: { show: false, start: '', end: '', weekdays: [4], type: 'home', overwrite: false },
+          seriesPreview: { show: false, data: null },
+          transferDialog: { target_date: '', operation: 'copy' },
+          transferConflict: { show: false, data: null },
           customHolidays: [], newCustomHoliday: { id: null, date: '', name: '', hours: 0 },
           snackbar: { show: false, text: '', color: 'success' },
 
@@ -736,7 +1083,26 @@
 
         yearTotalWorkTarget() { return this.yearData && this.yearData.length ? this.yearData.reduce((sum, item) => sum + item.work_hours_target, 0) : 0; },
         yearTotalHoHours() { return this.yearData && this.yearData.length ? this.yearData.reduce((sum, item) => sum + item.ho_hours_made, 0) : 0; },
-        yearTotalOfficeHours() { return this.yearData && this.yearData.length ? this.yearData.reduce((sum, item) => sum + item.office_hours_made, 0) : 0; }
+        yearTotalOfficeHours() { return this.yearData && this.yearData.length ? this.yearData.reduce((sum, item) => sum + item.office_hours_made, 0) : 0; },
+        yearTotalHoAllowed() { return this.yearData && this.yearData.length ? this.yearData.reduce((sum, item) => sum + item.ho_hours_allowed, 0) : 0; },
+        yearTotalOpenWorkdays() { return this.yearData && this.yearData.length ? this.yearData.reduce((sum, item) => sum + item.open_workdays, 0) : 0; },
+        yearQuotaPercentage() { return this.yearTotalHoAllowed ? (this.yearTotalHoHours / this.yearTotalHoAllowed) * 100 : 0; },
+        seriesTypes() { return this.baseTypes.filter(type => type.value !== ''); },
+        seriesValidationErrors() {
+            const errors = {};
+            const isCalendarDate = value => {
+                if (!/^\d{4}-\d{2}-\d{2}$/.test(value || '')) return false;
+                const [year, month, day] = value.split('-').map(Number);
+                const date = new Date(year, month - 1, day);
+                return date.getFullYear() === year && date.getMonth() === month - 1 && date.getDate() === day;
+            };
+            if (!isCalendarDate(this.seriesDialog.start)) errors.start = 'Bitte ein gültiges Startdatum eingeben.';
+            if (!isCalendarDate(this.seriesDialog.end)) errors.end = 'Bitte ein gültiges Enddatum eingeben.';
+            if (!errors.start && !errors.end && this.seriesDialog.end < this.seriesDialog.start) errors.end = 'Das Enddatum darf nicht vor dem Startdatum liegen.';
+            if (!Array.isArray(this.seriesDialog.weekdays) || this.seriesDialog.weekdays.length === 0) errors.weekdays = 'Mindestens einen Wochentag auswählen.';
+            if (!this.seriesDialog.type) errors.type = 'Bitte einen Status auswählen.';
+            return errors;
+        }
       },
       watch: {
           viewMode(newVal) {
@@ -748,7 +1114,7 @@
           this.loadSettings(); this.loadCustomHolidays(); this.loadMonthData();
           window.addEventListener('keydown', (e) => {
               if(e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT' || e.target.tagName === 'TEXTAREA') return;
-              if(this.dialogEditDay || this.dialogSettings || this.importDialog.show || this.seriesDialog.show) return;
+              if(this.dialogEditDay || this.dialogSettings || this.importDialog.show || this.seriesDialog.show || this.seriesPreview.show || this.transferConflict.show) return;
               if(this.viewMode === 'year') {
                   if(e.key === 'ArrowLeft') this.changeYear(-1);
                   if(e.key === 'ArrowRight') this.changeYear(1);
@@ -766,8 +1132,42 @@
         },
         formatOneDecimal(val) { return val || val === 0 ? val.toFixed(1).replace('.', ',') : '0,0'; },
         showMsg(text, color='success') { this.snackbar.text = text; this.snackbar.color = color; this.snackbar.show = true; },
+        selectView(view) { this.viewMode = view; this.navDrawer = false; },
+        openYearMonth(month) {
+            this.currentDate = new Date(this.currentYear, month - 1, 1);
+            this.selectView('calendar');
+        },
 
+        triggerPdfImport() { this.$refs.pdfInput.click(); },
+        triggerJsonImport() { this.$refs.jsonInput.click(); },
         uploadPdf(event) { const file = event.target.files[0]; if (!file) return; this.importDialog.file = file; this.importDialog.show = true; event.target.value = ''; },
+        async previewJsonImport(event) {
+            const file = event.target.files[0];
+            event.target.value = '';
+            if (!file) return;
+            const formData = new FormData();
+            formData.append('file', file);
+            try {
+                const response = await fetch('/api/import/json/preview', { method: 'POST', body: formData });
+                const data = await response.json();
+                if (!response.ok || data.success === false) throw new Error(data.message || 'JSON-Datei konnte nicht geprüft werden.');
+                this.jsonImport = { show: true, file, preview: data };
+            } catch (error) { this.showMsg(error.message, 'error'); }
+        },
+        async confirmJsonImport() {
+            if (!this.jsonImport.file) return;
+            const formData = new FormData();
+            formData.append('file', this.jsonImport.file);
+            try {
+                const response = await fetch('/api/import/json', { method: 'POST', body: formData });
+                const data = await response.json();
+                if (!response.ok || data.success === false) throw new Error(data.message || 'JSON-Import fehlgeschlagen.');
+                this.jsonImport.show = false;
+                this.showMsg(`${data.imported_entries} Einträge ergänzt, ${data.skipped_entries} Duplikate übersprungen, ${data.holiday_conflicts} Feiertags- und ${data.glz_override_conflicts} GLZ-Konflikte.`, 'success');
+                await this.loadMonthData();
+                if (this.viewMode === 'year') await this.loadYearData();
+            } catch (error) { this.showMsg(error.message, 'error'); }
+        },
 
         async proceedWithUpload() {
             this.importDialog.show = false;
@@ -808,6 +1208,16 @@
             return dateStr === this.getLocalTodayStr();
         },
 
+        async openTodayEntry() {
+            const today = new Date();
+            this.currentDate = new Date(today.getFullYear(), today.getMonth(), 1);
+            this.viewMode = 'list';
+            await this.loadMonthData();
+            const day = this.items.find(item => item.row_type === 'day' && item.date === this.getLocalTodayStr());
+            if (day) this.openEditDialog(day);
+            else this.showMsg('Der heutige Tag konnte nicht geladen werden.', 'error');
+        },
+
         isFutureDay(dateStr) {
             if (!dateStr) return false;
             return dateStr > this.getLocalTodayStr();
@@ -828,6 +1238,42 @@
             return found ? found.title : '';
         },
 
+        isValidDate(value) {
+            if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+            const [year, month, day] = value.split('-').map(Number);
+            const parsed = new Date(year, month - 1, day);
+            return parsed.getFullYear() === year && parsed.getMonth() === month - 1 && parsed.getDate() === day;
+        },
+        normalizeTimeInput(value) {
+            if (value === null || value === undefined || String(value).trim() === '') return '';
+            const input = String(value).trim().replace('.', ':');
+            let hours, minutes;
+            if (input.includes(':')) {
+                const parts = input.split(':');
+                if (parts.length !== 2 || !/^\d+$/.test(parts[0]) || !/^\d+$/.test(parts[1])) return null;
+                hours = Number(parts[0]); minutes = Number(parts[1]);
+            } else if (/^\d{4}$/.test(input)) {
+                hours = Number(input.slice(0, 2)); minutes = Number(input.slice(2));
+            } else if (/^\d{3}$/.test(input)) {
+                hours = Number(input.slice(0, 1)); minutes = Number(input.slice(1));
+            } else if (/^\d{1,2}$/.test(input)) {
+                hours = Number(input); minutes = 0;
+            } else return null;
+            if (hours > 23 || minutes > 59) return null;
+            return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
+        },
+        getTimeInputError(value) {
+            if (value === null || value === undefined || String(value).trim() === '') return '';
+            return this.normalizeTimeInput(value) ? '' : 'Ungültige Zeit (z. B. 08:30).';
+        },
+        getGlzOverrideError(value) {
+            if (value === null || value === undefined || String(value).trim() === '') return '';
+            return Number.isFinite(Number(String(value).replace(',', '.'))) ? '' : 'Bitte eine endliche Zahl eingeben.';
+        },
+        getDateInputError(value) {
+            if (!value) return '';
+            return this.isValidDate(value) ? '' : 'Bitte ein gültiges Datum eingeben.';
+        },
         needsTimeInput(type) { return ['home', 'office', 'dr', 'planned', '', null].includes(type); },
 
         getStatusIconColor(type, isClass=false) {
@@ -863,17 +1309,58 @@
 
         async deleteEntry(day, index) {
             const entry = day.entries[index];
-            if(entry.id) { try { await fetch(`/api/entry/${entry.id}`, { method: 'DELETE' }); } catch(e) {} }
+            if (entry.id) {
+                try {
+                    await this.writeJson(`/api/entry/${entry.id}`, {}, 'DELETE');
+                } catch (error) {
+                    this.showMsg(error.message, 'error');
+                    return;
+                }
+            }
             day.entries.splice(index, 1);
             if(day.entries.length === 0) { day.entries = [{type: '', start: '', end: '', net: 0, glz_override: null}]; }
             this.loadMonthData();
+        },
+
+        transferPayload(conflictMode = 'cancel') {
+            return { source_date: this.editingDay.date, target_date: this.transferDialog.target_date, operation: this.transferDialog.operation, conflict_mode: conflictMode };
+        },
+        async startTransfer() {
+            if (!this.editingDay || !this.transferDialog.target_date) return;
+            if (!this.isValidDate(this.transferDialog.target_date)) {
+                this.showMsg('Bitte ein gültiges Zieldatum eingeben.', 'error');
+                return;
+            }
+            try {
+                const data = await this.writeJson('/api/entry/copy-or-move', this.transferPayload());
+                await this.finishTransfer(data);
+            } catch (error) {
+                if (error.status === 409 && error.data && error.data.conflict) {
+                    this.transferConflict.data = error.data;
+                    this.transferConflict.show = true;
+                } else this.showMsg(error.message, 'error');
+            }
+        },
+        async confirmTransfer(conflictMode) {
+            try {
+                const data = await this.writeJson('/api/entry/copy-or-move', this.transferPayload(conflictMode));
+                this.transferConflict.show = false;
+                await this.finishTransfer(data);
+            } catch (error) { this.showMsg(error.message, 'error'); }
+        },
+        async finishTransfer(data) {
+            this.dialogEditDay = false;
+            const summary = `${data.copied_entries} übertragen, ${data.skipped_duplicates} Duplikate übersprungen, ${data.replaced_entries} ersetzt, ${data.glz_override_conflicts} GLZ-Konflikte.`;
+            this.showMsg(summary, 'success');
+            await this.loadMonthData();
+            if (this.viewMode === 'year') await this.loadYearData();
         },
 
         onEntryChange(day, entry) {
              if(['home', 'office', 'dr', 'planned'].includes(entry.type) && !entry.start) {
                 entry.start = this.settings.default_start_time || '08:00';
                 if(day.entries.length === 1) {
-                     const dailyTarget = this.calcDailyTarget;
+                     const dailyTarget = day.daily_target;
                      let startMin = 480; try { let p = entry.start.split(':'); startMin = parseInt(p[0])*60 + parseInt(p[1]); } catch(e){}
                      let grossHours = dailyTarget; if(dailyTarget > 9) grossHours += 0.75; else if(dailyTarget > 6) grossHours += 0.5;
                      const endMin = startMin + (grossHours * 60); const h = Math.floor(endMin / 60); const m = Math.round(endMin % 60);
@@ -888,7 +1375,13 @@
         },
 
         async saveSingleEntry(dateStr, entry) {
+            if (this.getTimeInputError(entry.start) || this.getTimeInputError(entry.end) || this.getGlzOverrideError(entry.glz_override)) {
+                this.showMsg('Bitte die markierten Eingaben prüfen.', 'error');
+                return;
+            }
             this.isSaving = true;
+            if (entry.start) entry.start = this.normalizeTimeInput(entry.start) || entry.start;
+            if (entry.end) entry.end = this.normalizeTimeInput(entry.end) || entry.end;
             if(entry.comment) entry.comment = entry.comment.trim();
 
             let payload = { ...entry, date: dateStr };
@@ -901,15 +1394,35 @@
                 payload.glz_override = null;
             }
 
-            const res = await fetch('/api/entry', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(payload) });
-            if(res.ok) {
-                const data = await res.json();
+            try {
+                const data = await this.writeJson('/api/entry', payload);
                 if(data.id) entry.id = data.id;
                 this.loadMonthData();
+            } catch (error) {
+                this.showMsg(error.message, 'error');
+                await this.loadMonthData();
+            } finally {
+                this.isSaving = false;
             }
-            this.isSaving = false;
         },
 
+        openTodayEntry() {
+            const today = new Date();
+            this.currentDate = new Date(today.getFullYear(), today.getMonth(), 1);
+            this.viewMode = 'list';
+            this.loadMonthData().then(() => {
+                const day = this.items.find(item => item.row_type === 'day' && item.date === this.getLocalTodayStr());
+                if (day) this.openEditDialog(day);
+                else this.showMsg('Der heutige Tag konnte nicht geladen werden.', 'error');
+            });
+        },
+        applyWeekTemplate(template) {
+            const types = { standard: '', office: 'office', home: 'home', vacation: 'vacation' };
+            this.seriesDialog.weekdays = [...(this.settings.active_weekdays || [0, 1, 2, 3, 4])];
+            this.seriesDialog.type = types[template];
+            this.seriesDialog.overwrite = false;
+            if (template === 'standard') this.showMsg('Standardwoche: Status bitte vor dem Ausführen auswählen.', 'info');
+        },
         openSeriesDialog() {
             const nextM = new Date(); nextM.setMonth(nextM.getMonth() + 1);
             const y = nextM.getFullYear(), m = nextM.getMonth();
@@ -918,30 +1431,104 @@
             this.seriesDialog.end = `${y}-${(m+1).toString().padStart(2,'0')}-${lastDay}`;
             this.seriesDialog.show = true;
         },
+        seriesPayload() {
+            return { start: this.seriesDialog.start, end: this.seriesDialog.end, weekdays: this.seriesDialog.weekdays, type: this.seriesDialog.type, overwrite: this.seriesDialog.overwrite };
+        },
         async saveSeriesPlan() {
-            this.seriesDialog.show = false; this.showMsg("Führe Serienplanung aus...", "info");
-            const payload = { start: this.seriesDialog.start, end: this.seriesDialog.end, weekdays: this.seriesDialog.weekdays, type: this.seriesDialog.type, overwrite: this.seriesDialog.overwrite };
+            if (Object.keys(this.seriesValidationErrors).length) {
+                this.showMsg('Bitte die markierten Angaben prüfen.', 'error');
+                return;
+            }
             try {
-                const res = await fetch('/api/plan/series', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(payload) });
-                if(res.ok) { this.showMsg("Planung erfolgreich!", "success"); this.loadMonthData(); } else { this.showMsg("Fehler beim Speichern", "error"); }
-            } catch(e) { this.showMsg("Fehler: " + e, "error"); }
+                const preview = await this.writeJson('/api/plan/series/preview', this.seriesPayload());
+                this.seriesPreview.data = preview;
+                this.seriesPreview.show = true;
+            } catch (error) {
+                this.showMsg(error.message, "error");
+            }
+        },
+        async confirmSeriesPlan() {
+            try {
+                const data = await this.writeJson('/api/plan/series', this.seriesPayload());
+                this.seriesPreview.show = false;
+                this.seriesDialog.show = false;
+                this.showMsg(`${data.created_dates.length} Tage geplant, ${data.skipped_existing_dates.length} übersprungen.`, "success");
+                await this.loadMonthData();
+                if (this.viewMode === 'year') await this.loadYearData();
+            } catch (error) {
+                this.showMsg(error.message, "error");
+            }
         },
 
         changeMonth(delta) { this.currentDate = new Date(this.currentDate.setMonth(this.currentDate.getMonth() + delta)); this.loadMonthData(); },
         changeYear(delta) { this.currentDate = new Date(this.currentDate.setFullYear(this.currentDate.getFullYear() + delta)); if(this.viewMode === 'year') this.loadYearData(); else this.loadMonthData(); },
 
-        async loadSettings() { try { const res = await fetch('/api/settings'); if(res.ok) this.settings = await res.json(); } catch(e){} },
-        async saveSettings() { await fetch('/api/settings', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(this.settings) }); this.dialogSettings = false; if(this.viewMode === 'year') this.loadYearData(); else this.loadMonthData(); },
+        async writeJson(url, payload, method = 'POST') {
+            let response;
+            try {
+                response = await fetch(url, { method, headers: {'Content-Type': 'application/json'}, body: JSON.stringify(payload) });
+            } catch (error) {
+                throw new Error('Netzwerkfehler. Änderungen wurden nicht gespeichert.');
+            }
+            let data = {};
+            try { data = await response.json(); } catch (error) {}
+            if (!response.ok || data.success === false) {
+                const error = new Error(data.message || 'Speichern fehlgeschlagen.');
+                error.status = response.status;
+                error.data = data;
+                throw error;
+            }
+            return data;
+        },
+        applyTheme(theme = this.settings.theme) {
+            const normalizedTheme = theme === 'light' ? 'light' : 'dark';
+            document.documentElement.dataset.theme = normalizedTheme;
+            vuetify.theme.change(normalizedTheme === 'light' ? 'bentoLight' : 'bentoDark');
+        },
+        async loadSettings() {
+            try {
+                const res = await fetch('/api/settings');
+                if (res.ok) this.settings = { ...this.settings, ...await res.json() };
+                this.applyTheme();
+            } catch(e) { this.showMsg('Einstellungen konnten nicht geladen werden.', 'error'); }
+        },
+        async saveSettings() {
+            try {
+                await this.writeJson('/api/settings', this.settings);
+                this.applyTheme();
+                this.dialogSettings = false;
+                if(this.viewMode === 'year') this.loadYearData(); else this.loadMonthData();
+                this.showMsg('Einstellungen gespeichert.', 'success');
+            } catch (error) {
+                this.showMsg(error.message, 'error');
+                await this.loadSettings();
+            }
+        },
 
-        async loadCustomHolidays() { try { const res = await fetch('/api/custom-holidays'); if(res.ok) this.customHolidays = await res.json(); } catch(e){} },
+        async loadCustomHolidays() { try { const res = await fetch('/api/custom-holidays'); if(res.ok) this.customHolidays = await res.json(); } catch(e) { this.showMsg('Sondertage konnten nicht geladen werden.', 'error'); } },
         editCustomHoliday(h) { this.newCustomHoliday = { id: h.id, date: h.date, name: h.name, hours: h.hours }; },
         async addCustomHoliday() {
-            if(!this.newCustomHoliday.date || !this.newCustomHoliday.name) return;
-            await fetch('/api/custom-holidays', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(this.newCustomHoliday) });
-            this.newCustomHoliday.id = null; this.newCustomHoliday.date = ''; this.newCustomHoliday.name = ''; this.newCustomHoliday.hours = 0;
-            this.loadCustomHolidays(); if(this.viewMode === 'year') this.loadYearData(); else this.loadMonthData();
+            const holiday = this.newCustomHoliday;
+            const hours = Number(holiday.hours);
+            const dateParts = /^([0-9]{4})-([0-9]{2})-([0-9]{2})$/.exec(holiday.date);
+            const parsedDate = dateParts && new Date(Number(dateParts[1]), Number(dateParts[2]) - 1, Number(dateParts[3]));
+            if (!parsedDate || parsedDate.getFullYear() !== Number(dateParts[1]) || parsedDate.getMonth() !== Number(dateParts[2]) - 1 || parsedDate.getDate() !== Number(dateParts[3])) return this.showMsg('Bitte ein gültiges Datum eingeben.', 'error');
+            if (!holiday.name || !holiday.name.trim()) return this.showMsg('Bitte eine Bezeichnung eingeben.', 'error');
+            if (!Number.isFinite(hours) || hours < 0) return this.showMsg('Die Stunden müssen endlich und nicht negativ sein.', 'error');
+            try {
+                await this.writeJson('/api/custom-holidays', { ...holiday, name: holiday.name.trim(), hours });
+                this.newCustomHoliday = { id: null, date: '', name: '', hours: 0 };
+                await this.loadCustomHolidays(); if(this.viewMode === 'year') this.loadYearData(); else this.loadMonthData();
+                this.showMsg('Sondertag gespeichert.', 'success');
+            } catch (error) { this.showMsg(error.message, 'error'); }
         },
-        async deleteCustomHoliday(id) { await fetch(`/api/custom-holidays/${id}`, { method: 'DELETE' }); this.loadCustomHolidays(); if(this.viewMode === 'year') this.loadYearData(); else this.loadMonthData(); },
+        async deleteCustomHoliday(id) {
+            try {
+                await this.writeJson(`/api/custom-holidays/${id}`, {}, 'DELETE');
+                await this.loadCustomHolidays(); if(this.viewMode === 'year') this.loadYearData(); else this.loadMonthData();
+                this.showMsg('Sondertag gelöscht.', 'success');
+            } catch (error) { this.showMsg(error.message, 'error'); }
+        },
         addWaeldchestag() {
             const y = this.currentYear;
             const a=y%19, b=Math.floor(y/100), c=y%100, dd=Math.floor(b/4), e=b%4, f=Math.floor((b+8)/25), g=Math.floor((b-f+1)/3), h=(19*a+b-dd-g+15)%30, i=Math.floor(c/4), k=c%4, l=(32+2*e+2*i-h-k)%7, m_easter=Math.floor((a+11*h+22*l)/451);
@@ -984,7 +1571,6 @@
         },
 
         destroyCharts() {
-            if (activeCharts.donut) { activeCharts.donut.destroy(); activeCharts.donut = null; }
             if (activeCharts.bar) { activeCharts.bar.destroy(); activeCharts.bar = null; }
         },
 
@@ -992,27 +1578,12 @@
             if (!window.Chart || !this.yearData || this.yearData.length === 0) return;
             this.destroyCharts();
 
-            const ctxDonut = document.getElementById('donutChart');
             const ctxBar = document.getElementById('barChart');
-            if (!ctxDonut || !ctxBar) return;
+            if (!ctxBar) return;
 
             Chart.defaults.color = '#94a3b8';
             Chart.defaults.borderColor = 'rgba(255, 255, 255, 0.05)';
             Chart.defaults.font.family = "'Inter', sans-serif";
-
-            activeCharts.donut = new Chart(ctxDonut, {
-                type: 'doughnut',
-                data: {
-                    labels: ['Home Office', 'Büro', 'Urlaub'],
-                    datasets: [{
-                        data: [this.yearTotalHo, this.yearTotalOffice, this.yearTotalVacation],
-                        backgroundColor: ['#10b981', '#818cf8', '#d946ef'],
-                        borderWidth: 0,
-                        hoverOffset: 4
-                    }]
-                },
-                options: { responsive: true, maintainAspectRatio: false, cutout: '75%', plugins: { legend: { position: 'right', labels: { boxWidth: 10, usePointStyle: true } } } }
-            });
 
             activeCharts.bar = new Chart(ctxBar, {
                 type: 'bar',
@@ -1025,7 +1596,7 @@
                         borderRadius: 6
                     }]
                 },
-                options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, grid: { display: true } }, x: { grid: { display: false } } } }
+                options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false }, tooltip: { callbacks: { label: context => `Homeoffice: ${context.parsed.y} Tage` } } }, scales: { y: { beginAtZero: true, title: { display: true, text: 'Tage' }, ticks: { precision: 0 }, grid: { display: true } }, x: { grid: { display: false } } } }
             });
         }
       }
@@ -1034,6 +1605,10 @@
     app.config.compilerOptions.delimiters = ['[[', ']]'];
     app.use(vuetify);
     app.mount('#app');
+    } catch (error) {
+      console.error('HO-Planer-Initialisierung fehlgeschlagen:', error);
+      showRuntimeError(`Initialisierung fehlgeschlagen: ${error.message || String(error)}`);
+    }
   </script>
 </body>
 </html>

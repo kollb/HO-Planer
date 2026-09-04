@@ -5,6 +5,7 @@ from werkzeug.exceptions import RequestEntityTooLarge
 from models import db, Settings, CustomHoliday, WorkEntry
 from logic import calculate_daily_net_hours, calculate_gross_hours, get_day_info, normalize_time_str, calculate_gross_time_needed
 import json
+import math
 import os
 import sqlite3
 import time
@@ -121,9 +122,7 @@ def auto_convert_expired_planned_days():
         if not expired_entries: return 
 
         year = get_local_now().year
-        he_holidays = holidays.DE(subdiv='HE', years=year)
-        he_holidays[date(year, 12, 24)] = "Heiligabend"
-        he_holidays[date(year, 12, 31)] = "Silvester"
+        he_holidays = hessen_holidays(settings, year)
         custom_map = {datetime.strptime(c.date, "%Y-%m-%d").date(): c for c in CustomHoliday.query.all()}
         def_start = settings.default_start_time if settings.default_start_time else "08:00"
 
@@ -147,9 +146,63 @@ def auto_convert_expired_planned_days():
     except Exception as e:
         app.logger.error(f"Auto-Convert Fehler: {e}", exc_info=True)
 
-def is_valid_date(date_str): return bool(re.match(r'^\d{4}-\d{2}-\d{2}$', str(date_str)))
-def is_valid_time(time_str): return bool(re.match(r'^([01]\d|2[0-3]):([0-5]\d)$', str(time_str))) if time_str else True
+def is_valid_date(date_str):
+    if not isinstance(date_str, str) or not re.match(r'^\d{4}-\d{2}-\d{2}$', date_str):
+        return False
+    try:
+        datetime.strptime(date_str, '%Y-%m-%d')
+        return True
+    except ValueError:
+        return False
+
+
+def is_valid_time(time_str):
+    return time_str == '' or (isinstance(time_str, str) and bool(re.fullmatch(r'([01]\d|2[0-3]):[0-5]\d', time_str)))
+
+
+def finite_number(value):
+    if isinstance(value, bool):
+        return None
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return None
+    return number if math.isfinite(number) else None
+
+
+def normalized_bool(value):
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        normalized = value.strip().lower()
+        if normalized in ('true', '1', 'yes', 'on'):
+            return True
+        if normalized in ('false', '0', 'no', 'off'):
+            return False
+    return None
+
+
+def normalized_weekdays(value):
+    if not isinstance(value, list):
+        return None
+    if any(isinstance(day, bool) or not isinstance(day, int) or day < 0 or day > 6 for day in value):
+        return None
+    if not value or len(set(value)) != len(value):
+        return None
+    return value
+
+
 VALID_TYPES = ['home', 'office', 'dr', 'planned', 'sick', 'vacation', 'glz', '']
+VALID_GLZ_OVERRIDE_SOURCES = {'manual', 'pdf', None}
+
+
+def hessen_holidays(settings, years):
+    holiday_map = holidays.DE(subdiv='HE', years=years)
+    if getattr(settings, 'christmas_eve_and_new_years_eve_off', True):
+        for year in (years if isinstance(years, (list, tuple, range, set)) else [years]):
+            holiday_map[date(year, 12, 24)] = 'Heiligabend'
+            holiday_map[date(year, 12, 31)] = 'Silvester'
+    return holiday_map
 
 with app.app_context():
     db.create_all()
@@ -162,10 +215,12 @@ with app.app_context():
 def get_glz_carryover(year, month, settings, custom_map):
     target_date = date(year, month, 1) - timedelta(days=1)
     
+    # Bei mehreren Ankern am selben Datum ist der zuletzt gespeicherte Eintrag
+    # maßgeblich. Die ID macht diese Regel unabhängig von der DB-Standardreihenfolge.
     last_override = WorkEntry.query.filter(
         WorkEntry.date <= str(target_date),
         WorkEntry.glz_override.isnot(None)
-    ).order_by(WorkEntry.date.desc()).first()
+    ).order_by(WorkEntry.date.desc(), WorkEntry.id.desc()).first()
     
     if last_override:
         running_glz = last_override.glz_override
@@ -193,10 +248,7 @@ def get_glz_carryover(year, month, settings, custom_map):
         entries_by_date[e.date].append(e)
         
     years = list(range(start_date.year, target_date.year + 1))
-    he_hols = holidays.DE(subdiv='HE', years=years)
-    for y in years:
-        he_hols[date(y, 12, 24)] = "Heiligabend"
-        he_hols[date(y, 12, 31)] = "Silvester"
+    he_hols = hessen_holidays(settings, years)
         
     today_str = str(get_local_now().date())
         
@@ -328,12 +380,10 @@ def parse_pdf_content(file_obj, include_report=False):
                     comment = 'Betriebsausflug' if 'betriebsausflug' in row_text.lower() else ''
                     if not entry_type:
                         comment = '⚠️ PDF-Prüfung erforderlich: unbekannter Status'
-                        report['warnings'].append(f"Tag {current_day:02d}: Zeiten ohne bekannten Status als Prüfeintrag übernommen.")
+                        report['warnings'].append(f"Tag {current_day:02d}: unbekannter Status; Zeiten als Prüfeintrag übernommen.")
+                        report['warnings'].append(f"Tag {current_day:02d}: Eintrag mit unbekannten Status prüfen.")
                     for index in range(0, len(times), 2):
                         start_time, end_time = times[index], times[index + 1]
-                        if end_time < start_time:
-                            entry_type, comment = '', '⚠️ PDF-Prüfung erforderlich: Endzeit vor Startzeit'
-                            report['warnings'].append(f"Tag {current_day:02d}: Endzeit vor Startzeit ({start_time}–{end_time}); Prüfeintrag.")
                         blocks.append({'type': entry_type, 'times': [start_time, end_time], 'glz_override': glz_override if index == 0 and not blocks else None, 'comment': comment})
                 elif found_type in ('vacation', 'sick', 'glz'):
                     blocks.append({'type': found_type, 'times': [], 'glz_override': glz_override if not blocks else None, 'comment': ''})
@@ -346,6 +396,62 @@ def parse_pdf_content(file_obj, include_report=False):
     if not extracted_entries:
         report['warnings'].append('Keine importierbaren Tagesbuchungen erkannt.')
     return (extracted_entries, report) if include_report else extracted_entries
+
+def pdf_block_identity(entry):
+    """Identifiziert einen PDF-Zeitblock unabhängig von Kommentar und GLZ-Anker."""
+    if isinstance(entry, dict):
+        return (
+            entry.get('type', '') or '',
+            entry.get('start_time', entry.get('start', '')) or '',
+            entry.get('end_time', entry.get('end', '')) or '',
+        )
+    return (
+        getattr(entry, 'type', '') or '',
+        getattr(entry, 'start_time', getattr(entry, 'start', '')) or '',
+        getattr(entry, 'end_time', getattr(entry, 'end', '')) or '',
+    )
+
+
+def merge_pdf_entries(existing_entries, pdf_entries):
+    """Führt PDF-Blöcke additiv zusammen und bewahrt manuelle Daten vor Überschreiben."""
+    result = {
+        'entries_to_add': [],
+        'skipped_duplicates': 0,
+        'comment_hints': 0,
+        'glz_override_conflicts': 0,
+    }
+    existing_by_identity = {pdf_block_identity(entry): entry for entry in existing_entries}
+    known_identities = set(existing_by_identity)
+    existing_glz = next((entry.glz_override for entry in existing_entries if entry.glz_override is not None), None)
+
+    for pdf_entry in pdf_entries:
+        identity = pdf_block_identity(pdf_entry)
+        existing = existing_by_identity.get(identity)
+        if identity in known_identities:
+            result['skipped_duplicates'] += 1
+            if existing:
+                pdf_comment = pdf_entry.get('comment', '')
+                if not (existing.comment or '') and pdf_comment:
+                    existing.comment = pdf_comment
+                    result['comment_hints'] += 1
+                elif (existing.comment or '') and pdf_comment and existing.comment != pdf_comment:
+                    result['comment_hints'] += 1
+                if pdf_entry.get('glz_override') is not None and existing_glz is not None and existing_glz != pdf_entry['glz_override']:
+                    result['glz_override_conflicts'] += 1
+            continue
+
+        entry_to_add = dict(pdf_entry)
+        if entry_to_add.get('glz_override') is not None and existing_glz is not None and existing_glz != entry_to_add['glz_override']:
+            entry_to_add['glz_override'] = None
+            result['glz_override_conflicts'] += 1
+        elif entry_to_add.get('glz_override') is not None:
+            existing_glz = entry_to_add['glz_override']
+        result['entries_to_add'].append(entry_to_add)
+        existing_by_identity[identity] = None
+        known_identities.add(identity)
+
+    return result
+
 
 # --- API ROUTEN ---
 @app.route('/')
@@ -362,22 +468,43 @@ def beta_index():
 def handle_settings():
     settings = db.session.query(Settings).first()
     if request.method == 'POST':
-        data = request.json
-        if not data: return jsonify({"success": False, "message": "Keine Daten"}), 400
-        try:
-            settings.weekly_hours = float(data.get('weekly_hours', 39))
-            active_list = data.get('active_weekdays', [0,1,2,3,4])
-            clean_list = [str(i) for i in active_list if isinstance(i, int) and 0 <= i <= 6]
-            settings.active_weekdays = ",".join(clean_list)
-            settings.ho_quota_percent = int(data.get('ho_quota_percent', 60))
-            settings.hide_weekends = bool(data.get('hide_weekends', True))
-            def_start = data.get('default_start_time', '08:00')
-            settings.default_start_time = normalize_time_str(def_start) if def_start else '08:00'
-            settings.auto_convert_planned = bool(data.get('auto_convert_planned', True))
-            db.session.commit()
-            return jsonify({"success": True})
-        except ValueError:
-            return jsonify({"success": False, "message": "Ungültiges Datenformat"}), 400
+        data = request.get_json(silent=True)
+        if not isinstance(data, dict):
+            return jsonify({"success": False, "message": "Ungültiger Request-Body"}), 400
+
+        weekly_hours = finite_number(data.get('weekly_hours', settings.weekly_hours))
+        ho_quota = finite_number(data.get('ho_quota_percent', settings.ho_quota_percent))
+        active_list = normalized_weekdays(data.get('active_weekdays', [int(day) for day in settings.active_weekdays.split(',') if day]))
+        hide_weekends = normalized_bool(data.get('hide_weekends', settings.hide_weekends))
+        auto_convert_planned = normalized_bool(data.get('auto_convert_planned', settings.auto_convert_planned))
+        year_end_off = normalized_bool(data.get('christmas_eve_and_new_years_eve_off', getattr(settings, 'christmas_eve_and_new_years_eve_off', True)))
+        theme = data.get('theme', getattr(settings, 'theme', 'dark'))
+        default_start = data.get('default_start_time', settings.default_start_time)
+        normalized_start = normalize_time_str(default_start) if default_start else None
+
+        if weekly_hours is None or weekly_hours <= 0:
+            return jsonify({"success": False, "message": "Ungültige Wochenstunden"}), 400
+        if ho_quota is None or not 0 <= ho_quota <= 100:
+            return jsonify({"success": False, "message": "Ungültige Home-Office-Quote"}), 400
+        if active_list is None:
+            return jsonify({"success": False, "message": "Ungültige aktive Wochentage"}), 400
+        if hide_weekends is None or auto_convert_planned is None or year_end_off is None:
+            return jsonify({"success": False, "message": "Ungültiger Wahrheitswert"}), 400
+        if theme not in ('dark', 'light'):
+            return jsonify({"success": False, "message": "Ungültiges Theme"}), 400
+        if normalized_start is None:
+            return jsonify({"success": False, "message": "Ungültige Standardstartzeit"}), 400
+
+        settings.weekly_hours = weekly_hours
+        settings.active_weekdays = ",".join(str(day) for day in active_list)
+        settings.ho_quota_percent = ho_quota
+        settings.hide_weekends = hide_weekends
+        settings.default_start_time = normalized_start
+        settings.auto_convert_planned = auto_convert_planned
+        settings.christmas_eve_and_new_years_eve_off = year_end_off
+        settings.theme = theme
+        db.session.commit()
+        return jsonify({"success": True})
     
     active_list = [int(x) for x in settings.active_weekdays.split(',')] if settings.active_weekdays else [0,1,2,3,4]
     return jsonify({ 
@@ -386,7 +513,9 @@ def handle_settings():
         "ho_quota_percent": settings.ho_quota_percent,
         "hide_weekends": settings.hide_weekends,
         "default_start_time": settings.default_start_time,
-        "auto_convert_planned": settings.auto_convert_planned
+        "auto_convert_planned": settings.auto_convert_planned,
+        "christmas_eve_and_new_years_eve_off": getattr(settings, 'christmas_eve_and_new_years_eve_off', True),
+        "theme": getattr(settings, 'theme', 'dark')
     })
 
 @app.route('/api/month/<int:year>/<int:month>', methods=['GET'])
@@ -394,9 +523,7 @@ def get_month_data(year, month):
     auto_convert_expired_planned_days()
     settings = db.session.query(Settings).first()
     
-    he_holidays = holidays.DE(subdiv='HE', years=year)
-    he_holidays[date(year, 12, 24)] = "Heiligabend"
-    he_holidays[date(year, 12, 31)] = "Silvester"
+    he_holidays = hessen_holidays(settings, year)
     custom_map = {datetime.strptime(c.date, "%Y-%m-%d").date(): c for c in CustomHoliday.query.all()}
     
     month_str = f"{year}-{month:02d}"
@@ -529,6 +656,7 @@ def get_month_data(year, month):
         "stats": {
             "total_ho_made": round(total_ho, 2), "total_office_made": round(total_office, 2),
             "total_work_made": round(total_ho + total_office, 2), "total_ho_allowed": round(max_ho, 2),
+            "work_hours_target": round(total_target_hours_month, 2),
             "avg_per_week": avg_per_week, "workdays_month": workdays, "current_glz": round(running_glz, 2)
         }
     })
@@ -536,7 +664,7 @@ def get_month_data(year, month):
 @app.route('/api/year/<int:year>', methods=['GET'])
 def get_year_data(year):
     settings = db.session.query(Settings).first()
-    he_holidays = holidays.DE(state='HE', years=year)
+    he_holidays = hessen_holidays(settings, year)
     custom_map = {datetime.strptime(c.date, "%Y-%m-%d").date(): c for c in CustomHoliday.query.all()}
     
     today_str = str(get_local_now().date())
@@ -549,18 +677,29 @@ def get_year_data(year):
         
         ho_h, off_h, wd_count, target_month = 0.0, 0.0, 0, 0.0
         d_ho, d_off, d_vac = set(), set(), set()
-        
-        num_days = calendar.monthrange(year, m)[1]
-        for day in range(1, num_days+1):
-            dt = date(year, m, day)
-            inf = get_day_info(dt, settings, he_holidays, custom_map)
-            if inf["is_workday"]: 
-                wd_count += 1
-                target_month += inf["target"]
-        
+        holiday_preview = []
+        planned_workdays = 0
+        open_workdays = 0
+
         entries_by_date = {}
         for entry in m_entries:
             entries_by_date.setdefault(entry.date, []).append(entry)
+
+        num_days = calendar.monthrange(year, m)[1]
+        for day in range(1, num_days+1):
+            dt = date(year, m, day)
+            date_str = str(dt)
+            inf = get_day_info(dt, settings, he_holidays, custom_map)
+            if inf["holiday_name"]:
+                holiday_preview.append(f"{day}. {inf['holiday_name']}")
+            if inf["is_workday"]:
+                wd_count += 1
+                target_month += inf["target"]
+                day_entries = entries_by_date.get(date_str, [])
+                if any(entry.type == "planned" for entry in day_entries):
+                    planned_workdays += 1
+                elif not day_entries:
+                    open_workdays += 1
 
         for entry_date, day_entries in entries_by_date.items():
             timed_entries = [
@@ -596,17 +735,22 @@ def get_year_data(year):
             "days_vacation": len(d_vac), "ho_hours_made": round(ho_h, 2), 
             "ho_hours_allowed": round(target_month * (settings.ho_quota_percent/100), 2), 
             "office_hours_made": round(off_h, 2),
-            "work_hours_target": round(target_month, 2)
+            "work_hours_target": round(target_month, 2),
+            "holiday_preview": holiday_preview,
+            "planned_workdays": planned_workdays,
+            "open_workdays": open_workdays
         })
     return jsonify(data)
 
 @app.route('/api/entry', methods=['POST'])
 def save_entry():
-    d = request.json
-    if not d: return jsonify({"success": False, "message": "Keine Daten empfangen"}), 400
+    d = request.get_json(silent=True)
+    if not isinstance(d, dict): return jsonify({"success": False, "message": "Ungültiger Request-Body"}), 400
     if not is_valid_date(d.get('date')): return jsonify({"success": False, "message": "Ungültiges Datum"}), 400
     if d.get('type') not in VALID_TYPES: return jsonify({"success": False, "message": "Ungültiger Typ"}), 400
-    
+    for field in ('start', 'end'):
+        if field in d and not is_valid_time(d[field]):
+            return jsonify({"success": False, "message": "Ungültige Zeit"}), 400
     if d.get('id'):
         entry = db.session.get(WorkEntry, d.get('id'))
         if not entry: return jsonify({"success": False, "message": "Nicht gefunden"}), 404
@@ -619,13 +763,17 @@ def save_entry():
     entry.end_time = normalize_time_str(d.get('end'))
     entry.comment = d.get('comment').strip() if d.get('comment') else ''
     
+    if 'glz_override_source' in d and d['glz_override_source'] not in ('manual', 'pdf', None):
+        return jsonify({"success": False, "message": "Ungültige GLZ-Quelle"}), 400
+
     if 'glz_override' in d:
         val = d.get('glz_override')
-        if val is not None and str(val).strip() != '': 
-            new_val = float(val)
-            if entry.glz_override != new_val:
-                entry.glz_override = new_val
-                entry.glz_override_source = 'manual'
+        if val is not None and str(val).strip() != '':
+            new_val = finite_number(val)
+            if new_val is None:
+                return jsonify({"success": False, "message": "Ungültiger GLZ-Abgleich"}), 400
+            entry.glz_override = new_val
+            entry.glz_override_source = d.get('glz_override_source', 'manual')
         else: 
             entry.glz_override = None
             entry.glz_override_source = None
@@ -647,77 +795,206 @@ def delete_entry(id):
         db.session.commit()
     return jsonify({"success": True})
 
+@app.route('/api/entry/copy-or-move', methods=['POST'])
+def copy_or_move_entries():
+    """Kopiert oder verschiebt einen vollständigen Tag mit expliziter Konfliktstrategie."""
+    payload = request.get_json(silent=True)
+    if not isinstance(payload, dict):
+        return jsonify({"success": False, "message": "Ungültiger Request-Body"}), 400
+
+    source_date = payload.get('source_date')
+    target_date = payload.get('target_date')
+    operation = payload.get('operation')
+    conflict_mode = payload.get('conflict_mode', 'cancel')
+    if not is_valid_date(source_date) or not is_valid_date(target_date):
+        return jsonify({"success": False, "message": "Ungültiges Datum"}), 400
+    if source_date == target_date:
+        return jsonify({"success": False, "message": "Quell- und Zieldatum müssen unterschiedlich sein"}), 400
+    if operation not in ('copy', 'move'):
+        return jsonify({"success": False, "message": "Ungültige Operation"}), 400
+    if conflict_mode not in ('cancel', 'merge', 'overwrite'):
+        return jsonify({"success": False, "message": "Ungültige Konfliktstrategie"}), 400
+
+    source_entries = WorkEntry.query.filter_by(date=source_date).order_by(WorkEntry.id).all()
+    if not source_entries:
+        return jsonify({"success": False, "message": "Am Quelldatum sind keine Einträge vorhanden"}), 404
+    target_entries = WorkEntry.query.filter_by(date=target_date).order_by(WorkEntry.id).all()
+    if target_entries and conflict_mode == 'cancel':
+        return jsonify({
+            "success": False,
+            "conflict": True,
+            "message": "Das Zieldatum enthält bereits Einträge. Bitte Zusammenführen oder Überschreiben ausdrücklich bestätigen.",
+            "source_entries": len(source_entries),
+            "target_entries": len(target_entries),
+        }), 409
+
+    try:
+        overwritten_entries = 0
+        skipped_duplicates = 0
+        glz_override_conflicts = 0
+        entries_to_copy = source_entries
+
+        if target_entries and conflict_mode == 'overwrite':
+            overwritten_entries = len(target_entries)
+            for entry in target_entries:
+                db.session.delete(entry)
+            known_entries = set()
+            target_glz_override = None
+        else:
+            known_entries = {
+                (entry.type, entry.start_time or '', entry.end_time or '', entry.comment or '')
+                for entry in target_entries
+            }
+            target_glz_override = next(
+                (entry.glz_override for entry in target_entries if entry.glz_override is not None),
+                None,
+            )
+
+        copied_entries = 0
+        # Beim Verschieben wird die Quelle erst gelöscht, nachdem alle Zielblöcke
+        # vorbereitet sind. Der abschließende Commit bleibt atomar.
+        for entry in entries_to_copy:
+            identity = (entry.type, entry.start_time or '', entry.end_time or '', entry.comment or '')
+            if identity in known_entries:
+                skipped_duplicates += 1
+                continue
+
+            glz_override = entry.glz_override
+            glz_override_source = entry.glz_override_source
+            if glz_override is not None:
+                if target_glz_override is not None and target_glz_override != glz_override:
+                    glz_override = None
+                    glz_override_source = None
+                    glz_override_conflicts += 1
+                else:
+                    target_glz_override = glz_override
+
+            db.session.add(WorkEntry(
+                date=target_date,
+                type=entry.type,
+                start_time=entry.start_time,
+                end_time=entry.end_time,
+                comment=entry.comment,
+                glz_override=glz_override,
+                glz_override_source=glz_override_source,
+            ))
+            known_entries.add(identity)
+            copied_entries += 1
+
+        if operation == 'move':
+            for entry in source_entries:
+                db.session.delete(entry)
+
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+        app.logger.exception("Kopieren/Verschieben fehlgeschlagen")
+        return jsonify({"success": False, "message": "Kopieren oder Verschieben konnte nicht gespeichert werden."}), 500
+
+    action = 'verschoben' if operation == 'move' else 'kopiert'
+    suffix = ' und Ziel überschrieben' if target_entries and conflict_mode == 'overwrite' else ''
+    suffix = ' und mit dem Ziel zusammengeführt' if target_entries and conflict_mode == 'merge' else suffix
+    return jsonify({
+        "success": True,
+        "message": f"{copied_entries} Einträge {action}{suffix}.",
+        "copied_entries": copied_entries,
+        "skipped_duplicates": skipped_duplicates,
+        "replaced_entries": overwritten_entries,
+        "glz_override_conflicts": glz_override_conflicts,
+    })
+
+def build_series_plan(payload):
+    """Ermittelt eine Serienplanung ohne Daten zu verändern."""
+    if not isinstance(payload, dict):
+        return None, ("Ungültiger Request-Body", 400)
+    if not is_valid_date(payload.get('start')) or not is_valid_date(payload.get('end')):
+        return None, ("Ungültiger Zeitraum", 400)
+
+    start_date = datetime.strptime(payload['start'], '%Y-%m-%d').date()
+    end_date = datetime.strptime(payload['end'], '%Y-%m-%d').date()
+    weekdays = normalized_weekdays(payload.get('weekdays'))
+    target_type = payload.get('type')
+    overwrite = normalized_bool(payload.get('overwrite', False))
+    if start_date > end_date:
+        return None, ("Ungültiger Zeitraum", 400)
+    if weekdays is None:
+        return None, ("Ungültige Wochentage", 400)
+    # Ein leerer Status ist kein speicherbarer Serienplan. Das verhindert, dass
+    # die UI-Vorlage "Standardwoche" versehentlich Leerblöcke erzeugt.
+    if target_type not in VALID_TYPES or target_type == '':
+        return None, ("Für die Serienplanung ist ein konkreter Typ erforderlich", 400)
+    if overwrite is None:
+        return None, ("Ungültiger Wahrheitswert", 400)
+
+    settings = Settings.query.first()
+    default_start = settings.default_start_time or "08:00"
+    existing_by_date = {}
+    for entry in WorkEntry.query.filter(WorkEntry.date >= str(start_date), WorkEntry.date <= str(end_date)).all():
+        existing_by_date.setdefault(entry.date, []).append(entry)
+    custom_map = {datetime.strptime(item.date, "%Y-%m-%d").date(): item for item in CustomHoliday.query.all()}
+    holidays = hessen_holidays(settings, list(range(start_date.year, end_date.year + 1)))
+    today = get_local_now().date()
+    plan = {"entries": [], "created_dates": [], "skipped_existing_dates": [], "overwritten_dates": [], "excluded_dates": []}
+
+    current = start_date
+    while current <= end_date:
+        day_iso = str(current)
+        if current.weekday() not in weekdays:
+            current += timedelta(days=1)
+            continue
+        day_info = get_day_info(current, settings, holidays, custom_map)
+        if not day_info['is_workday']:
+            plan['excluded_dates'].append(day_iso)
+            current += timedelta(days=1)
+            continue
+
+        existing = existing_by_date.get(day_iso, [])
+        if existing and not overwrite:
+            plan['skipped_existing_dates'].append(day_iso)
+            current += timedelta(days=1)
+            continue
+        if existing:
+            plan['overwritten_dates'].append(day_iso)
+
+        final_type, start_time, end_time = target_type, '', ''
+        if target_type == 'home' and current > today:
+            final_type = 'planned'
+        elif target_type in ('home', 'office', 'dr') and day_info['target'] > 0:
+            start_time = normalize_time_str(default_start)
+            start_hours, start_minutes_part = map(int, start_time.split(':'))
+            start_minutes = start_hours * 60 + start_minutes_part
+            end_minutes = start_minutes + calculate_gross_time_needed(day_info['target']) * 60
+            end_time = f"{int(end_minutes // 60):02d}:{int(end_minutes % 60):02d}"
+        plan['entries'].append({"date": day_iso, "type": final_type, "start": start_time, "end": end_time})
+        plan['created_dates'].append(day_iso)
+        current += timedelta(days=1)
+    return plan, None
+
+
+@app.route('/api/plan/series/preview', methods=['POST'])
+def preview_series_plan():
+    plan, error = build_series_plan(request.get_json(silent=True))
+    if error:
+        return jsonify({"success": False, "message": error[0]}), error[1]
+    return jsonify({"success": True, **plan})
+
+
 @app.route('/api/plan/series', methods=['POST'])
 def plan_series():
-    d = request.json
+    plan, error = build_series_plan(request.get_json(silent=True))
+    if error:
+        return jsonify({"success": False, "message": error[0]}), error[1]
     try:
-        if not is_valid_date(d.get('start')) or not is_valid_date(d.get('end')):
-            return jsonify({"success": False, "message": "Ungültiger Zeitraum"}), 400
-            
-        start_date = datetime.strptime(d['start'], '%Y-%m-%d').date()
-        end_date = datetime.strptime(d['end'], '%Y-%m-%d').date()
-        weekdays = [int(x) for x in d['weekdays']]
-        target_type = d.get('type')
-        overwrite = d.get('overwrite', False)
-        
-        if target_type not in VALID_TYPES: return jsonify({"success": False, "message": "Ungültiger Typ"}), 400
-        
-        settings = db.session.query(Settings).first()
-        def_start = settings.default_start_time if settings.default_start_time else "08:00"
-
-        all_existing = WorkEntry.query.filter(WorkEntry.date >= str(start_date), WorkEntry.date <= str(end_date)).all()
-        existing_by_date = {}
-        for entry in all_existing:
-            if entry.date not in existing_by_date: existing_by_date[entry.date] = []
-            existing_by_date[entry.date].append(entry)
-            
-        today_date = get_local_now().date()
-        custom_map = {datetime.strptime(c.date, "%Y-%m-%d").date(): c for c in CustomHoliday.query.all()}
-        
-        curr = start_date
-        while curr <= end_date:
-            if curr.weekday() in weekdays:
-                s_date = str(curr)
-                he_hols = holidays.DE(state='HE', years=curr.year)
-                
-                if curr in he_hols and not (curr.month==12 and curr.day in [24,31]):
-                    curr += timedelta(days=1)
-                    continue
-
-                existing_entries_for_day = existing_by_date.get(s_date, [])
-                
-                if overwrite and existing_entries_for_day:
-                    for e in existing_entries_for_day: db.session.delete(e)
-                    existing_entries_for_day = []
-                
-                if not existing_entries_for_day:
-                    final_type = target_type
-                    start_t = ""
-                    end_t = ""
-
-                    if target_type == 'home' and curr > today_date:
-                        final_type = 'planned'
-                    elif target_type in ['home', 'office', 'dr']:
-                        info = get_day_info(curr, settings, he_hols, custom_map)
-                        target_hours = info["target"]
-                        if target_hours > 0:
-                            start_t = normalize_time_str(def_start)
-                            gross_hours = calculate_gross_time_needed(target_hours)
-                            sh, sm = map(int, start_t.split(':'))
-                            start_minutes = sh * 60 + sm
-                            end_minutes = start_minutes + (gross_hours * 60)
-                            end_t = f"{int(end_minutes // 60):02d}:{int(end_minutes % 60):02d}"
-
-                    db.session.add(WorkEntry(date=s_date, type=final_type, start_time=start_t, end_time=end_t))
-            
-            curr += timedelta(days=1)
-            
+        for day_iso in plan['overwritten_dates']:
+            WorkEntry.query.filter_by(date=day_iso).delete()
+        for entry in plan['entries']:
+            db.session.add(WorkEntry(date=entry['date'], type=entry['type'], start_time=entry['start'], end_time=entry['end']))
         db.session.commit()
-        return jsonify({"success": True})
-        
-    except Exception as e:
-        app.logger.error(f"Fehler im Serienplaner: {e}", exc_info=True)
-        return jsonify({"success": False, "message": "Ein Fehler ist beim Speichern aufgetreten."}), 400
+        return jsonify({"success": True, **plan})
+    except Exception:
+        db.session.rollback()
+        app.logger.exception("Fehler im Serienplaner")
+        return jsonify({"success": False, "message": "Ein Fehler ist beim Speichern aufgetreten."}), 500
 
 @app.route('/api/custom-holidays', methods=['GET', 'POST'])
 def handle_custom_holidays():
@@ -725,28 +1002,40 @@ def handle_custom_holidays():
         hols = CustomHoliday.query.all()
         return jsonify(sorted([{'id': h.id, 'date': h.date, 'name': h.name, 'hours': h.hours or 0} for h in hols], key=lambda x: x['date']))
     
-    data = request.json
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict): return jsonify({"success": False, "message": "Ungültiger Request-Body"}), 400
     if not is_valid_date(data.get('date')): return jsonify({"success": False, "message": "Ungültiges Datum"}), 400
+    if not isinstance(data.get('name'), str) or not data['name'].strip(): return jsonify({"success": False, "message": "Ungültiger Name"}), 400
+    hours = finite_number(data.get('hours', 0))
+    if hours is None or hours < 0: return jsonify({"success": False, "message": "Ungültige Stunden"}), 400
         
     holiday_id = data.get('id')
     
+    existing_for_date = CustomHoliday.query.filter_by(date=data['date']).first()
     if holiday_id:
         existing = db.session.get(CustomHoliday, holiday_id)
-        if existing:
+        if not existing:
+            return jsonify({"success": False, "message": "Sondertag nicht gefunden"}), 404
+        if existing_for_date and existing_for_date.id != existing.id:
+            existing_for_date.name = data['name'].strip()
+            existing_for_date.hours = hours
+            db.session.delete(existing)
+        else:
             existing.date = data['date']
-            existing.name = data['name']
-            existing.hours = float(data.get('hours', 0))
-        else:
-            db.session.add(CustomHoliday(date=data['date'], name=data['name'], hours=float(data.get('hours', 0))))
+            existing.name = data['name'].strip()
+            existing.hours = hours
+    elif existing_for_date:
+        existing_for_date.name = data['name'].strip()
+        existing_for_date.hours = hours
     else:
-        existing = CustomHoliday.query.filter_by(date=data['date']).first()
-        if existing:
-            existing.name = data['name']
-            existing.hours = float(data.get('hours', 0))
-        else:
-            db.session.add(CustomHoliday(date=data['date'], name=data['name'], hours=float(data.get('hours', 0))))
-        
-    db.session.commit()
+        db.session.add(CustomHoliday(date=data['date'], name=data['name'].strip(), hours=hours))
+
+    try:
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+        app.logger.exception("Sondertag konnte nicht gespeichert werden")
+        return jsonify({"success": False, "message": "Sondertag konnte nicht gespeichert werden"}), 409
     return jsonify({"success": True})
 
 @app.route('/api/custom-holidays/<int:id>', methods=['DELETE'])
@@ -783,6 +1072,7 @@ def serialize_export():
             "hide_weekends": settings.hide_weekends,
             "default_start_time": settings.default_start_time,
             "auto_convert_planned": settings.auto_convert_planned,
+            "christmas_eve_and_new_years_eve_off": getattr(settings, 'christmas_eve_and_new_years_eve_off', True),
         },
         "custom_holidays": [
             {"date": holiday.date, "name": holiday.name, "hours": holiday.hours or 0.0}
@@ -804,25 +1094,102 @@ def serialize_export():
 
 
 def normalized_import_entry(raw_entry):
+    """Validiert genau einen Austausch-Eintrag und liefert einen neutralen Fehlercode."""
     if not isinstance(raw_entry, dict):
-        return None
+        return None, 'invalid_object'
     entry_date = raw_entry.get('date')
     entry_type = raw_entry.get('type', '')
-    start = normalize_time_str(raw_entry.get('start', ''))
-    end = normalize_time_str(raw_entry.get('end', ''))
-    comment = str(raw_entry.get('comment') or '').strip()
-    if not is_valid_date(entry_date) or entry_type not in VALID_TYPES:
-        return None
+    start = raw_entry.get('start', '')
+    end = raw_entry.get('end', '')
+    if not is_valid_date(entry_date):
+        return None, 'invalid_date'
+    if entry_type not in VALID_TYPES:
+        return None, 'invalid_type'
     if not is_valid_time(start) or not is_valid_time(end):
-        return None
-    override = raw_entry.get('glz_override')
-    try:
-        override = float(override) if override is not None and str(override).strip() != '' else None
-    except (TypeError, ValueError):
-        return None
+        return None, 'invalid_time'
+    override_raw = raw_entry.get('glz_override')
+    override = None if override_raw is None or override_raw == '' else finite_number(override_raw)
+    if override_raw is not None and override_raw != '' and override is None:
+        return None, 'invalid_glz_override'
     source = raw_entry.get('glz_override_source')
-    return {"date": entry_date, "type": entry_type, "start": start or '', "end": end or '', "comment": comment,
-            "glz_override": override, "glz_override_source": source if source in ('manual', 'pdf') else None}
+    if source not in VALID_GLZ_OVERRIDE_SOURCES:
+        return None, 'invalid_glz_override_source'
+    return {"date": entry_date, "type": entry_type, "start": start, "end": end,
+            "comment": str(raw_entry.get('comment') or '').strip(), "glz_override": override,
+            "glz_override_source": source}, None
+
+
+def json_import_preview(payload):
+    """Analysiert einen Export ohne Datenbankänderungen für die Importbestätigung."""
+    if not isinstance(payload, dict) or payload.get('format') != 'ho-planer-export' or payload.get('version') != 1:
+        return None, "Nicht unterstütztes Exportformat oder unbekannte Formatversion."
+    if not isinstance(payload.get('entries'), list) or not isinstance(payload.get('custom_holidays'), list):
+        return None, "Ungültiger Eintrags- oder Sondertagscontainer in der Exportdatei."
+
+    result = {"valid_entries": 0, "skipped_entries": 0, "invalid_entries": 0,
+              "entry_conflicts": 0, "valid_custom_holidays": 0, "skipped_custom_holidays": 0,
+              "holiday_conflicts": 0, "glz_override_conflicts": 0, "details": []}
+    known_entries = {
+        (entry.date, entry.type, entry.start_time or '', entry.end_time or '', entry.comment or '')
+        for entry in WorkEntry.query.all()
+    }
+    # Nur vor dem Import vorhandene Anker erzeugen Konflikte. Unterschiedliche
+    # Anker aus derselben Datei bleiben gültig; beim Speichern gewinnt der letzte.
+    existing_overrides_by_date = {
+        entry.date: entry.glz_override
+        for entry in WorkEntry.query.filter(WorkEntry.glz_override.isnot(None)).order_by(WorkEntry.id).all()
+    }
+    for index, raw_entry in enumerate(payload['entries']):
+        entry, error_code = normalized_import_entry(raw_entry)
+        if error_code:
+            result['invalid_entries'] += 1
+            result['details'].append(f'entries[{index}]: {error_code}')
+            continue
+        identity = (entry['date'], entry['type'], entry['start'], entry['end'], entry['comment'])
+        if identity in known_entries:
+            result['skipped_entries'] += 1
+            continue
+        if (
+            entry['glz_override'] is not None
+            and entry['date'] in existing_overrides_by_date
+            and existing_overrides_by_date[entry['date']] != entry['glz_override']
+        ):
+            result['glz_override_conflicts'] += 1
+        known_entries.add(identity)
+        result['valid_entries'] += 1
+
+    for index, raw_holiday in enumerate(payload['custom_holidays']):
+        if not isinstance(raw_holiday, dict) or not is_valid_date(raw_holiday.get('date')) or not str(raw_holiday.get('name') or '').strip():
+            result['holiday_conflicts'] += 1
+            result['details'].append(f'custom_holidays[{index}]: invalid_object')
+            continue
+        hours = finite_number(raw_holiday.get('hours', 0))
+        if hours is None or hours < 0:
+            result['holiday_conflicts'] += 1
+            result['details'].append(f'custom_holidays[{index}]: invalid_hours')
+            continue
+        existing = CustomHoliday.query.filter_by(date=raw_holiday['date']).first()
+        if existing and (existing.name != str(raw_holiday['name']).strip() or (existing.hours or 0.0) != hours):
+            result['holiday_conflicts'] += 1
+        elif existing:
+            result['skipped_custom_holidays'] += 1
+        else:
+            result['valid_custom_holidays'] += 1
+    return result, None
+
+
+@app.route('/api/import/json/preview', methods=['POST'])
+def preview_json_import():
+    if 'file' not in request.files:
+        return jsonify({"success": False, "message": "Keine JSON-Datei ausgewählt."}), 400
+    try:
+        payload = json.load(request.files['file'])
+    except (json.JSONDecodeError, UnicodeDecodeError):
+        return jsonify({"success": False, "message": "Ungültige JSON-Datei."}), 400
+    result, error = json_import_preview(payload)
+    if error:
+        return jsonify({"success": False, "message": error}), 400
+    return jsonify({"success": True, **result})
 
 
 @app.route('/api/export/json', methods=['GET'])
@@ -844,23 +1211,34 @@ def import_json():
 
     if not isinstance(payload, dict) or payload.get('format') != 'ho-planer-export' or payload.get('version') != 1:
         return jsonify({"success": False, "message": "Nicht unterstütztes Exportformat oder unbekannte Formatversion."}), 400
-    if not isinstance(payload.get('entries', []), list) or not isinstance(payload.get('custom_holidays', []), list):
-        return jsonify({"success": False, "message": "Ungültige Datenstruktur in der Exportdatei."}), 400
+    if 'entries' not in payload or not isinstance(payload['entries'], list):
+        return jsonify({"success": False, "message": "Ungültiger Eintragscontainer in der Exportdatei."}), 400
+    if 'custom_holidays' not in payload or not isinstance(payload['custom_holidays'], list):
+        return jsonify({"success": False, "message": "Ungültiger Sondertagscontainer in der Exportdatei."}), 400
 
     overwrite = request.form.get('overwrite') == 'true'
     result = {"imported_entries": 0, "skipped_entries": 0, "invalid_entries": 0,
               "entry_conflicts": 0, "imported_custom_holidays": 0, "skipped_custom_holidays": 0,
               "holiday_conflicts": 0, "glz_override_conflicts": 0, "settings_imported": False,
-              "backup_created": None}
+              "backup_created": None, "details": []}
 
     try:
         if overwrite:
             result['backup_created'] = create_import_backup()
 
-        for raw_entry in payload['entries']:
-            entry_data = normalized_import_entry(raw_entry)
-            if entry_data is None:
+        # Nur vor dem Import vorhandene Anker sind Konfliktkandidaten. Mehrere
+        # Anker aus demselben portablen Import müssen ihre Reihenfolge und damit
+        # die Semantik "zuletzt gespeicherter Anker gewinnt" behalten.
+        existing_overrides_by_date = {
+            entry.date: entry
+            for entry in WorkEntry.query.filter(WorkEntry.glz_override.isnot(None)).order_by(WorkEntry.id).all()
+        }
+
+        for index, raw_entry in enumerate(payload['entries']):
+            entry_data, error_code = normalized_import_entry(raw_entry)
+            if error_code:
                 result['invalid_entries'] += 1
+                result['details'].append(f'entries[{index}]: {error_code}')
                 continue
 
             identical = WorkEntry.query.filter_by(
@@ -877,7 +1255,7 @@ def import_json():
                 result['skipped_entries'] += 1
                 continue
 
-            existing_override = WorkEntry.query.filter_by(date=entry_data['date']).filter(WorkEntry.glz_override.isnot(None)).first()
+            existing_override = existing_overrides_by_date.get(entry_data['date'])
             if entry_data['glz_override'] is not None and existing_override and existing_override.glz_override != entry_data['glz_override']:
                 if overwrite:
                     existing_override.glz_override = entry_data['glz_override']
@@ -896,9 +1274,8 @@ def import_json():
             if not isinstance(raw_holiday, dict) or not is_valid_date(raw_holiday.get('date')) or not str(raw_holiday.get('name') or '').strip():
                 result['holiday_conflicts'] += 1
                 continue
-            try:
-                hours = float(raw_holiday.get('hours', 0))
-            except (TypeError, ValueError):
+            hours = finite_number(raw_holiday.get('hours', 0))
+            if hours is None or hours < 0:
                 result['holiday_conflicts'] += 1
                 continue
             existing = CustomHoliday.query.filter_by(date=raw_holiday['date']).first()
@@ -951,55 +1328,58 @@ def import_pdf():
              return jsonify({"success": True, "message": "Keine Einträge gefunden.", "report": report})
              
         y = extracted_entries[0]['date'].year
-        he_holidays = holidays.DE(state='HE', years=y)
-        he_holidays[date(y, 12, 24)] = "Heiligabend"
-        he_holidays[date(y, 12, 31)] = "Silvester"
+        he_holidays = hessen_holidays(settings, y)
         custom_map = {datetime.strptime(c.date, "%Y-%m-%d").date(): c for c in CustomHoliday.query.all()}
 
-        cnt = 0
+        result = {
+            'imported_entries': 0,
+            'skipped_duplicates': 0,
+            'comment_hints': 0,
+            'glz_override_conflicts': 0,
+        }
         entries_by_date = {}
-        for e in extracted_entries:
-            d = e['date']
-            if d not in entries_by_date: entries_by_date[d] = []
-            entries_by_date[d].append(e)
-            
+        for entry in extracted_entries:
+            entries_by_date.setdefault(entry['date'], []).append(entry)
+
         for date_obj, entries in entries_by_date.items():
             date_iso = str(date_obj)
             day_info = get_day_info(date_obj, settings, he_holidays, custom_map)
-            is_free_day = not day_info["is_workday"]
-            
-            valid_entries = []
-            for e in entries:
-                has_times = bool(e['start'] and e['end'])
-                has_comment = bool(e['comment'])
-                
-                if has_times or not is_free_day or has_comment or e['glz_override'] is not None:
-                    valid_entries.append(e)
-            
-            if not valid_entries: continue
-            
+            is_free_day = not day_info['is_workday']
+            valid_entries = [
+                entry for entry in entries
+                if entry['start'] and entry['end'] or entry['comment'] or entry['glz_override'] is not None or not is_free_day
+            ]
+            if not valid_entries:
+                continue
+
+            existing_entries = WorkEntry.query.filter_by(date=date_iso).all()
             if overwrite:
                 WorkEntry.query.filter_by(date=date_iso).delete()
-            
-            for e in valid_entries:
-                if not overwrite:
-                    if e['type'] and WorkEntry.query.filter_by(date=date_iso, type=e['type'], start_time=e['start']).first():
-                        continue
-                
-                en = WorkEntry(date=date_iso, type=e['type'])
-                en.start_time = e['start']
-                en.end_time = e['end']
-                en.comment = e['comment']
-                
-                if e.get('glz_override') is not None:
-                    en.glz_override = e['glz_override']
-                    en.glz_override_source = 'pdf'
-                    
-                db.session.add(en)
-                cnt += 1
+                entries_to_add = valid_entries
+            else:
+                merged = merge_pdf_entries(existing_entries, valid_entries)
+                entries_to_add = merged['entries_to_add']
+                for field in ('skipped_duplicates', 'comment_hints', 'glz_override_conflicts'):
+                    result[field] += merged[field]
+
+            for entry in entries_to_add:
+                new_entry = WorkEntry(
+                    date=date_iso,
+                    type=entry['type'],
+                    start_time=entry['start'],
+                    end_time=entry['end'],
+                    comment=entry['comment'],
+                    glz_override=entry.get('glz_override'),
+                    glz_override_source='pdf' if entry.get('glz_override') is not None else None,
+                )
+                db.session.add(new_entry)
+                result['imported_entries'] += 1
 
         db.session.commit()
-        return jsonify({"success": True, "message": f"{cnt} Einträge importiert.", "report": report})
+        result['success'] = True
+        result['message'] = f"{result['imported_entries']} Einträge importiert."
+        result['report'] = report
+        return jsonify(result)
             
     except ValueError as error:
         app.logger.info("PDF-Import abgelehnt: %s", error)

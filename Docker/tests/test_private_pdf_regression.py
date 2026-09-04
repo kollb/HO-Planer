@@ -23,13 +23,13 @@ EXPECTATIONS_PATH = os.environ.get("HO_PLANER_PDF_EXPECTATIONS")
 
 def _private_pdf_files():
     if not PDF_DIRECTORY:
-        pytest.skip("HO_PLANER_PDF_FIXTURE_DIR ist nicht gesetzt.")
+        pytest.skip("HO_PLANER_PDF_FIXTURE_DIR ist nicht gesetzt.", allow_module_level=True)
     directory = Path(PDF_DIRECTORY)
     if not directory.is_dir():
-        pytest.skip("Privater PDF-Ordner ist nicht verfügbar.")
+        pytest.skip("Privater PDF-Ordner ist nicht verfügbar.", allow_module_level=True)
     files = sorted(directory.glob("*.pdf"))
     if not files:
-        pytest.skip("Privater PDF-Ordner enthält keine PDFs.")
+        pytest.skip("Privater PDF-Ordner enthält keine PDFs.", allow_module_level=True)
     return files
 
 

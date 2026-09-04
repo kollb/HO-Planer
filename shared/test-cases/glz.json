@@ -16,6 +16,27 @@
         {"date": "2025-02-03", "type": "home", "start": "08:00", "end": "16:30", "glz_override": -3.25, "glz_override_source": "manual"}
       ],
       "expected_anchor": {"date": "2025-02-03", "value": -3.25, "source": "manual"}
+    },
+    {
+      "id": "multiple-anchors-on-same-day-use-last-stored-entry",
+      "entries": [
+        {"date": "2025-03-03", "type": "home", "start": "08:00", "end": "16:30", "glz_override": 1.5, "glz_override_source": "manual"},
+        {"date": "2025-03-03", "type": "office", "start": "08:00", "end": "16:30", "glz_override": 4.0, "glz_override_source": "pdf"}
+      ],
+      "expected_anchor": {"date": "2025-03-03", "value": 4.0, "source": "pdf"}
+    },
+    {
+      "id": "no-anchor-starts-at-first-entry-in-target-year",
+      "entries": [
+        {"date": "2025-05-03", "type": "home", "start": "08:00", "end": "16:30"}
+      ],
+      "target": {"year": 2025, "month": 6},
+      "expected_first_calculation_date": "2025-05-03"
+    },
+    {
+      "id": "no-anchor-and-no-entry-is-zero",
+      "entries": [],
+      "expected_carryover": 0.0
     }
   ]
 }

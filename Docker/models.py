@@ -14,13 +14,16 @@ class Settings(db.Model):
     hide_weekends = db.Column(db.Boolean, default=True)
     default_start_time = db.Column(db.String(5), default="08:00")
     auto_convert_planned = db.Column(db.Boolean, default=True)
+    christmas_eve_and_new_years_eve_off = db.Column(db.Boolean, default=True)
+    # Darstellungseinstellung; ältere Installationen erhalten über Migration V6 den Dark-Mode.
+    theme = db.Column(db.String(10), default="dark")
 
 class CustomHoliday(db.Model):
     """
     Eigene freie Tage oder Sonderregeltage.
     """
     id = db.Column(db.Integer, primary_key=True)
-    date = db.Column(db.String(10), nullable=False) # Format: YYYY-MM-DD
+    date = db.Column(db.String(10), nullable=False, unique=True) # Format: YYYY-MM-DD
     name = db.Column(db.String(50), nullable=False)
     hours = db.Column(db.Float, nullable=True, default=0.0)
 

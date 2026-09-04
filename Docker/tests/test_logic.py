@@ -12,9 +12,10 @@ SHARED_HOLIDAY_CASES = Path(__file__).resolve().parents[2] / "shared" / "test-ca
 # Wir simulieren die Datenbank-Klassen, damit wir keine echte DB brauchen
 
 class MockSettings:
-    def __init__(self, weekly_hours=39.0, active_weekdays="0,1,2,3,4"):
+    def __init__(self, weekly_hours=39.0, active_weekdays="0,1,2,3,4", christmas_eve_and_new_years_eve_off=True):
         self.weekly_hours = weekly_hours
         self.active_weekdays = active_weekdays
+        self.christmas_eve_and_new_years_eve_off = christmas_eve_and_new_years_eve_off
 
 class MockCustomHoliday:
     def __init__(self, name, hours=0.0):
@@ -38,6 +39,7 @@ class MockCustomHoliday:
     # Mit Punkt statt Doppelpunkt
     ("08.00", "08:00"),
     ("8.30", "08:30"),
+    ("12:3", "12:03"),
     # Leerzeichen Trimmen
     (" 08:00 ", "08:00"),
 ])
@@ -49,8 +51,9 @@ def test_normalize_time_valid(input_str, expected):
     None, 
     "25:00",   # Stunde zu hoch
     "08:60",   # Minute zu hoch
+    "-1:00",   # Negative Stunden
+    "08:-1",   # Negative Minuten
     "abc",     # Kein Zahl
-    ("12:3", "12:03"),
     "12345"    # Zu lang
 ])
 def test_normalize_time_invalid(input_str):
@@ -119,6 +122,8 @@ def test_shared_holiday_cases():
             active_weekdays=",".join(str(value) for value in case["active_weekdays"]),
         )
         statutory = {day: case["statutory_holiday"]} if "statutory_holiday" in case else {}
+        if case.get("christmas_eve_and_new_years_eve_off", True) and day.month == 12 and day.day in (24, 31):
+            statutory[day] = "Heiligabend" if day.day == 24 else "Silvester"
         custom = case.get("custom_holiday")
         custom_map = {day: MockCustomHoliday(custom["name"], custom["hours"])} if custom else {}
         result = get_day_info(day, settings, statutory, custom_map)

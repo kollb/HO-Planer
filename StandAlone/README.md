@@ -11,8 +11,15 @@ Das Besondere an dieser Edition: **Es ist nur eine einzige HTML-Datei.**
 3. Fertig. Du kannst das Tool direkt nutzen.
 
 ### 💾 Wo liegen meine Daten?
-Da es keinen Server gibt, speichert die App deine Einträge sicher im `localStorage` und der `IndexedDB` deines Browsers. 
-* **Tipp für Backups:** Über das Menü kannst du deine Daten jederzeit als `.json`-Datei auf deine Festplatte exportieren und auch wieder nahtlos einlesen (nutzt die moderne File-System API). 
+Da es keinen Server gibt, speichert die App ihre Einträge im `localStorage` und ergänzende lokale Dateiinformationen in der `IndexedDB` deines Browsers. Diese Daten gehören zum Browserprofil: Browserbereinigung, ein neues Profil, Gerätewechsel oder ein Defekt können sie entfernen. Die Speicherung ersetzt daher kein Backup.
+
+* **Backup:** Regelmäßig über das Menü als JSON-Datei exportieren und die Datei außerhalb des Browserprofils sichern.
+* **Wiederherstellung:** Die JSON-Datei über den Importdialog auswählen. Der Standardimport ist additiv und übernimmt keine Einstellungen; anschließend das Ergebnis mit der exportierten Datei abgleichen.
+* **Vorsicht:** Einen Überschreibimport nur nach einem aktuellen JSON-Export verwenden, weil er vorhandene Tagesblöcke ersetzen kann.
+
+### 🌐 Laufzeitabhängigkeiten und Offline-Nutzung
+
+Die ausgewählte PDF wird vollständig lokal im Browser gelesen und nicht an einen Server hochgeladen. Die aktuelle HTML-Datei lädt jedoch Vue, Vuetify, Chart.js, PDF.js, Icons, Fonts und den PDF-Worker über CDNs. Deshalb braucht die Anwendung beim Laden Internetzugriff. Wenn eine erforderliche Bibliothek nicht geladen werden kann, zeigt die Seite eine sichtbare Fehlermeldung mit den fehlenden Abhängigkeiten an und verändert keine vorhandenen Browserdaten. Eine lokale, versionierte Bündelung dieser Bibliotheken ist für eine echte Offline-Nutzung weiterhin erforderlich.
 
 ---
 
@@ -57,6 +64,18 @@ Docker und Standalone haben unterschiedliche Laufzeitumgebungen, verwenden aber 
 - [`../shared/test-cases/`](../shared/test-cases/): gemeinsame Referenzfälle für Pausen, Feiertage, unvollständige Einträge, GLZ und Import
 
 Die Browser-Speicherung bleibt die produktive Datenhaltung der Standalone-Variante. JSON dient für Export, Import und den Austausch mit Docker.
+
+## Fachliche Betriebsregeln
+
+### Jahresendoption
+
+Heiligabend und Silvester werden standardmäßig als arbeitsfreie Tage behandelt. Im Einstellungsdialog kann diese Option deaktiviert werden, wenn an diesen Tagen regulär Sollzeit gelten soll. Gesetzliche Feiertage in Hessen bleiben davon unberührt und haben Vorrang vor eigenen Sondertagen.
+
+### JSON-Validierung und Import
+
+Das portable Format lautet `ho-planer-export` in Version `1`. Es akzeptiert nur echte ISO-Kalenderdaten (`YYYY-MM-DD`), leere oder exakte `HH:MM`-Zeiten, endliche Zahlen und die GLZ-Quellen `manual`, `pdf` oder `null`; Sonderstunden dürfen nicht negativ sein.
+
+Ein gültiger Importcontainer wird partiell verarbeitet: Fehlerhafte Einzelobjekte werden übersprungen, valide Nachbarobjekte bleiben erhalten. Das Ergebnis meldet neutrale Detailcodes, beispielsweise `entries[2]: invalid_date`. Der normale Import bleibt additiv, überspringt identische Einträge und importiert keine Einstellungen.
 
 - [Zentrale Testanleitung](../docs/testing.md)
 

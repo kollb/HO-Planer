@@ -22,6 +22,16 @@ Vor jeder tatsächlichen strukturellen Schemaänderung erstellt `migrate.py` ein
 
 Die Migration läuft transaktional. Schlägt sie fehl, wird die Transaktion zurückgerollt; das zuvor erzeugte Backup bleibt als Wiederherstellungsoption erhalten.
 
+Die derzeit bekannten Schemaänderungen sind:
+
+- **V1:** entfernt eine veraltete Eindeutigkeitsbeschränkung auf `work_entry.date`, damit mehrere Tagesblöcke möglich sind.
+- **V2:** ergänzt `work_entry.glz_override`.
+- **V3:** ergänzt `work_entry.glz_override_source`.
+- **V4:** ergänzt `settings.christmas_eve_and_new_years_eve_off` mit dem rückwärtskompatiblen Standardwert `true`.
+- **V5:** begrenzt eigene Sondertage auf einen Datensatz je Datum und bereinigt ältere Dubletten vor dem eindeutigen Index.
+
+Jede erfolgreich angewendete Version wird in `schema_migrations` erfasst. Eine Migration erzeugt nur dann ein Backup, wenn sie tatsächlich eine Schemaänderung ausführt.
+
 ## Weitere Backups
 
 - täglich: `db_backup_YYYY-MM-DD.db`

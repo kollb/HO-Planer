@@ -5,7 +5,8 @@ Diese Anleitung beschreibt die technische Prüfung beider Laufzeitvarianten. Sie
 ## Voraussetzungen
 
 - Python passend zur jeweiligen Variante sowie `pip`
-- Für Browser-Tests: Playwright und Chromium
+- Unter Windows kann der verfügbare `py`-Launcher statt `python` verwendet werden.
+- Für Browser-Tests: Playwright, `pytest-playwright` und Chromium
 - Freie Ports `5000` (Docker/Flask) und `8000` (Standalone-Testserver)
 - Für die Standalone-GUI-Tests gegebenenfalls Internetzugriff: Vue, Vuetify, PDF.js, Chart.js und weitere Ressourcen werden per CDN geladen.
 
@@ -42,9 +43,17 @@ Die Testbereiche umfassen unter anderem Zeitnormalisierung, Pausen, Nachtschicht
 Aus dem Verzeichnis `StandAlone/`:
 
 ```bash
-python -m pip install pytest pytest-playwright
-playwright install chromium --with-deps
+python -m pip install -r requirements-test.txt
+python -m playwright install chromium
 python run_tests.py
+```
+
+Unter Windows können dieselben Befehle mit `py` ausgeführt werden:
+
+```powershell
+py -m pip install -r requirements-test.txt
+py -m playwright install chromium
+py run_tests.py
 ```
 
 `run_tests.py` startet selbst `python -m http.server 8000` und führt dann `python -m pytest test_standalone.py` aus. Port `8000` muss frei sein. Die Testfixture leert vor jedem Test den Browser-`localStorage`.
@@ -139,6 +148,16 @@ Vor einem Release mindestens ausführen beziehungsweise abnehmen:
 - Prüfung von Backup und Restore für das Docker-Volume.
 
 Die Standalone-Release-Artefakte zusätzlich lokal öffnen: HTML-Datei starten, Daten exportieren und wieder importieren.
+
+## Release-Prozess für gemeinsame Verträge und Referenzfälle
+
+Änderungen unter `shared/contracts/` oder `shared/test-cases/` sind fachliche Änderungen für **beide** Varianten. Ein Release oder Merge folgt daher diesem Ablauf:
+
+1. Fachregel, Datenmodell, JSON-Schema und betroffene Referenzfälle gemeinsam aktualisieren; die Formatversion nur bei einer inkompatiblen Änderung erhöhen.
+2. Docker- und Standalone-Implementierung sowie ihre Tests anpassen. Alte Exporte der unterstützten Version müssen weiterhin lesbar bleiben, soweit der Vertrag keine Inkompatibilität festlegt.
+3. Beide Teststarter sowie die JSON-Roundtrips Docker → Standalone und Standalone → Docker ausführen. Infrastrukturprobleme wie fehlende Browser-Binaries separat von fachlichen Testfehlern bewerten.
+4. Bei Docker-Schemaänderungen zusätzlich Migrationsabnahme, Backup und Restore mit einer Datenbankkopie durchführen.
+5. Erst nach erfolgreicher Prüfung die Vertrags-, Testfall- und Implementierungsänderungen gemeinsam veröffentlichen. Die Versions- und Migrationshinweise gehören in den Release-Text.
 
 ## CI und Veröffentlichungen
 

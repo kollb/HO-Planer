@@ -85,6 +85,24 @@ Docker und Standalone haben unterschiedliche Laufzeitumgebungen, verwenden aber 
 
 Die SQLite-Datenbank bleibt die produktive Datenhaltung der Docker-Variante. JSON dient nur Export, Import und Austausch.
 
+## Fachliche Betriebsregeln
+
+### Jahresendoption
+
+Heiligabend und Silvester gelten standardmäßig als arbeitsfreie Tage. Die Einstellung `christmas_eve_and_new_years_eve_off` kann im Einstellungsdialog deaktiviert werden, wenn für diese Tage regulär Sollzeit gelten soll. Gesetzliche Feiertage in Hessen haben immer Vorrang und bleiben unabhängig von dieser Option arbeitsfrei.
+
+### JSON-Import
+
+Das Austauschformat ist `ho-planer-export` in Version `1`. Der normale Import ist additiv: Er übernimmt keine Einstellungen, überspringt identische Einträge und ergänzt abweichende Einträge. Ungültige Einzelobjekte verhindern nicht den Import valider Nachbarobjekte; das Ergebnis enthält neutrale Detailcodes wie `entries[2]: invalid_date`.
+
+Für Austauschdaten sind nur echte ISO-Daten (`YYYY-MM-DD`), leere oder exakte `HH:MM`-Zeiten, endliche Zahlen und die GLZ-Quellen `manual`, `pdf` oder `null` zulässig. Sonderstunden dürfen nicht negativ sein. Der Überschreibmodus ersetzt die vorhandenen Tagesblöcke und erstellt davor ein SQLite-Backup.
+
+### PDF-Import
+
+PDF-Daten werden blockweise und additiv zusammengeführt. Ein Block ist durch `date`, `type`, `start` und `end` identisch; identische Blöcke werden übersprungen. Ein leerer vorhandener Kommentar kann aus dem PDF ergänzt werden. Unterschiedliche nichtleere Kommentare bleiben erhalten und werden als Hinweis gezählt.
+
+Bestehende GLZ-Anker werden nie überschrieben. Bei einem abweichenden PDF-Anker bleibt der Zeitblock importierbar, der kollidierende Anker wird jedoch ausgelassen und als Konflikt gemeldet. Im Überschreibmodus ersetzt der PDF-Import die Tagesblöcke vollständig.
+
 - [Zentrale Testanleitung](../docs/testing.md)
 - [Migration, Backup und Wiederherstellung](docs/migrations-and-backups.md)
 

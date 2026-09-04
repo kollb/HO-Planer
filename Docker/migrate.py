@@ -1,5 +1,7 @@
 import os
 
+import os
+
 from sqlalchemy import inspect, text
 
 from app import app, backup_dir, create_sqlite_backup, db, db_path, get_local_now
@@ -80,39 +82,64 @@ def migrate():
     with app.app_context():
         engine = db.engine
         inspector = inspect(engine)
-        if not inspector.has_table("work_entry"):
-            app.logger.info("[Migrate] work_entry wird beim App-Start neu angelegt; keine Datenmigration erforderlich.")
-            return
+        has_work_entry = inspector.has_table("work_entry")
+        has_settings = inspector.has_table("settings")
 
         with engine.connect() as conn:
-            legacy_unique = has_legacy_unique_date_constraint(conn)
-            columns = {column["name"] for column in inspect(conn).get_columns("work_entry")}
-            needs_override = "glz_override" not in columns
-            needs_source = "glz_override_source" not in columns
+            legacy_unique = has_work_entry and has_legacy_unique_date_constraint(conn)
+            work_columns = {column["name"] for column in inspect(conn).get_columns("work_entry")} if has_work_entry else set()
+            settings_columns = {column["name"] for column in inspect(conn).get_columns("settings")} if has_settings else set()
+            needs_override = has_work_entry and "glz_override" not in work_columns
+            needs_source = has_work_entry and "glz_override_source" not in work_columns
+            needs_year_end_option = has_settings and "christmas_eve_and_new_years_eve_off" not in settings_columns
+            needs_theme = has_settings and "theme" not in settings_columns
+            holiday_indexes = inspect(conn).get_indexes("custom_holiday") if inspect(conn).has_table("custom_holiday") else []
+            has_holiday_unique_index = any(index["unique"] and index["column_names"] == ["date"] for index in holiday_indexes)
+            needs_unique_holiday_date = bool(holiday_indexes is not None) and inspect(conn).has_table("custom_holiday") and not has_holiday_unique_index
             needs_metadata = not inspect(conn).has_table(MIGRATION_TABLE)
 
-        if not any((legacy_unique, needs_override, needs_source, needs_metadata)):
+        if not any((legacy_unique, needs_override, needs_source, needs_year_end_option, needs_theme, needs_unique_holiday_date, needs_metadata)):
             app.logger.info("[Migrate] Datenbank-Schema ist aktuell.")
             return
 
-        needs_schema_change = any((legacy_unique, needs_override, needs_source))
+        needs_schema_change = any((legacy_unique, needs_override, needs_source, needs_year_end_option, needs_theme, needs_unique_holiday_date))
         backup_file = create_migration_backup() if needs_schema_change else None
         try:
             with engine.begin() as conn:
                 ensure_migration_table(conn)
-                if legacy_unique:
-                    perform_unique_constraint_migration(conn)
-                    record_migration(conn, 1)
+                if has_work_entry:
+                    if legacy_unique:
+                        perform_unique_constraint_migration(conn)
+                        record_migration(conn, 1)
 
-                columns = {row[1] for row in conn.execute(text("PRAGMA table_info(work_entry)")).fetchall()}
-                if "glz_override" not in columns:
-                    conn.execute(text("ALTER TABLE work_entry ADD COLUMN glz_override FLOAT"))
-                record_migration(conn, 2)
+                    columns = {row[1] for row in conn.execute(text("PRAGMA table_info(work_entry)")).fetchall()}
+                    if "glz_override" not in columns:
+                        conn.execute(text("ALTER TABLE work_entry ADD COLUMN glz_override FLOAT"))
+                    record_migration(conn, 2)
 
-                columns = {row[1] for row in conn.execute(text("PRAGMA table_info(work_entry)")).fetchall()}
-                if "glz_override_source" not in columns:
-                    conn.execute(text("ALTER TABLE work_entry ADD COLUMN glz_override_source VARCHAR(20)"))
-                record_migration(conn, 3)
+                    columns = {row[1] for row in conn.execute(text("PRAGMA table_info(work_entry)")).fetchall()}
+                    if "glz_override_source" not in columns:
+                        conn.execute(text("ALTER TABLE work_entry ADD COLUMN glz_override_source VARCHAR(20)"))
+                    record_migration(conn, 3)
+
+                if has_settings:
+                    columns = {row[1] for row in conn.execute(text("PRAGMA table_info(settings)")).fetchall()}
+                    if "christmas_eve_and_new_years_eve_off" not in columns:
+                        conn.execute(text("ALTER TABLE settings ADD COLUMN christmas_eve_and_new_years_eve_off BOOLEAN NOT NULL DEFAULT 1"))
+                    record_migration(conn, 4)
+
+                    columns = {row[1] for row in conn.execute(text("PRAGMA table_info(settings)")).fetchall()}
+                    if "theme" not in columns:
+                        conn.execute(text("ALTER TABLE settings ADD COLUMN theme VARCHAR(10) NOT NULL DEFAULT 'dark'"))
+                    record_migration(conn, 6)
+
+                if inspect(conn).has_table("custom_holiday"):
+                    conn.execute(text("""
+                        DELETE FROM custom_holiday
+                        WHERE id NOT IN (SELECT MAX(id) FROM custom_holiday GROUP BY date)
+                    """))
+                    conn.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS ux_custom_holiday_date ON custom_holiday (date)"))
+                    record_migration(conn, 5)
 
             app.logger.info("[Migrate] Migration erfolgreich abgeschlossen. Backup: %s", backup_file)
         except Exception:

@@ -1,0 +1,43 @@
+{
+  "contract_version": 1,
+  "description": "Referenzfälle für den additiven Merge von PDF-Zeitblöcken.",
+  "cases": [
+    {
+      "id": "preserve-blocks-comment-and-glz-conflicts",
+      "existing_entries": [
+        {"type": "home", "start": "08:00", "end": "12:00", "comment": "Bestehend", "glz_override": 2.0},
+        {"type": "office", "start": "13:00", "end": "17:00", "comment": "", "glz_override": null}
+      ],
+      "pdf_entries": [
+        {"type": "home", "start": "08:00", "end": "12:00", "comment": "Neu", "glz_override": 3.0},
+        {"type": "dr", "start": "18:00", "end": "22:00", "comment": "Reise", "glz_override": 3.0}
+      ],
+      "expected": {
+        "imported_entries": 1,
+        "skipped_duplicates": 1,
+        "comment_hints": 1,
+        "glz_override_conflicts": 2,
+        "added_entries": [
+          {"type": "dr", "start": "18:00", "end": "22:00", "comment": "Reise", "glz_override": null}
+        ]
+      }
+    },
+    {
+      "id": "fill-empty-existing-comment",
+      "existing_entries": [
+        {"type": "office", "start": "08:00", "end": "16:00", "comment": "", "glz_override": null}
+      ],
+      "pdf_entries": [
+        {"type": "office", "start": "08:00", "end": "16:00", "comment": "Ergänzter Kommentar", "glz_override": null}
+      ],
+      "expected": {
+        "imported_entries": 0,
+        "skipped_duplicates": 1,
+        "comment_hints": 1,
+        "glz_override_conflicts": 0,
+        "existing_comments": ["Ergänzter Kommentar"],
+        "added_entries": []
+      }
+    }
+  ]
+}

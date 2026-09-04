@@ -178,6 +178,78 @@
         "is_workday": true,
         "target": 6.0
       }
+    },
+    {
+      "id": "christmas-eve-is-off-by-default",
+      "date": "2024-12-24",
+      "weekly_hours": 40,
+      "active_weekdays": [
+        0,
+        1,
+        2,
+        3,
+        4
+      ],
+      "christmas_eve_and_new_years_eve_off": true,
+      "expected": {
+        "is_workday": false,
+        "target": 0.0,
+        "holiday_name": "Heiligabend"
+      }
+    },
+    {
+      "id": "christmas-eve-can-be-a-workday",
+      "date": "2024-12-24",
+      "weekly_hours": 40,
+      "active_weekdays": [
+        0,
+        1,
+        2,
+        3,
+        4
+      ],
+      "christmas_eve_and_new_years_eve_off": false,
+      "expected": {
+        "is_workday": true,
+        "target": 8.0,
+        "holiday_name": ""
+      }
+    },
+    {
+      "id": "new-years-eve-is-off-by-default",
+      "date": "2024-12-31",
+      "weekly_hours": 40,
+      "active_weekdays": [
+        0,
+        1,
+        2,
+        3,
+        4
+      ],
+      "christmas_eve_and_new_years_eve_off": true,
+      "expected": {
+        "is_workday": false,
+        "target": 0.0,
+        "holiday_name": "Silvester"
+      }
+    },
+    {
+      "id": "new-years-eve-can-be-a-workday",
+      "date": "2024-12-31",
+      "weekly_hours": 40,
+      "active_weekdays": [
+        0,
+        1,
+        2,
+        3,
+        4
+      ],
+      "christmas_eve_and_new_years_eve_off": false,
+      "expected": {
+        "is_workday": true,
+        "target": 8.0,
+        "holiday_name": ""
+      }
     }
   ]
 }
