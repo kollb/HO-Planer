@@ -752,3 +752,20 @@ def test_wochenkopf_bleibt_beim_scrollen_sichtbar(page: Page):
     box = header.bounding_box()
     assert box["y"] > 0, "Der Kopf ist beim Scrollen aus dem Blickfeld gewandert."
     assert box["y"] < 200, "Der Kopf klebt nicht unter der Kopfzeile."
+
+
+def test_wochenköpfe_stapeln_sicht_nicht(page: Page):
+    """Köpfe dürfen nicht gleichzeitig auf derselben Höhe kleben.
+
+    Ohne eigenen Abschnitt pro Woche sammeln sich alle Köpfe an derselben
+    Klebeposition und überdecken sich gegenseitig.
+    """
+    page.evaluate("() => window.scrollTo(0, Math.round(document.documentElement.scrollHeight / 2))")
+    page.wait_for_timeout(500)
+
+    tops = page.evaluate(
+        "() => [...document.querySelectorAll('.tl-week-sum')]"
+        ".map(h => Math.round(h.getBoundingClientRect().top))"
+    )
+    assert any(50 <= top <= 100 for top in tops), f"Kein Kopf klebt: {tops}"
+    assert len(set(tops)) == len(tops), f"Zwei Köpfe kleben auf derselben Höhe: {tops}"
