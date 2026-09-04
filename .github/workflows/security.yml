@@ -27,16 +27,16 @@ jobs:
         with:
           python-version: '3.14'
 
-      - name: Abhängigkeiten installieren
+      - name: pip-audit installieren
         run: |
           python -m pip install --upgrade pip
           python -m pip install pip-audit
-          python -m pip install -r Docker/requirements.txt -r StandAlone/requirements-test.txt
 
-      # Ohne --strict: gefunden Schwachstellen lassen den Lauf scheitern,
-      # nicht prüfbare Abhängigkeiten dagegen nicht.
+      # pip-audit löst die nicht festgenagelten Anforderungen selbst auf.
+      # Ohne --strict: gefundene Schwachstellen lassen den Lauf scheitern,
+      # nicht auflösbare Abhängigkeiten dagegen nicht.
       - name: pip-audit ausführen
-        run: pip-audit --skip-editable --progress-spinner off
+        run: pip-audit -r Docker/requirements.txt -r StandAlone/requirements-test.txt --progress-spinner off
 
   dependency-review:
     name: Abhängigkeits-Review
