@@ -984,3 +984,34 @@ def test_edit_custom_holiday(client):
     assert updated_holiday["date"] == "2099-05-02"
     assert updated_holiday["name"] == "Geänderter Feiertag"
     assert updated_holiday["hours"] == 4.0
+
+def test_month_items_put_week_summary_before_its_days(client):
+    """Die Wochenzusammenfassung eröffnet ihre Woche, statt sie abzuschließen."""
+    client.post('/api/entry', json={
+        "date": "2026-09-02", "type": "home", "start": "08:00", "end": "16:30", "comment": "Test",
+    })
+    response = client.get('/api/month/2026/9')
+    assert response.status_code == 200
+
+    blocks = []
+    for item in response.get_json()["items"]:
+        if item["row_type"] == "summary":
+            blocks.append({"week": item["iso_week"], "dates": []})
+        elif blocks:
+            blocks[-1]["dates"].append(item["date"])
+
+    assert len(blocks) >= 4, "Der Monat muss mehrere Wochenköpfe enthalten."
+    # Jeder Tag nach einem Kopf gehört zur Kalenderwoche dieses Kopfes.
+    for block in blocks:
+        assert block["dates"], f"KW {block['week']} hat keine Tage"
+        for date_str in block["dates"]:
+            assert date.fromisoformat(date_str).isocalendar()[1] == block["week"], date_str
+
+
+def test_month_items_keep_every_day(client):
+    """Die Umstellung darf keinen Tag verlieren oder doppeln."""
+    response = client.get('/api/month/2026/9')
+    days = [item["date"] for item in response.get_json()["items"] if item["row_type"] == "day"]
+    assert len(days) == 30
+    assert days == sorted(days)
+    assert len(set(days)) == 30

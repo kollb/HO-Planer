@@ -709,3 +709,46 @@ def test_mobile_tageskarte_ist_das_bedienelement(page: Page):
     expect(card).to_have_attribute("role", "button")
     card.locator(".tl-date-cell").first.click()
     expect(page.locator(".v-dialog .v-card").first).to_be_visible()
+
+
+# --- Wochenkopf ---------------------------------------------------------
+
+def test_wochenkopf_steht_vor_seinen_tagen(page: Page):
+    """Die Zusammenfassung eröffnet die Woche, statt sie abzuschließen."""
+    blocks = []
+    for item in page.evaluate("() => window.vm.items"):
+        if item["row_type"] == "summary":
+            blocks.append({"week": item["iso_week"], "dates": []})
+        elif blocks:
+            blocks[-1]["dates"].append(item["date"])
+
+    assert len(blocks) >= 4, "Der Monat muss mehrere Wochenköpfe enthalten."
+    for block in blocks:
+        assert block["dates"], f"KW {block['week']} hat keine Tage"
+        for date_str in block["dates"]:
+            iso = page.evaluate("d => { const x = new Date(d + 'T12:00:00'); return getISOWeek(x); }", date_str)
+            assert iso == block["week"], date_str
+
+
+def test_wochenkopf_über_den_tagen(page: Page):
+    page.evaluate("() => { window.vm.loadData(); }")
+    page.wait_for_timeout(500)
+    header = page.locator(".tl-week-sum").first
+    expect(header).to_be_visible()
+    assert header.bounding_box()["y"] < page.locator(".tl-day-card").first.bounding_box()["y"]
+
+    expect(header.locator(".tl-week-sum__week")).to_contain_text("KW")
+    expect(header.locator(".tl-week-sum__hours")).to_contain_text("von")
+
+
+def test_wochenkopf_bleibt_beim_scrollen_sichtbar(page: Page):
+    page.evaluate("() => { window.vm.loadData(); }")
+    page.wait_for_timeout(500)
+    header = page.locator(".tl-week-sum").first
+    expect(header).to_be_visible()
+
+    page.mouse.wheel(0, 500)
+    page.wait_for_timeout(500)
+    box = header.bounding_box()
+    assert box["y"] > 0, "Der Kopf ist beim Scrollen aus dem Blickfeld gewandert."
+    assert box["y"] < 200, "Der Kopf klebt nicht unter der Kopfzeile."

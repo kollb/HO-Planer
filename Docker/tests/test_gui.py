@@ -289,3 +289,46 @@ def test_desktop_rows_keep_direct_input(page: Page):
     card = page.locator(".tl-day-card").first
     expect(card).not_to_have_attribute("role", "button")
     expect(page.locator(".tl-row").first.locator("input").first).to_be_visible()
+
+
+# ==========================================
+# WOCHENKOPF
+# ==========================================
+
+def test_week_summary_opens_its_week(page: Page):
+    """Der Wochenkopf steht vor den Tagen seiner Woche und bleibt vollständig."""
+    page.goto(BASE_URL)
+    header = page.locator(".tl-week-sum").first
+    expect(header).to_be_visible()
+
+    summary_box = header.bounding_box()
+    day_box = page.locator(".tl-day-card").first.bounding_box()
+    assert summary_box["y"] < day_box["y"], "Der Kopf muss über seinen Tagen stehen."
+
+    text = header.inner_text()
+    assert "KW" in text
+    assert "von" in text
+
+
+def test_week_summary_stays_visible_while_scrolling(page: Page):
+    """Beim Scrollen bleibt der Wochenkopf stehen, statt mitzuwandern."""
+    page.goto(BASE_URL)
+    header = page.locator(".tl-week-sum").first
+    expect(header).to_be_visible()
+
+    page.mouse.wheel(0, 500)
+    page.wait_for_timeout(500)
+
+    box = header.bounding_box()
+    assert box["y"] > 0, "Der Kopf ist beim Scrollen aus dem Blickfeld gewandert."
+    assert box["y"] < 200, "Der Kopf klebt nicht unter der Kopfzeile."
+
+
+def test_week_summary_shows_week_balance(page: Page):
+    """Ist von Soll und Abweichung bleiben ablesbar."""
+    page.goto(BASE_URL)
+    header = page.locator(".tl-week-sum").first
+    expect(header).to_be_visible()
+    expect(header.locator(".tl-week-sum__week")).to_contain_text("KW")
+    expect(header.locator(".tl-week-sum__hours")).to_contain_text("von")
+    expect(header.locator(".tl-week-sum__delta")).to_be_visible()
