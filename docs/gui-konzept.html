@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HO-Planer – Konzept: Übersichtliche Oberfläche</title>
+<style>
+  :root {
+    --bg: #0f172a; --surface: #1e293b; --surface2: #334155;
+    --primary: #3b82f6; --success: #10b981; --warning: #f59e0b; --error: #ef4448;
+    --info: #0ea5e9; --text: #f8fafc; --muted: #94a3b8;
+    --border: rgba(255,255,255,.10); --radius: 12px;
+    --mono: ui-monospace, "JetBrains Mono", SFMono-Regular, Menlo, monospace;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 32px 20px 96px;
+    background: var(--bg); color: var(--text);
+    font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    line-height: 1.6;
+  }
+  .wrap { max-width: 1120px; margin: 0 auto; }
+  h1 { font-size: 1.75rem; margin: 0 0 8px; letter-spacing: -.5px; }
+  h2 { font-size: 1.25rem; margin: 48px 0 4px; letter-spacing: -.3px; }
+  h2 .num { color: var(--primary); font-family: var(--mono); margin-right: 10px; }
+  h3 { font-size: .95rem; margin: 28px 0 10px; color: var(--text); }
+  p { margin: 8px 0; color: #cbd5e1; }
+  .lead { color: var(--muted); margin: 0 0 4px; }
+  .sub { color: var(--muted); font-size: .9rem; margin-top: 4px; }
+  code { font-family: var(--mono); font-size: .85em; background: rgba(148,163,184,.14); padding: 1px 5px; border-radius: 4px; }
+  hr { border: 0; border-top: 1px solid var(--border); margin: 40px 0; }
+
+  /* Prinzip-Karten */
+  .principles { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 14px; margin-top: 18px; }
+  .principle { background: var(--surface); border: 1px solid var(--border); border-left: 3px solid var(--primary); border-radius: var(--radius); padding: 14px 16px; }
+  .principle b { display: block; margin-bottom: 4px; }
+  .principle span { color: var(--muted); font-size: .88rem; }
+
+  /* Tabellen */
+  table { width: 100%; border-collapse: collapse; margin: 14px 0; font-size: .9rem; }
+  th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--border); }
+  th { color: var(--muted); font-size: .75rem; text-transform: uppercase; letter-spacing: .5px; font-weight: 600; }
+  td.num, th.num { text-align: right; font-family: var(--mono); }
+  tbody tr:last-child td { border-bottom: 0; }
+  .bad { color: var(--error); font-weight: 600; }
+  .good { color: var(--success); font-weight: 600; }
+
+  /* Wireframes */
+  .pair { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 14px; }
+  @media (max-width: 860px) { .pair { grid-template-columns: 1fr; } }
+  .frame { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+  .frame > header { padding: 10px 14px; border-bottom: 1px solid var(--border); font-size: .8rem; display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+  .tag { font-size: .68rem; text-transform: uppercase; letter-spacing: .6px; padding: 2px 8px; border-radius: 999px; font-weight: 700; }
+  .tag.ist { background: rgba(239,68,68,.16); color: #fca5a5; }
+  .tag.soll { background: rgba(16,185,129,.16); color: #6ee7b7; }
+  .frame .body { padding: 14px; }
+  .cap { color: var(--muted); font-size: .82rem; padding: 0 14px 14px; margin: 0; }
+
+  /* Mock-Bausteine */
+  .bar { display: flex; align-items: center; gap: 6px; padding: 8px; background: #16233c; border: 1px solid var(--border); border-radius: 8px; margin-bottom: 10px; flex-wrap: wrap; }
+  .chip { font-size: .72rem; padding: 4px 9px; border-radius: 6px; background: var(--surface2); color: #e2e8f0; white-space: nowrap; }
+  .chip.ic { width: 28px; height: 28px; display: inline-flex; align-items: center; justify-content: center; padding: 0; }
+  .chip.seg { background: transparent; color: var(--muted); border: 1px solid transparent; }
+  .chip.seg.on { background: var(--surface2); color: var(--text); border-color: var(--border); }
+  .chip.dead { background: rgba(239,68,68,.14); color: #fca5a5; text-decoration: line-through; border: 1px dashed rgba(239,68,68,.5); }
+  .chip.new { background: rgba(16,185,129,.14); color: #6ee7b7; border: 1px dashed rgba(16,185,129,.5); }
+  .chip.beta { background: rgba(59,130,246,.2); color: #93c5fd; }
+  .chip.fab { width: 34px; height: 34px; border-radius: 50%; background: var(--primary); display: inline-flex; align-items: center; justify-content: center; color: #fff; font-weight: 700; padding: 0; }
+  .spacer { flex: 1 1 auto; }
+  .screen { position: relative; background: #16233c; border: 1px solid var(--border); border-radius: 8px; padding: 10px; min-height: 132px; }
+  .bottombar { display: flex; gap: 4px; margin-top: 8px; background: #16233c; border: 1px solid var(--border); border-radius: 8px; padding: 6px; }
+  .bottombar .chip { flex: 1; text-align: center; background: transparent; color: var(--muted); font-size: .68rem; }
+  .bottombar .chip.on { color: var(--primary); }
+  .fabrow { display: flex; justify-content: flex-end; margin-top: 10px; }
+
+  /* Tageskarte */
+  .day { display: flex; align-items: center; gap: 10px; background: #16233c; border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; margin-bottom: 8px; font-size: .8rem; }
+  .day .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--primary); flex: 0 0 auto; }
+  .day .d { font-family: var(--mono); font-weight: 700; }
+  .day .st { color: var(--muted); }
+  .day .btn { margin-left: auto; background: rgba(59,130,246,.16); color: #93c5fd; border: 1px solid rgba(59,130,246,.35); border-radius: 6px; padding: 6px 10px; font-size: .72rem; white-space: nowrap; }
+  .day.clickable { cursor: pointer; border-color: rgba(148,163,184,.25); }
+  .day.clickable::after { content: "›"; margin-left: auto; color: var(--muted); font-size: 1.1rem; }
+  .day.off { opacity: .45; }
+
+  ul { margin: 8px 0; padding-left: 20px; color: #cbd5e1; }
+  li { margin: 4px 0; }
+  .note { background: rgba(245,158,11,.10); border: 1px solid rgba(245,158,11,.35); border-radius: var(--radius); padding: 12px 16px; margin: 16px 0; }
+  .note b { color: var(--warning); }
+  .note p { margin: 4px 0 0; }
+  .kpi { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; margin: 18px 0; }
+  .kpi div { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px; text-align: center; }
+  .kpi b { display: block; font-size: 1.6rem; font-family: var(--mono); }
+  .kpi span { color: var(--muted); font-size: .78rem; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <h1>Konzept: Übersichtliche Oberfläche</h1>
+  <p class="lead">Docker-Variante · <code>Docker/static/index.html</code> · Stand: Analyse des Ist-Zustands per DOM-Vermessung</p>
+
+  <div class="note" style="background: rgba(16,185,129,.10); border-color: rgba(16,185,129,.35);">
+    <b style="color: var(--success);">Umsetzungsstand: Schritte 1–5 umgesetzt</b>
+    <p style="color:#cbd5e1">Kopfzeile konsolidiert, Beta-Reste und mobiles Bottom-Sheet entfernt, mobile Timeline als klickbare Tageskarten, Drawer gruppiert, JSON-Export und Theme-Umschalter ergänzt. Die nachfolgenden Abschnitte dokumentieren weiterhin die Ausgangslage und die Begründung.</p>
+  </div>
+
+  <div class="kpi">
+    <div><b class="bad">5 → 13</b><span>Wege zu 5 Aktionen (Desktop)</span></div>
+    <div><b class="bad">× 25</b><span>identische „Tag bearbeiten"-Buttons (Mobil)</span></div>
+    <div><b class="bad">1</b><span>toter Link „Zurück zu V1"</span></div>
+    <div><b class="bad">0</b><span>JSON-Export in der Oberfläche</span></div>
+  </div>
+
+  <h2><span class="num">01</span>Leitprinzip</h2>
+  <p>Die Oberfläche ist nicht überladen, weil sie zu viel <em>kann</em> — sondern weil dieselben fünf Aktionen an vier Stellen gleichzeitig liegen. Das Konzept folgt drei Regeln:</p>
+  <div class="principles">
+    <div class="principle"><b>Eine Aktion – ein Ort</b><span>Jede Aktion ist genau einem Ort zugeordnet. Wiederholungen nur dort, wo der Wechsel sonst einen Umweg kostet.</span></div>
+    <div class="principle"><b>Navigation ≠ Aktion</b><span>Die Kopfzeile beantwortet „Wo bin ich?" (Ansicht, Zeitraum). Aktionen beantworten „Was kann ich tun?" und liegen im FAB.</span></div>
+    <div class="principle"><b>Gleiche Logik auf allen Breiten</b><span>Desktop und Mobil unterscheiden sich nur in der <em>Form</em> der Navigation (Segment vs. Bottom-Leiste), nicht in der Anzahl der Wege.</span></div>
+  </div>
+
+  <hr>
+
+  <h2><span class="num">02</span>Ist-Vermessung</h2>
+  <p>Gemessen am laufenden System: sichtbare Bedienelemente je Zone und Viewport.</p>
+  <table>
+    <thead><tr><th>Zone</th><th class="num">Desktop 1440</th><th class="num">Tablet 900</th><th class="num">Mobil 390</th><th>Bemerkung</th></tr></thead>
+    <tbody>
+      <tr><td>Kopfzeile</td><td class="num">8</td><td class="num">2</td><td class="num">2</td><td>Desktop: 3 Aktions-Icons + toter Link</td></tr>
+      <tr><td>Navigation Drawer</td><td class="num">5</td><td class="num">5</td><td class="num">5</td><td>dieselben 5 Aktionen wie im FAB</td></tr>
+      <tr><td>FAB-Menü</td><td class="num">5</td><td class="num">5</td><td class="num">5</td><td>vollständig – der eigentliche Ort</td></tr>
+      <tr><td>Bottom-Sheet (⋮)</td><td class="num">–</td><td class="num">5</td><td class="num">5</td><td>nur Mobil/Tablet, dritter Weg</td></tr>
+      <tr><td>Timeline: „Tag bearbeiten"</td><td class="num">0</td><td class="num bad">25</td><td class="num bad">25</td><td>ein Button pro Tag</td></tr>
+      <tr><td><b>Wege zu 5 Aktionen</b></td><td class="num bad">13</td><td class="num bad">15</td><td class="num bad">15</td><td>je 3-fach bzw. 4-fach vorhanden</td></tr>
+    </tbody>
+  </table>
+  <p class="sub">Die fünf Aktionen: Tag erfassen · Serienplanung · PDF importieren · JSON importieren · Einstellungen.</p>
+
+  <hr>
+
+  <h2><span class="num">03</span>Kopfzeile: Orientierung statt Werkzeugkasten</h2>
+
+  <div class="pair">
+    <div class="frame">
+      <header><b>IST – Desktop</b><span class="tag ist">Ist</span></header>
+      <div class="body">
+        <div class="bar">
+          <span class="chip ic">☰</span>
+          <span class="chip">◉ HO Planer</span>
+          <span class="chip beta">BETA</span>
+          <span class="spacer"></span>
+          <span class="chip seg on">Timeline</span><span class="chip seg">Kalender</span><span class="chip seg">Jahr</span>
+          <span class="spacer"></span>
+          <span class="chip ic" title="PDF Import">📄</span>
+          <span class="chip ic" title="Serien-Planer">📅</span>
+          <span class="chip ic" title="Einstellungen">⚙</span>
+          <span class="chip dead">Zurück zu V1</span>
+        </div>
+        <div class="screen">
+          <div class="day clickable"><span class="dot"></span><span class="d">03</span><span class="st">Mi · Homeoffice · 08:00–16:30</span></div>
+          <div class="day clickable"><span class="dot"></span><span class="d">04</span><span class="st">Do · Büro · 08:00–16:30</span></div>
+          <div class="fabrow"><span class="chip fab">+</span></div>
+        </div>
+      </div>
+      <p class="cap">8 Bedienelemente plus Titel und <code>BETA</code>-Chip. Drei Aktionen doppelt (Icons + FAB), dazu ein Link auf die Seite, auf der man schon ist.</p>
+    </div>
+
+    <div class="frame">
+      <header><b>SOLL – Desktop</b><span class="tag soll">Soll</span></header>
+      <div class="body">
+        <div class="bar">
+          <span class="chip ic">☰</span>
+          <span class="chip">◉ HO Planer</span>
+          <span class="spacer"></span>
+          <span class="chip seg on">Timeline</span><span class="chip seg">Kalender</span><span class="chip seg">Jahr</span>
+          <span class="spacer"></span>
+          <span class="chip ic new">☾</span>
+        </div>
+        <div class="screen">
+          <div class="day clickable"><span class="dot"></span><span class="d">03</span><span class="st">Mi · Homeoffice · 08:00–16:30</span></div>
+          <div class="day clickable"><span class="dot"></span><span class="d">04</span><span class="st">Do · Büro · 08:00–16:30</span></div>
+          <div class="fabrow"><span class="chip fab">+</span><span class="chip" style="align-self:center;margin-left:8px">alle Aktionen</span></div>
+        </div>
+      </div>
+      <p class="cap">6 Elemente. Kopfzeile = Orientierung, FAB = Aktionen. <code>BETA</code> und <code>Zurück zu V1</code> entfallen, Theme-Umschalter rückt nach vorn.</p>
+    </div>
+  </div>
+
+  <h3>Was wohin wandert</h3>
+  <table>
+    <thead><tr><th>Element</th><th>IST</th><th>SOLL</th><th>Grund</th></tr></thead>
+    <tbody>
+      <tr><td><code>BETA</code>-Chip</td><td>Kopfzeile</td><td class="good">entfällt</td><td><code>/</code> ist laut README die produktive Ansicht; <code>/beta</code> leitet dorthin um. Die Kennzeichnung ist überholt.</td></tr>
+      <tr><td>„Zurück zu V1"</td><td>Kopfzeile (2×)</td><td class="good">entfällt</td><td>Verlinkt auf <code>/</code> — also auf sich selbst. Toter Link.</td></tr>
+      <tr><td>PDF / Serien / Einstellungen</td><td>Kopfzeile <em>und</em> Drawer <em>und</em> FAB</td><td class="good">nur FAB + Drawer</td><td>Dreifach vorhanden; im FAB immer erreichbar, im Drawer mit vollständigen Beschriftungen.</td></tr>
+      <tr><td>Theme-Umschalter</td><td>versteckt im Einstellungsdialog</td><td class="good">Kopfzeile</td><td>Reine Darstellungsoption; rechtfertigt keinen Dialog. <span class="sub">(optional)</span></td></tr>
+      <tr><td>FAB</td><td>5 Aktionen</td><td>5 Aktionen + <em>Export</em></td><td>Bleibt der einzige direkte Aktionsort.</td></tr>
+    </tbody>
+  </table>
+
+  <hr>
+
+  <h2><span class="num">04</span>Mobil &amp; Tablet: ein Weg statt drei, Karten statt Buttons</h2>
+
+  <div class="pair">
+    <div class="frame">
+      <header><b>IST – Mobil</b><span class="tag ist">Ist</span></header>
+      <div class="body">
+        <div class="bar"><span class="chip ic">☰</span><span class="chip">◉ HO Planer</span><span class="chip beta">BETA</span><span class="spacer"></span><span class="chip ic">⋮</span></div>
+        <div class="screen" style="min-height:0">
+          <div class="day"><span class="dot"></span><span class="d">03</span><span class="st">Mi · Homeoffice</span><span class="btn">✎ Tag bearbeiten</span></div>
+          <div class="day"><span class="dot"></span><span class="d">04</span><span class="st">Do · Büro</span><span class="btn">✎ Tag bearbeiten</span></div>
+          <div class="day off"><span class="dot"></span><span class="d">05</span><span class="st">Fr · keine Erfassung</span><span class="btn">✎ Tag bearbeiten</span></div>
+          <div class="fabrow"><span class="chip fab">+</span></div>
+        </div>
+        <div class="bottombar"><span class="chip on">Timeline</span><span class="chip">Kalender</span><span class="chip">Jahr</span></div>
+      </div>
+      <p class="cap">Drei Aktionsorte (⋮-Sheet, FAB, Drawer) und unter jeder Tageskarte derselbe 44 px hohe Button — 25-mal.</p>
+    </div>
+
+    <div class="frame">
+      <header><b>SOLL – Mobil</b><span class="tag soll">Soll</span></header>
+      <div class="body">
+        <div class="bar"><span class="chip ic">☰</span><span class="chip">◉ HO Planer</span><span class="spacer"></span><span class="chip ic new">☾</span></div>
+        <div class="screen" style="min-height:0">
+          <div class="day clickable"><span class="dot"></span><span class="d">03</span><span class="st">Mi · Homeoffice · 8,0 h</span></div>
+          <div class="day clickable"><span class="dot"></span><span class="d">04</span><span class="st">Do · Büro · 8,0 h</span></div>
+          <div class="day clickable off"><span class="dot"></span><span class="d">05</span><span class="st">Fr · keine Erfassung</span></div>
+          <div class="fabrow"><span class="chip fab">+</span></div>
+        </div>
+        <div class="bottombar"><span class="chip on">Timeline</span><span class="chip">Kalender</span><span class="chip">Jahr</span></div>
+      </div>
+      <p class="cap">Die ganze Karte ist das Ziel (wie in der Jahresansicht, die das schon so macht). Kein Button-Wiederholungsteppich, <code>⋮</code>-Sheet entfällt.</p>
+    </div>
+  </div>
+
+  <p><b>Warum die Karte statt des Buttons?</b> Die Jahresansicht macht es bereits vor: Monatszeilen sind per Klick bedienbar (<code>role="button"</code>, Enter/Space, Fokusring). Die Timeline auf Mobil führt mit dem Button eine zweite Bedienlogik ein. Vereinheitlichung spart 25 Bedienelemente pro Monat und macht die Tastaturbedienung konsistent.</p>
+
+  <hr>
+
+  <h2><span class="num">05</span>Drawer: vollständig, aber mit Struktur</h2>
+  <p>Der Drawer bleibt der Ort mit den ausgeschriebenen Beschriftungen — gruppiert, statt einer flachen Fünferliste:</p>
+  <table>
+    <thead><tr><th class="num" style="width:34%">IST</th><th>SOLL</th></tr></thead>
+    <tbody>
+      <tr>
+        <td class="num" style="vertical-align:top">
+          Ansichten<br>Timeline · Kalender · Jahresübersicht<br><br>
+          Schnellaktionen<br>Heutigen Tag erfassen · Serienplanung<br>PDF importieren · JSON importieren · Einstellungen
+        </td>
+        <td style="vertical-align:top">
+          <b>Ansichten</b><br>Timeline · Kalender · Jahr<br><br>
+          <b>Erfassen &amp; planen</b><br>Tag erfassen · Serienplanung<br><br>
+          <b>Daten</b><br>PDF importieren · JSON importieren · <span class="good">JSON exportieren</span><br><br>
+          <b>Darstellung &amp; System</b><br>Einstellungen
+        </td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="note">
+    <b>Zusatzbefund: JSON-Export fehlt</b>
+    <p>Die API <code>GET /api/export/json</code> existiert, die Oberfläche bietet aber keinen Aufruf dafür — es gibt nur Import (PDF/JSON). Laut <code>docs/testing.md</code> ist der Export/Import-Roundtrip vor jedem Release Pflicht, aktuell also nur über die API machbar. Ein Export-Eintrag unter „Daten" schließt diese Lücke.</p>
+  </div>
+
+  <hr>
+
+  <h2><span class="num">06</span>Auswirkung auf die Tests</h2>
+  <p>Drei der neun GUI-Tests greifen heute über die Kopfzeilen-Icons zu. Bei einer Konsolidierung werden sie auf den FAB umgestellt — inhaltlich bleibt die Prüfung identisch:</p>
+  <table>
+    <thead><tr><th>Test</th><th>Heute</th><th>Nach dem Umbau</th></tr></thead>
+    <tbody>
+      <tr><td><code>test_standard_initial_elements_present</code></td><td><code>button[title='PDF Import']</code> u. a. in der Kopfzeile</td><td>FAB öffnen, Einträge im Menü prüfen</td></tr>
+      <tr><td><code>test_standard_series_planner_dialog</code></td><td><code>button[title='Serien-Planer']</code></td><td>Serienplanung über FAB-Menü</td></tr>
+      <tr><td><code>test_standard_custom_holiday_edit</code> / <code>…_save_error_is_visible</code></td><td><code>button[title='Einstellungen']</code></td><td>Einstellungen über FAB-Menü</td></tr>
+    </tbody>
+  </table>
+  <p class="sub">Alle 9 GUI-Tests laufen in der Sandbox (Chromium + lokal gestubbte CDN-Bibliotheken), Änderungen werden vor dem Commit gegen den echten Browser geprüft. Die 144 Nicht-GUI-Tests sind vom Umbau nicht betroffen.</p>
+
+  <hr>
+
+  <h2><span class="num">07</span>Umsetzungsreihenfolge</h2>
+  <ul>
+    <li><b>Schritt 1 – Rückstandslos entfernen:</b> <code>BETA</code>-Chip, „Zurück zu V1" (Desktop + Mobil), <code>⋮</code>-Bottom-Sheet. Kein Funktionsverlust, da FAB und Drawer alles abdecken.</li>
+    <li><b>Schritt 2 – Kopfzeile konsolidieren:</b> drei Aktions-Icon entfernen, FAB als alleiniger Aktionsort; zugehörige GUI-Tests umstellen.</li>
+    <li><b>Schritt 3 – Mobil-Timeline:</b> Tageskarte als Ganzes klickbar (<code>role="button"</code>, Enter/Space, Fokusring), 25 Buttons entfallen.</li>
+    <li><b>Schritt 4 – Drawer gruppieren</b> und JSON-Export ergänzen (Datenbereich).</li>
+    <li><b>Schritt 5 – optional:</b> Theme-Umschalter in die Kopfzeile; Einstellungsdialog in Bereiche gliedern.</li>
+  </ul>
+  <p class="sub">Jeder Schritt ist einzeln commit- und testbar; nach Schritt 1–3 ist das Ziel „ein Weg pro Aktion" bereits erreicht.</p>
+
+</div>
+</body>
+</html>

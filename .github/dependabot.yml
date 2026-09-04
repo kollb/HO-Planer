@@ -1,6 +1,27 @@
 version: 2
 updates:
+  # Python-Abhängigkeiten der Docker-Variante
   - package-ecosystem: pip
+    directory: /Docker
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+
+  # Test-Abhängigkeiten der Standalone-Variante
+  - package-ecosystem: pip
+    directory: /StandAlone
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+
+  # GitHub Actions: hält die Workflows auf aktuellem Stand
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+
+  # Basis-Image des Container-Images
+  - package-ecosystem: docker
     directory: /Docker
     schedule:
       interval: weekly

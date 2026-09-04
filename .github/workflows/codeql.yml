@@ -1,0 +1,87 @@
+name: CodeQL
+
+# SAST für Python, für die Workflows selbst (Sprache "actions") und für das
+# JavaScript der beiden Oberflächen. Für ein öffentliches Repository ist Code
+# Scanning kostenlos.
+#
+# WICHTIG: Dieses Repository nutzt derzeit das Standard-Setup für Code
+# Scanning. Beides gleichzeitig geht nicht - GitHub lehnt SARIF aus einer
+# erweiterten Konfiguration ab, solange das Standard-Setup aktiv ist
+# ("CodeQL analyses from advanced configurations cannot be processed when the
+# default setup is enabled"). Die Aufträge sind deshalb an die Repository-
+# Variable CODEQL_ADVANCED gekoppelt und laufen erst, wenn
+#   1. unter Settings -> Code security -> Code scanning auf "Advanced"
+#      umgestellt (also das Standard-Setup abgeschaltet) wird und
+#   2. die Variable CODEQL_ADVANCED auf "true" gesetzt wird
+#      (Settings -> Secrets and variables -> Actions -> Variables).
+# Solange das Standard-Setup aktiv ist, deckt es Python und Actions bereits ab.
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    - cron: '27 4 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  analyse:
+    name: CodeQL ${{ matrix.language }}
+    if: vars.CODEQL_ADVANCED == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      security-events: write
+      packages: read
+      actions: read
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        language: [python, actions]
+    steps:
+      - name: Repository auschecken
+        uses: actions/checkout@v5
+
+      - name: CodeQL initialisieren
+        uses: github/codeql-action/init@v4
+        with:
+          languages: ${{ matrix.language }}
+          queries: security-extended
+
+      - name: CodeQL-Analyse ausführen
+        uses: github/codeql-action/analyze@v4
+        with:
+          category: "/language:${{ matrix.language }}"
+
+  javascript:
+    name: CodeQL javascript (Inline-Skripte)
+    if: vars.CODEQL_ADVANCED == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      security-events: write
+      packages: read
+      actions: read
+      contents: read
+    steps:
+      - name: Repository auschecken
+        uses: actions/checkout@v5
+
+      # Das JavaScript der beiden Oberflächen steht inline in HTML-Dateien.
+      # CodeQL wertet .html nicht aus, deshalb werden die Skriptblöcke vor der
+      # Analyse herausgelöst - ohne sie bliebe ein großer Teil des Codes unprüft.
+      - name: Inline-Skripte extrahieren
+        run: python3 .github/scripts/extract-inline-js.py
+
+      - name: CodeQL initialisieren
+        uses: github/codeql-action/init@v4
+        with:
+          languages: javascript-typescript
+          queries: security-extended
+
+      - name: CodeQL-Analyse ausführen
+        uses: github/codeql-action/analyze@v4
+        with:
+          category: "/language:javascript-inline"

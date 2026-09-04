@@ -42,6 +42,9 @@
       --ho-radius-lg: 20px;
       --ho-shadow-sm: 0 2px 4px rgba(0, 0, 0, 0.2);
       --ho-shadow-md: 0 10px 25px -5px rgba(0, 0, 0, 0.3);
+      /* Höhe der App-Bar: ab lg baut Vuetify sie 58px hoch, darunter 50px.
+         Alle klebenden Köpfe rechnen damit, statt feste Werte zu raten. */
+      --ho-appbar: 50px;
       --ho-shadow: var(--ho-shadow-md);
       --ho-space-1: 4px;
       --ho-space-2: 8px;
@@ -50,6 +53,11 @@
       --ho-space-5: 24px;
       --ho-space-6: 32px;
     }
+    /* Ab lg (1280px) baut Vuetify die App-Bar höher. */
+    @media (min-width: 1280px) {
+        :root { --ho-appbar: 58px; }
+    }
+
     :root[data-theme="light"] {
       --ho-background: #f8fafc;
       --ho-surface: #ffffff;
@@ -73,7 +81,11 @@
     #runtime-error h1 { margin-top: 0; font-size: 1.3rem; }
     #runtime-error code { color: #fbbf24; }
     
-    body { font-family: 'Inter', sans-serif; background-color: var(--ho-background); color: var(--ho-text); overflow-y: overlay;}
+    body { font-family: 'Inter', sans-serif; background-color: var(--ho-background); color: var(--ho-text);
+        /* Nicht overflow-y: overlay - das macht den Body zum Scroll-Container und
+           hebt position: sticky im gesamten Dokument auf. Der Viewport scrollt
+           über html, damit Spalten- und Wochenkopf stehen bleiben können. */
+        overflow-y: visible;}
     .mono-num { font-family: 'JetBrains Mono', monospace; letter-spacing: -0.5px; }
     .glass-effect { background: color-mix(in srgb, var(--ho-surface) 82%, transparent) !important; backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); border: 1px solid var(--ho-border) !important; }
 
@@ -131,7 +143,7 @@
         color: var(--ho-muted);
         border-bottom: 1px solid var(--ho-border);
         position: sticky;
-        top: 64px;
+        top: var(--ho-appbar);
         z-index: 5;
         background: color-mix(in srgb, var(--ho-surface) 96%, transparent);
         box-shadow: 0 1px 0 var(--ho-border), 0 8px 12px color-mix(in srgb, var(--ho-background) 35%, transparent);
@@ -191,6 +203,11 @@
     .tl-date-cell { display: flex; align-items: baseline; gap: 8px; white-space: nowrap; overflow: hidden; }
     .tl-date-num { font-size: 1rem; font-weight: 700; color: var(--ho-text); }
     .tl-date-day { font-size: 0.9rem; font-weight: 500; color: var(--ho-muted); }
+    /* Kalenderwoche als Merkmal des Tages (Variante B). Sie steht bewusst
+       leise neben Datum und Wochentag: wer tief in einer Woche liest, sieht
+       die Zugehörigkeit auch dann, wenn der Wochenkopf weitergezogen ist. */
+    .tl-date-kw { flex: none; font-size: 0.62rem; font-weight: 600; letter-spacing: 0.3px;
+                  color: var(--ho-muted); opacity: 0.65; }
     .tl-holiday-badge { font-size: 0.65rem; font-weight: 600; color: #ef4444; letter-spacing: -0.2px; background: rgba(239, 68, 68, 0.15); padding: 2px 6px; border-radius: 4px;}
     .worktime-warning {
         display: inline-flex;
@@ -206,31 +223,53 @@
         white-space: nowrap;
     }
     
+    /* Wochenkopf: die Zusammenfassung eröffnet ihre Woche als Abschnitt und
+       bleibt beim Scrollen stehen, statt zwischen den Tagen zu liegen. Der
+       Abstand öffnet nach oben (neue Woche) und schließt nach unten (Tage). */
+    /* Der Wochenblock (Variante C): ein Rahmen fasst Kopf und Tage einer Woche
+       zusammen. Der negative Außenabstand wird innen wieder ausgeglichen,
+       damit Spalten, Punkte und Zeitachse exakt dort bleiben, wo sie waren. */
+    .tl-week {
+        margin: 0 calc(var(--ho-space-3) * -1) var(--ho-space-4);
+        padding: var(--ho-space-2) var(--ho-space-3) var(--ho-space-3);
+        border: 1px solid var(--ho-border);
+        border-radius: var(--ho-radius-md);
+        background: color-mix(in srgb, var(--ho-surface) 40%, transparent);
+    }
+
     .tl-week-sum {
-        display: inline-flex;
+        display: flex;
         align-items: center;
         gap: var(--ho-space-3);
-        margin: var(--ho-space-2) 0 var(--ho-space-4) 48px;
-        padding: var(--ho-space-2) var(--ho-space-4);
-        background: color-mix(in srgb, var(--ho-surface) 76%, transparent);
-        border: 1px solid var(--ho-border);
-        border-radius: var(--ho-radius-sm);
+        margin: var(--ho-space-1) 0 var(--ho-space-2) 48px;
+        padding: var(--ho-space-2) 0;
+        border-top: 1px solid var(--ho-border);
         color: var(--ho-muted);
-        position: relative;
-        z-index: 2;
+        font-size: 0.72rem;
+        position: sticky;
+        top: calc(var(--ho-appbar) + 28px);
+        z-index: 4;
+        background: color-mix(in srgb, var(--ho-surface) 96%, transparent);
+        backdrop-filter: blur(8px);
+        -webkit-backdrop-filter: blur(8px);
+    }
+    /* Ohne Spaltenkopf sitzt der Wochenkopf direkt unter der App-Bar. */
+    @media (max-width: 768px) {
+        .tl-week-sum { top: var(--ho-appbar); margin-left: 0; }
     }
     .tl-week-sum__week {
-        color: var(--ho-text);
-        font-size: 0.75rem;
+        color: var(--ho-muted);
+        font-size: 0.68rem;
         font-weight: 700;
-        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        letter-spacing: 0.09em;
         white-space: nowrap;
     }
     .tl-week-sum__progress {
-        width: 112px;
-        height: 6px;
+        width: 88px;
+        height: 3px;
         overflow: hidden;
-        background: color-mix(in srgb, var(--ho-muted) 20%, transparent);
+        background: color-mix(in srgb, var(--ho-muted) 22%, transparent);
         border-radius: 999px;
     }
     .tl-week-sum__progress-bar {
@@ -242,14 +281,15 @@
     }
     .tl-week-sum__hours,
     .tl-week-sum__delta {
-        font-size: 0.78rem;
-        font-weight: 700;
+        font-size: 0.74rem;
+        font-weight: 600;
         white-space: nowrap;
     }
     .tl-week-sum__hours { color: var(--ho-text); }
     .tl-week-sum__delta { padding-left: var(--ho-space-3); border-left: 1px solid var(--ho-border); }
     @media (max-width: 600px) {
         .tl-week-sum { margin-left: 0; }
+        .tl-week { margin: 0 0 var(--ho-space-4); padding: var(--ho-space-2); background: none; }
         .tl-week-sum__progress { width: 76px; }
     }
 
@@ -365,7 +405,19 @@
         .tl-day-summary { margin: var(--ho-space-2) 0 0; gap: var(--ho-space-1) var(--ho-space-2); }
         .tl-summary-item { padding-right: var(--ho-space-2); border-right: 1px solid var(--ho-border); }
         .tl-summary-item:last-child { border-right: 0; }
-        .tl-day-edit { width: 100%; min-height: 44px; margin-top: var(--ho-space-2); }
+        .tl-day-card { cursor: pointer; }
+        /* Unterhalb der Desktop-Breite ist die Tageskarte selbst das Bedienelement. */
+        .tl-day-card::after {
+            content: "›";
+            position: absolute;
+            right: 10px;
+            top: 12px;
+            color: var(--ho-muted);
+            font-size: 1.25rem;
+            line-height: 1;
+            pointer-events: none;
+        }
+        .tl-day-card:focus-visible { outline: 2px solid var(--ho-primary); outline-offset: 2px; }
         .tl-spine { display: none; }
         
         .tl-row { 
@@ -407,11 +459,20 @@
           <v-list-item prepend-icon="mdi-calendar-month" title="Kalender" :active="viewMode === 'calendar'" @click="selectView('calendar')"></v-list-item>
           <v-list-item prepend-icon="mdi-calendar-range" title="Jahresübersicht" :active="viewMode === 'year'" @click="selectView('year')"></v-list-item>
           <v-divider class="my-3"></v-divider>
-          <v-list-subheader>Schnellaktionen</v-list-subheader>
+          <v-list-subheader>Erfassen &amp; planen</v-list-subheader>
           <v-list-item prepend-icon="mdi-calendar-plus" title="Heutigen Tag erfassen" @click="navDrawer = false; openTodayEntry()"></v-list-item>
           <v-list-item prepend-icon="mdi-calendar-multiple" title="Serienplanung" @click="navDrawer = false; openSeriesDialog()"></v-list-item>
+
+          <v-divider class="my-3"></v-divider>
+          <v-list-subheader>Daten</v-list-subheader>
+          <v-list-item prepend-icon="mdi-folder-open" title="Datei öffnen/anlegen" @click="navDrawer = false; openFile()"></v-list-item>
+          <v-list-item prepend-icon="mdi-tray-arrow-down" title="JSON exportieren" @click="navDrawer = false; saveToFile()"></v-list-item>
           <v-list-item prepend-icon="mdi-file-pdf-box" title="PDF importieren" @click="navDrawer = false; triggerPdfImport()"></v-list-item>
           <v-list-item prepend-icon="mdi-file-code-outline" title="JSON importieren" @click="navDrawer = false; triggerJsonImport()"></v-list-item>
+          <v-list-item v-if="storedHandleName && !fileHandle" prepend-icon="mdi-link-variant" title="Dateiverbindung wiederherstellen" @click="navDrawer = false; restoreFileConnection()"></v-list-item>
+
+          <v-divider class="my-3"></v-divider>
+          <v-list-subheader>Darstellung &amp; System</v-list-subheader>
           <v-list-item prepend-icon="mdi-cog" title="Einstellungen" @click="navDrawer = false; dialogSettings = true"></v-list-item>
         </v-list>
       </v-navigation-drawer>
@@ -440,32 +501,24 @@
             <v-spacer></v-spacer>
 
             <div class="d-flex align-center gap-1">
-                <v-btn icon="mdi-dots-vertical" variant="text" size="small" class="d-flex d-md-none" aria-label="Aktionen öffnen" @click="actionSheet = true"></v-btn>
-                <div class="d-none d-md-flex align-center gap-1">
-                <div class="d-flex align-center px-3 py-1 mr-4 rounded-pill border" style="background: rgba(0,0,0,0.25); border-color: rgba(255,255,255,0.05) !important;">
+                <!-- Der Speicherstatus ist Orientierung, keine Aktion: er bleibt in der
+                     Kopfzeile. Die Datei- und Importaktionen liegen im FAB und im Drawer. -->
+                <div class="d-flex align-center px-3 py-1 mr-1 mr-md-2 rounded-pill border" style="background: rgba(0,0,0,0.25); border-color: rgba(255,255,255,0.05) !important;">
                     <template v-if="fileHandle">
-                        <span class="dot green mr-2" title="Mit lokaler Datei synchronisiert"></span>
-                        <span class="text-caption text-bright font-weight-bold text-truncate" style="max-width: 100px;">[[ fileName ]]</span>
-                        <v-btn icon="mdi-content-save" size="x-small" variant="text" class="ml-1" :color="unsavedChanges ? 'warning' : 'grey'" @click="saveToFile" title="Speichern"></v-btn>
+                        <span class="dot green mr-2" :title="unsavedChanges ? 'Ungespeicherte Änderungen' : 'Mit lokaler Datei synchronisiert'"></span>
+                        <span class="text-caption text-bright font-weight-bold text-truncate d-none d-sm-inline" style="max-width: 110px;">[[ fileName ]]</span>
                     </template>
                     <template v-else-if="storedHandleName">
                         <span class="dot orange mr-2" title="Berechtigung zur Datei fehlt"></span>
-                        <span class="text-caption text-slate text-truncate" style="max-width: 100px;">[[ storedHandleName ]]</span>
-                        <v-btn icon="mdi-link-variant" size="x-small" variant="text" class="ml-1" color="primary" @click="restoreFileConnection" title="Verbindung wiederherstellen"></v-btn>
-                        <v-btn icon="mdi-folder-open" size="x-small" variant="text" class="ml-1" color="slate" @click="openFile" title="Andere Datei öffnen"></v-btn>
+                        <span class="text-caption text-slate text-truncate d-none d-sm-inline" style="max-width: 110px;">[[ storedHandleName ]]</span>
                     </template>
                     <template v-else>
                         <span class="dot red mr-2" title="Nur temporär im Browser gespeichert"></span>
-                        <span class="text-caption text-slate">Lokal (Browser)</span>
-                        <v-btn icon="mdi-folder-open" size="x-small" variant="text" class="ml-1" color="primary" @click="openFile" title="Datei öffnen/anlegen"></v-btn>
-                        <v-btn icon="mdi-download" size="x-small" variant="text" class="ml-1" color="slate" @click="saveToFile" title="Als JSON herunterladen"></v-btn>
+                        <span class="text-caption text-slate d-none d-sm-inline">Lokal (Browser)</span>
                     </template>
                 </div>
 
-                <v-btn icon="mdi-file-pdf-box" variant="text" color="#94a3b8" size="small" @click="triggerPdfImport" title="PDF Import"></v-btn>
-                <v-btn icon="mdi-calendar-multiple" variant="text" color="#94a3b8" size="small" @click="openSeriesDialog()" title="Serien-Planer"></v-btn>
-                <v-btn icon="mdi-cog" variant="text" color="#94a3b8" size="small" @click="dialogSettings = true" title="Einstellungen"></v-btn>
-                </div>
+                <v-btn :icon="themeIcon" variant="text" size="small" :aria-label="themeLabel" :title="themeLabel" @click="toggleTheme"></v-btn>
             </div>
         </v-container>
       </v-app-bar>
@@ -542,7 +595,8 @@
                         <div class="tl-panel glass-effect">
                             <div class="tl-spine d-none d-md-block"></div>
 
-                            <div class="tl-header d-none d-md-grid">
+                            <div class="tl-header"><!-- kein d-none/d-md-grid: Vuetify kennt d-md-grid nicht,
+                                 die Sichtbarkeit steuert ausschließlich unser CSS -->
                                 <div>Datum</div>
                                 <div>Status</div>
                                 <div class="text-center">Start</div>
@@ -552,9 +606,27 @@
                                 <div></div>
                             </div>
 
-                            <template v-for="(item, idx) in items" :key="item.date ? 'tl-day-'+item.date : 'tl-sum-'+idx">
-                                
-                                <div v-if="item && item.row_type === 'day' && (!settings.hide_weekends || !isWeekend(item))" class="position-relative tl-day-card" :class="{'is-today': isToday(item.date)}">
+                            <div v-for="(block, blockIdx) in weekBlocks" :key="'tl-week-'+blockIdx" class="tl-week">
+
+                                <div v-if="block.summary" class="tl-week-sum">
+                                    <span class="tl-week-sum__week">KW [[ block.summary.iso_week ]]</span>
+                                    <span class="tl-week-sum__progress" :aria-label="`Fortschritt: ${formatNum(block.summary.sum)} von ${formatNum(block.summary.target)} Stunden`">
+                                        <span class="tl-week-sum__progress-bar" :style="{ width: `${block.summary.target > 0 ? Math.min(100, Math.max(0, block.summary.sum / block.summary.target * 100)) : 0}%` }"></span>
+                                    </span>
+                                    <span class="tl-week-sum__hours mono-num">[[ formatNum(block.summary.sum) ]] von [[ formatNum(block.summary.target) ]] h</span>
+                                    <span class="tl-week-sum__delta mono-num" :class="getWeeklyColor(block.summary)">[[ block.summary.sum - block.summary.target > 0 ? '+' : '' ]][[ formatNum(block.summary.sum - block.summary.target) ]] h</span>
+                                </div>
+
+                                <div v-for="item in block.days" :key="'tl-day-'+item.date"
+                                     class="position-relative tl-day-card"
+                                     :class="{'is-today': isToday(item.date)}"
+                                     :data-kw="item.iso_week"
+                                     :role="isCompact ? 'button' : null"
+                                     :tabindex="isCompact ? 0 : null"
+                                     :aria-label="isCompact ? 'Tag ' + item.day_num + ' bearbeiten' : null"
+                                     @click="onDayCardActivate(item, $event)"
+                                     @keydown.enter.prevent="isCompact && openEditDialog(item)"
+                                     @keydown.space.prevent="isCompact && openEditDialog(item)">
                                     
                                     <div v-for="(entry, index) in item.entries" :key="index" 
                                          class="tl-row" :class="['type-' + entry.type, {'is-off-day': item.is_off_day, 'has-holiday': item.is_holiday}]">
@@ -565,6 +637,7 @@
                                             <template v-if="index === 0">
                                                 <span class="tl-date-num" :class="{'text-primary': isToday(item.date)}">[[ item.day_num ]].</span>
                                                 <span class="tl-date-day">[[ getGermanDayShort(item.weekday_index) ]]</span>
+                                                <span class="tl-date-kw">KW [[ item.iso_week ]]</span>
                                                 <span v-if="item.is_holiday" class="tl-holiday-badge">[[ item.holiday_name ]]</span>
                                                 <span v-if="item.total_net > 10" class="worktime-warning" title="Achtung: Tagesarbeitszeit über 10 Stunden (ArbZG)"><v-icon size="12">mdi-alert-outline</v-icon>Über 10 h</span>
                                             </template>
@@ -630,19 +703,10 @@
                                             <i v-else class="mdi mdi-close action-icon" title="Löschen" @click="deleteEntry(item, index)"></i>
                                         </div>
                                     </div>
-                                    <v-btn class="tl-day-edit d-md-none" variant="tonal" color="primary" prepend-icon="mdi-pencil" @click="openEditDialog(item)">Tag bearbeiten</v-btn>
                                 </div>
                                 
-                                <div v-else-if="item && item.row_type === 'summary'" class="tl-week-sum">
-                                    <span class="tl-week-sum__week">KW [[ item.iso_week ]]</span>
-                                    <span class="tl-week-sum__progress" :aria-label="`Fortschritt: ${formatNum(item.sum)} von ${formatNum(item.target)} Stunden`">
-                                        <span class="tl-week-sum__progress-bar" :style="{ width: `${item.target > 0 ? Math.min(100, Math.max(0, item.sum / item.target * 100)) : 0}%` }"></span>
-                                    </span>
-                                    <span class="tl-week-sum__hours mono-num">[[ formatNum(item.sum) ]] von [[ formatNum(item.target) ]] h</span>
-                                    <span class="tl-week-sum__delta mono-num" :class="getWeeklyColor(item)">[[ item.sum - item.target > 0 ? '+' : '' ]][[ formatNum(item.sum - item.target) ]] h</span>
-                                </div>
 
-                            </template>
+                            </div>
                         </div>
                     </div>
 
@@ -776,6 +840,7 @@
           <v-list-item prepend-icon="mdi-calendar-multiple" title="Serienplanung" @click="openSeriesDialog()"></v-list-item>
           <v-list-item prepend-icon="mdi-file-pdf-box" title="PDF importieren" @click="triggerPdfImport"></v-list-item>
           <v-list-item prepend-icon="mdi-file-code-outline" title="JSON importieren" @click="triggerJsonImport"></v-list-item>
+          <v-list-item prepend-icon="mdi-tray-arrow-down" title="JSON exportieren" @click="saveToFile"></v-list-item>
           <v-list-item prepend-icon="mdi-cog" title="Einstellungen" @click="dialogSettings = true"></v-list-item>
         </v-list>
       </v-menu>
@@ -1004,18 +1069,7 @@
         <v-btn value="calendar" @click="selectView('calendar')"><v-icon>mdi-calendar-month</v-icon><span>Kalender</span></v-btn>
         <v-btn value="year" @click="selectView('year')"><v-icon>mdi-calendar-range</v-icon><span>Jahr</span></v-btn>
       </v-bottom-navigation>
-      <v-bottom-sheet v-model="actionSheet">
-        <v-card class="glass-effect" rounded="t-xl">
-          <v-card-title class="text-body-1">Schnellaktionen</v-card-title>
-          <v-list class="bg-transparent">
-            <v-list-item prepend-icon="mdi-calendar-plus" title="Heutigen Tag erfassen" @click="actionSheet = false; openTodayEntry()"></v-list-item>
-            <v-list-item prepend-icon="mdi-calendar-multiple" title="Serienplanung" @click="actionSheet = false; openSeriesDialog()"></v-list-item>
-            <v-list-item prepend-icon="mdi-file-pdf-box" title="PDF importieren" @click="actionSheet = false; triggerPdfImport()"></v-list-item>
-            <v-list-item prepend-icon="mdi-file-code-outline" title="JSON importieren" @click="actionSheet = false; triggerJsonImport()"></v-list-item>
-            <v-list-item prepend-icon="mdi-cog" title="Einstellungen" @click="actionSheet = false; dialogSettings = true"></v-list-item>
-          </v-list>
-        </v-card>
-      </v-bottom-sheet>
+
       
     </v-app>
   </div>
@@ -1110,7 +1164,10 @@
             if(migrated) this.persist();
         },
         get() { return this.data; },
-        set(newData) { this.data = newData; this.init(); localStorage.setItem('bbk_data', JSON.stringify(this.data)); },
+        // Zuerst persistieren, dann initialisieren: init() liest den Stand aus dem
+        // localStorage zurück. Würde erst initialisiert, bliebe beim Laden einer Datei
+        // oder beim Zurücksetzen in Tests der alte Stand erhalten.
+        set(newData) { localStorage.setItem('bbk_data', JSON.stringify(newData)); this.init(); },
         replaceData(newData) {
             this.data = JSON.parse(JSON.stringify(newData));
             if (!this.data.settings) this.data.settings = {};
@@ -1291,6 +1348,16 @@
             throw new Error('Nicht unterstütztes Exportformat oder unbekannte Formatversion.');
         }
         const data = targetData;
+        // Konfliktquelle sind ausschließlich Anker, die vor diesem Import gespeichert
+        // waren. Zwei neue Einträge desselben Imports kollidieren nicht miteinander:
+        // bei mehreren Ankern an einem Tag ist der zuletzt gespeicherte maßgeblich
+        // (shared/test-cases/glz.json, "multiple-anchors-on-same-day...").
+        const existingOverrides = {};
+        for (const [existingDate, existingList] of Object.entries(data.entries || {})) {
+            existingOverrides[existingDate] = existingList.find(
+                entry => entry.glz_override !== null && entry.glz_override !== undefined
+            ) || null;
+        }
         const result = { imported_entries: 0, skipped_entries: 0, invalid_entries: 0, imported_custom_holidays: 0, holiday_conflicts: 0, glz_override_conflicts: 0, details: [], changed: false };
         payload.entries.forEach((raw, index) => {
             const normalized = normalizePortableEntry(raw);
@@ -1298,7 +1365,7 @@
             const { date, ...incoming } = normalized.entry;
             const current = data.entries[date] || [];
             if (current.some(entry => entryIdentity(entry) === entryIdentity(incoming))) { result.skipped_entries++; return; }
-            const existingOverride = current.find(entry => entry.glz_override !== null && entry.glz_override !== undefined);
+            const existingOverride = existingOverrides[date] || null;
             if (incoming.glz_override !== null && existingOverride && Number(existingOverride.glz_override) !== Number(incoming.glz_override)) { incoming.glz_override = null; incoming.glz_override_source = null; result.glz_override_conflicts++; }
             current.push(incoming); data.entries[date] = current; result.imported_entries++; result.changed = true;
         });
@@ -1425,7 +1492,8 @@
           stats: { total_ho_made: 0, total_ho_allowed: 1, total_office_made: 0, total_work_made: 0, avg_per_week: 0, workdays_month: 0, current_glz: 0 }, 
           settings: { weekly_hours: 39, active_weekdays: [0,1,2,3,4], ho_quota_percent: 60, hide_weekends: false, default_start_time: '08:00', auto_convert_planned: true, christmas_eve_and_new_years_eve_off: true, theme: 'dark' },
           dialogSettings: false, dialogEditDay: false, editingDay: null,
-          navDrawer: false, actionSheet: false,
+          navDrawer: false,
+          windowWidth: window.innerWidth,
           importDialog: { show: false, overwrite: false, file: null },
           jsonImport: { show: false, file: null, preview: null, payload: null },
           seriesDialog: { show: false, start: '', end: '', weekdays: [4], type: 'home', overwrite: false },
@@ -1450,6 +1518,26 @@
         currentMonth() { return this.currentDate.getMonth() + 1 }, 
         currentMonthName() { return this.currentDate.toLocaleString('de-DE', { month: 'long' }) },
         quotaPercentage() { if(!this.stats.total_ho_allowed) return 0; return (this.stats.total_ho_made / this.stats.total_ho_allowed) * 100; },
+        /* Jede Woche ist ein eigener Abschnitt: nur so klebt ihr Kopf genau so
+           lange, wie die Woche selbst zu sehen ist, statt sich mit den Köpfen
+           der anderen Wochen auf dieselbe Höhe zu stapeln. */
+        weekBlocks() {
+            const blocks = [];
+            const hideWeekends = !!(this.settings && this.settings.hide_weekends);
+            let current = null;
+            for (const item of (this.items || [])) {
+                if (!item) continue;
+                if (item.row_type === 'summary') {
+                    current = { summary: item, days: [] };
+                    blocks.push(current);
+                } else if (item.row_type === 'day') {
+                    if (hideWeekends && this.isWeekend(item)) continue;
+                    if (!current) { current = { summary: null, days: [] }; blocks.push(current); }
+                    current.days.push(item);
+                }
+            }
+            return blocks.filter(block => block.days.length > 0);
+        },
         paddingDays() { if(!this.items || this.items.length === 0) return 0; const firstDay = this.items.find(i => i.row_type === 'day'); return firstDay ? firstDay.weekday_index : 0; },
         calcDailyTarget() { const activeCount = this.settings.active_weekdays ? this.settings.active_weekdays.length : 5; if (activeCount === 0) return 0; return this.settings.weekly_hours / activeCount; },
         budgetRemainingHours() { return this.stats.total_ho_allowed - this.stats.total_ho_made; },
@@ -1465,6 +1553,10 @@
         yearTotalOpenWorkdays() { return this.yearData && this.yearData.length ? this.yearData.reduce((sum, item) => sum + item.open_workdays, 0) : 0; },
         yearQuotaPercentage() { return this.yearTotalHoAllowed ? (this.yearTotalHoHours / this.yearTotalHoAllowed) * 100 : 0; },
         seriesTypes() { return this.baseTypes.filter(type => type.value !== ''); },
+        // Unter 960 px (Vuetify-md) sind die Tageszeilen Karten statt Direkteingaben.
+        isCompact() { return this.windowWidth < 960; },
+        themeIcon() { return this.settings.theme === 'light' ? 'mdi-weather-night' : 'mdi-weather-sunny'; },
+        themeLabel() { return this.settings.theme === 'light' ? 'Zu dunklem Farbschema wechseln' : 'Zu hellem Farbschema wechseln'; },
         seriesValidationErrors() {
             const errors = {};
             const isCalendarDate = value => {
@@ -1489,6 +1581,7 @@
       },
       async mounted() {
           Store.onPersist = () => { if(this.viewMode==='year') this.loadYearData(); else this.loadMonthData(); if(this.fileHandle) this.saveToFile(); else this.unsavedChanges = true; };
+          window.addEventListener('resize', this.updateWindowWidth);
           this.loadData();
           await this.checkForStoredHandle();
           this.showBrowserBackupReminder();
@@ -1514,6 +1607,26 @@
         formatOneDecimal(val) { return val || val === 0 ? val.toFixed(1).replace('.', ',') : '0,0'; },
         showMsg(text, color='success') { this.snackbar.text = text; this.snackbar.color = color; this.snackbar.show = true; },
         selectView(view) { this.viewMode = view; this.navDrawer = false; },
+
+        toggleTheme() {
+            const next = this.settings.theme === 'light' ? 'dark' : 'light';
+            this.settings.theme = next;
+            Store.saveSettings(this.settings);
+            this.applyTheme(next);
+            this.showMsg(next === 'light' ? 'Farbschema: Hell.' : 'Farbschema: Dunkel.', 'success');
+        },
+
+        updateWindowWidth() { this.windowWidth = window.innerWidth; },
+
+        onDayCardActivate(item, event) {
+            // Unterhalb der Desktop-Breite öffnet die Tageskarte selbst den Dialog; dort
+            // sind die Felder nicht direkt bedienbar. Direkte Eingaben haben Vorrang.
+            if (!this.isCompact) return;
+            const target = event && event.target;
+            if (target && target.closest && target.closest('input, select, textarea, button, a, .action-icon')) return;
+            this.openEditDialog(item);
+        },
+
         openYearMonth(month) {
             this.currentDate = new Date(this.currentYear, month - 1, 1);
             this.selectView('calendar');
@@ -1864,6 +1977,10 @@
             let total_ho=0, total_office=0, workdays=0;
             let current_week_sum = 0.0;
             let current_week_target = 0.0;
+            // Tage der laufenden Woche werden gesammelt und nach dem Wochenkopf
+            // ausgegeben: die Zusammenfassung eröffnet den Abschnitt.
+            let week_days = [];
+            let week_iso = null;
             let total_target_hours_month = 0.0;
             
             let running_glz = this.getGlzCarryover(year, month);
@@ -1953,7 +2070,8 @@
 
                 if(dayEntries.length === 0) dayEntries.push({type:'', start:'', end:'', comment:'', glz_override: null, glz_override_source: null});
 
-                this.items.push({ 
+                if (week_days.length === 0) week_iso = getISOWeek(dateObj);
+                week_days.push({ 
                     row_type: 'day', date: dateStr, day_num: d, weekday_index: (dateObj.getDay()+6)%7, iso_week: getISOWeek(dateObj), 
                     is_holiday: (info.holiday_name && !info.is_workday), holiday_name: info.holiday_name, is_short_day: info.is_short_day, is_off_day: info.is_off_day,
                     daily_target: info.target, entries: dayEntries, total_net: dayNet, main_type: mainType, glz_saldo: running_glz, 
@@ -1965,11 +2083,14 @@
                     if (current_week_target > 0 || current_week_sum > 0) {
                         this.items.push({ 
                             row_type: 'summary', 
-                            iso_week: getISOWeek(dateObj), 
+                            iso_week: week_iso !== null ? week_iso : getISOWeek(dateObj), 
                             sum: parseFloat(current_week_sum.toFixed(2)), 
                             target: parseFloat(current_week_target.toFixed(2)) 
                         });
                     }
+                    this.items.push(...week_days);
+                    week_days = [];
+                    week_iso = null;
                     current_week_sum = 0.0;
                     current_week_target = 0.0;
                 }

@@ -34,3 +34,26 @@ JSON ist ein Austausch-, Export- und Importformat. Die Docker-Variante verwendet
 - Automatisierung: [`.github/workflows/`](.github/workflows/)
 
 Die produktive Docker-Oberfläche ist `/` (`Docker/static/index.html`). Sie basiert auf der früheren Beta-Oberfläche; `/beta` leitet aus Kompatibilitätsgründen auf `/` weiter.
+
+## Sicherheit und Automatisierung
+
+Das Repository ist öffentlich, deshalb sind die Sicherheitsfunktionen von GitHub ohne Zusatzkosten nutzbar.
+
+| Baustein | Datei | Was er tut |
+| --- | --- | --- |
+| CodeQL (SAST) | [`.github/workflows/codeql.yml`](.github/workflows/codeql.yml) | statische Analyse von Python, der Inline-Skripte beider Oberflächen und der Workflows selbst; wöchentlich sowie bei Push und Pull Request auf `main` |
+| Abhängigkeiten und Workflows | [`.github/workflows/security.yml`](.github/workflows/security.yml) | `pip-audit` gegen die Python-Abhängigkeiten, `actionlint` für die Workflows, Abhängigkeits-Review für Pull Requests |
+| Dependabot | [`.github/dependabot.yml`](.github/dependabot.yml) | wöchentliche Aktualisierungsvorschläge für Python-Pakete, GitHub Actions und das Docker-Basis-Image |
+| Tests | [`.github/workflows/`](.github/workflows/) | beide Test-Suiten bei Push und Pull Request |
+
+Das JavaScript der beiden Oberflächen steht inline in HTML-Dateien, die CodeQL nicht auswertet. [`.github/scripts/extract-inline-js.py`](.github/scripts/extract-inline-js.py) löst die Skriptblöcke deshalb vor der Analyse heraus, damit auch dieser Teil geprüft wird.
+
+Folgendes lässt sich nicht über Dateien im Repository einschalten, sondern **einmalig unter _Settings → Code security and analysis_**:
+
+- **Dependabot alerts** und **Dependabot security updates**: Warnungen und automatische Korrektur-Pull-Requests für verwundbare Abhängigkeiten
+- **Secret scanning** und **Push protection**: findet Geheimnisse im Code und blockiert das Pushen neuer Geheimnisse
+- **Private vulnerability reporting**: vertrauliche Meldung von Schwachstellen, siehe [`SECURITY.md`](SECURITY.md)
+
+**Stand dieses Repositories:** Code Scanning läuft über das *Standard-Setup* und deckt damit Python und Actions bereits ab. Der Workflow `.github/workflows/codeql.yml` ist die erweiterte Konfiguration (zusätzlich das JavaScript der Oberflächen) und bleibt so lange in Bereitschaft, bis unter _Settings → Code security → Code scanning_ auf _Advanced_ umgestellt und die Repository-Variable `CODEQL_ADVANCED` auf `true` gesetzt wird. Beides gleichzeitig ist nicht möglich: GitHub lehnt SARIF aus einer erweiterten Konfiguration ab, solange das Standard-Setup aktiv ist.
+
+Sobald CodeQL einmal Ergebnisse geliefert hat, erscheinen sie unter _Security → Code scanning_.

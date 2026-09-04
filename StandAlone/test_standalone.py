@@ -18,6 +18,18 @@ SHARED_PDF_MERGE_CASES = Path(__file__).resolve().parents[1] / "shared" / "test-
 BASE_URL = "http://localhost:8000/ho-planer.html"
 PRIVATE_DIR = "testfiles"
 
+# Aktionen liegen an genau einer Stelle: im Menü des Floating Action Buttons.
+QUICK_ACTION_FAB = ".quick-action-fab"
+QUICK_ACTION_ITEMS = ".v-menu .v-list-item"
+
+
+def open_quick_actions(page: Page):
+    """Öffnet das Aktionsmenü des FAB und liefert seine Einträge."""
+    page.locator(QUICK_ACTION_FAB).click()
+    items = page.locator(QUICK_ACTION_ITEMS)
+    expect(items.first).to_be_visible()
+    return items
+
 # --- FIXTURES ---
 @pytest.fixture(autouse=True)
 def setup_viewport(page: Page):
@@ -418,7 +430,14 @@ def test_shared_pdf_merge_cases(page: Page):
 def test_shared_glz_anchor_round_trip(page: Page):
     """GLZ-Anker behalten beim Browser-Export und -Import Wert sowie Quelle."""
     cases = json.loads(SHARED_GLZ_CASES.read_text(encoding="utf-8"))["cases"]
-    for case in cases:
+    # Zwei Referenzfälle enthalten bewusst keinen Anker: ohne Anker beginnt die
+    # Berechnung beim ersten Eintrag des Zieljahres. Geprüft wird das in
+    # test_glz_carryover_without_anchor_starts_at_first_target_year_entry;
+    # hier zählen nur die Ankerfälle.
+    anchor_cases = [case for case in cases if "expected_anchor" in case]
+    assert len(anchor_cases) == 3, "Die Ankerfälle der gemeinsamen Referenzdatei fehlen."
+
+    for case in anchor_cases:
         page.evaluate("() => Store.set({ settings: {}, entries: {}, customHolidays: {} })")
         payload = {
             "format": "ho-planer-export", "version": 1, "exported_at": "2098-01-01T00:00:00Z",
@@ -550,8 +569,8 @@ def test_add_custom_holiday_rejects_invalid_input_before_persisting(page: Page):
 
 
 def test_v2_gui_settings_custom_holiday(page: Page):
-    # Einstellungen über das Icon in der Kopfzeile öffnen
-    page.locator("button[title='Einstellungen']").click()
+    # Einstellungen über das Aktionsmenü öffnen
+    open_quick_actions(page).filter(has_text="Einstellungen").click()
     today = page.evaluate("toLocalIsoDate(new Date())")
     
     dialog = page.locator(".v-dialog .v-card").filter(has_text="Einstellungen")
@@ -578,8 +597,10 @@ def test_v2_gui_switch_views(page: Page):
     expect(page.locator(".bento-grid").first).to_be_visible()
     
     page.locator(".view-btn").filter(has_text="Jahr").click()
-    expect(page.locator("th").filter(has_text="Urlaub")).to_be_visible()
-    expect(page.locator("canvas#donutChart")).to_be_attached()
+    # Jahresansicht: Monatstabelle mit den vier Kennzahlen und Balkendiagramm
+    expect(page.locator("th").filter(has_text="Homeoffice-Quote")).to_be_visible()
+    expect(page.locator("th").filter(has_text="Planung")).to_be_visible()
+    expect(page.locator("canvas#barChart")).to_be_attached()
     
     page.locator(".view-btn").filter(has_text="Timeline").click()
     expect(page.locator(".tl-panel").first).to_be_visible()
@@ -639,3 +660,159 @@ def test_v2_pdf_import_missing_booking(page: Page):
     # Neues Wording prüfen
     comment_field = row.locator("input[placeholder='Notiz...']")
     expect(comment_field).to_have_value(re.compile("Fehlt im PDF", re.IGNORECASE))
+
+# --- Angleichung an die Docker-Oberfläche -------------------------------
+
+def test_kopfzeile_enthält_keine_doppelten_aktionen(page: Page):
+    """Die Kopfzeile trägt Orientierung, nicht die Aktionen."""
+    app_bar = page.locator(".v-app-bar")
+    for label in ("PDF", "Serien", "Einstellungen", "Aktionen öffnen"):
+        expect(app_bar.locator(f"[title*='{label}']")).to_have_count(0)
+
+    # Speicherstatus und Farbschema bleiben sichtbar
+    expect(app_bar.locator("[title*='Farbschema']")).to_be_visible()
+    expect(page.locator(".v-app-bar .dot")).to_be_visible()
+
+
+def test_aktionsmenü_bietet_jede_aktion_einmal(page: Page):
+    actions = open_quick_actions(page)
+    for label in ("Tag erfassen", "Serienplanung", "PDF importieren", "JSON importieren", "JSON exportieren", "Einstellungen"):
+        expect(actions.filter(has_text=label)).to_be_visible()
+    expect(actions).to_have_count(6)
+
+
+def test_drawer_ist_gegliedert(page: Page):
+    page.locator("button[aria-label='Navigation öffnen']").click()
+    drawer = page.locator(".v-navigation-drawer")
+    expect(drawer).to_be_visible()
+    for group in ("Ansichten", "Erfassen & planen", "Daten", "Darstellung & System"):
+        expect(drawer.locator(".v-list-subheader").filter(has_text=group)).to_be_visible()
+    expect(drawer.locator(".v-list-item").filter(has_text="Datei öffnen/anlegen")).to_be_visible()
+
+
+def test_theme_umschalter_wechselt_und_bleibt(page: Page):
+    first = page.evaluate("() => document.documentElement.dataset.theme")
+    page.locator(".v-app-bar button[aria-label*='Farbschema']").click()
+    second = page.evaluate("() => document.documentElement.dataset.theme")
+    assert second in ("light", "dark")
+    assert second != first
+    assert page.evaluate("() => Store.getSettings().theme") == second
+
+
+def test_mobile_tageskarte_ist_das_bedienelement(page: Page):
+    page.set_viewport_size({"width": 390, "height": 844})
+    page.reload()
+    page.wait_for_timeout(800)
+
+    expect(page.locator(".tl-day-edit")).to_have_count(0)
+    card = page.locator(".tl-day-card").first
+    expect(card).to_have_attribute("role", "button")
+    card.locator(".tl-date-cell").first.click()
+    expect(page.locator(".v-dialog .v-card").first).to_be_visible()
+
+
+# --- Wochenkopf ---------------------------------------------------------
+
+def test_wochenkopf_steht_vor_seinen_tagen(page: Page):
+    """Die Zusammenfassung eröffnet die Woche, statt sie abzuschließen."""
+    blocks = []
+    for item in page.evaluate("() => window.vm.items"):
+        if item["row_type"] == "summary":
+            blocks.append({"week": item["iso_week"], "dates": []})
+        elif blocks:
+            blocks[-1]["dates"].append(item["date"])
+
+    assert len(blocks) >= 4, "Der Monat muss mehrere Wochenköpfe enthalten."
+    for block in blocks:
+        assert block["dates"], f"KW {block['week']} hat keine Tage"
+        for date_str in block["dates"]:
+            iso = page.evaluate("d => { const x = new Date(d + 'T12:00:00'); return getISOWeek(x); }", date_str)
+            assert iso == block["week"], date_str
+
+
+def test_wochenkopf_über_den_tagen(page: Page):
+    page.evaluate("() => { window.vm.loadData(); }")
+    page.wait_for_timeout(500)
+    header = page.locator(".tl-week-sum").first
+    expect(header).to_be_visible()
+    assert header.bounding_box()["y"] < page.locator(".tl-day-card").first.bounding_box()["y"]
+
+    expect(header.locator(".tl-week-sum__week")).to_contain_text("KW")
+    expect(header.locator(".tl-week-sum__hours")).to_contain_text("von")
+
+
+def test_wochenkopf_bleibt_beim_scrollen_sichtbar(page: Page):
+    page.evaluate("() => { window.vm.loadData(); }")
+    page.wait_for_timeout(500)
+    header = page.locator(".tl-week-sum").first
+    expect(header).to_be_visible()
+
+    page.mouse.wheel(0, 500)
+    page.wait_for_timeout(500)
+    box = header.bounding_box()
+    assert box["y"] > 0, "Der Kopf ist beim Scrollen aus dem Blickfeld gewandert."
+    assert box["y"] < 200, "Der Kopf klebt nicht unter der Kopfzeile."
+
+
+def test_wochenköpfe_stapeln_sicht_nicht(page: Page):
+    """Köpfe dürfen nicht gleichzeitig auf derselben Höhe kleben.
+
+    Ohne eigenen Abschnitt pro Woche sammeln sich alle Köpfe an derselben
+    Klebeposition und überdecken sich gegenseitig.
+    """
+    # Erst warten, bis die Timeline steht: sonst ist die Dokumenthöhe noch die
+    # der leeren Seite und der Scroll-Wert damit wirkungslos.
+    expect(page.locator(".tl-week").first).to_be_visible()
+    # Nicht nur eine Position: die Dokumenthöhe hängt von Daten und Einstellungen
+    # ab, deshalb wird über den ganzen Scrollbereich geprüft.
+    hoehe = page.evaluate("() => window.innerHeight")
+    for anteil in (0, 0.25, 0.5, 0.75, 1.0):
+        page.evaluate(f"() => window.scrollTo(0, Math.round(document.documentElement.scrollHeight * {anteil}))")
+        page.wait_for_timeout(250)
+        tops = page.evaluate(
+            "() => [...document.querySelectorAll('.tl-week-sum')]"
+            ".map(h => Math.round(h.getBoundingClientRect().top))"
+        )
+        # Der Fehler, den der Wochenblock behebt: kein Kopf darf auf der Höhe
+        # eines anderen kleben.
+        assert len(set(tops)) == len(tops), f"Zwei Köpfe auf derselben Höhe: {tops}"
+        # Beim Übergang von einem Block zum nächsten sitzt der folgende Kopf
+        # kurz zwischen Klebe- und Normalposition - entscheidend ist, dass
+        # oben immer Orientierung steht.
+        assert any(40 <= top <= hoehe for top in tops), f"Kein Kopf sichtbar: {tops}"
+
+
+def test_jede_woche_bildet_einen_block(page: Page):
+    """Variante C: Rahmen fasst Kopf und Tage einer Woche zusammen."""
+    page.evaluate("() => { window.vm.loadData(); }")
+    expect(page.locator(".tl-week").first).to_be_visible()
+    blocks = page.evaluate(
+        "() => [...document.querySelectorAll('.tl-week')].map(b => ({"
+        "  kopf: b.querySelector('.tl-week-sum') ? b.querySelector('.tl-week-sum').innerText.trim().split('\\n')[0] : null,"
+        "  tage: [...b.querySelectorAll('.tl-day-card')].map(c => c.dataset.kw),"
+        "}))"
+    )
+    assert len(blocks) >= 4, "Der Monat muss mehrere Wochenblöcke enthalten."
+    for block in blocks:
+        assert block["kopf"] and block["kopf"].startswith("KW ")
+        woche = block["kopf"].split()[1]
+        assert block["tage"], f"{block['kopf']} enthält keine Tage"
+        assert set(block["tage"]) == {woche}, f"Block {woche} enthält fremde Tage: {block['tage']}"
+
+
+def test_jeder_tag_trägt_seine_kalenderwoche(page: Page):
+    """Variante B: die Kalenderwoche ist Merkmal des Tages, nicht nur des Kopfes."""
+    page.evaluate("() => { window.vm.loadData(); }")
+    expect(page.locator(".tl-week").first).to_be_visible()
+    for anteil in (0, 0.25, 0.5, 0.75, 1.0):
+        page.evaluate(f"() => window.scrollTo(0, Math.round(document.documentElement.scrollHeight * {anteil}))")
+        page.wait_for_timeout(250)
+        zeilen = page.evaluate(
+            "() => [...document.querySelectorAll('.tl-day-card')]"
+            ".filter(c => { const r = c.getBoundingClientRect(); return r.bottom > 130 && r.top < window.innerHeight - 60; })"
+            ".map(c => c.dataset.kw + '|' + (c.querySelector('.tl-date-kw') ? c.querySelector('.tl-date-kw').textContent.trim() : ''))"
+        )
+        assert zeilen, f"Keine Tageszeile sichtbar bei Scroll-Anteil {anteil}"
+        for zeile in zeilen:
+            woche, text = zeile.split("|")
+            assert text == f"KW {woche}", f"KW-Merkmal falsch oder fehlend: {zeile!r}"
