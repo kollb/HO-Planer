@@ -8,6 +8,19 @@ from playwright.sync_api import Page, expect
 # Die frühere Beta-Oberfläche ist die produktive Standardansicht.
 BASE_URL = "http://localhost:5000/"
 
+# Aktionen liegen an genau einer Stelle: im Menü des Floating Action Buttons.
+QUICK_ACTION_FAB = ".quick-action-fab"
+QUICK_ACTION_ITEMS = ".v-menu .v-list-item"
+
+
+def open_quick_actions(page: Page):
+    """Öffnet das Aktionsmenü des FAB und liefert seine Einträge."""
+    page.locator(QUICK_ACTION_FAB).click()
+    items = page.locator(QUICK_ACTION_ITEMS)
+    expect(items.first).to_be_visible()
+    return items
+
+
 @pytest.fixture(autouse=True)
 def setup_viewport(page: Page):
     """
@@ -24,11 +37,66 @@ def test_standard_initial_elements_present(page: Page):
     page.goto(BASE_URL)
     # Titel ist jetzt in der neuen Top-App-Bar
     expect(page.get_by_text("HO Planer").first).to_be_visible()
-    
-    # Menüeinträge prüfen (sind jetzt Icons mit title Attributen in der Header-Leiste)
-    expect(page.locator("button[title='PDF Import']").first).to_be_visible()
-    expect(page.locator("button[title='Serien-Planer']").first).to_be_visible()
-    expect(page.locator("button[title='Einstellungen']").first).to_be_visible()
+
+    # Die Kopfzeile trägt Navigation und Darstellung, die Aktionen liegen im FAB.
+    expect(page.locator("button[aria-label='Navigation öffnen']")).to_be_visible()
+    expect(page.locator(QUICK_ACTION_FAB)).to_be_visible()
+
+    actions = open_quick_actions(page)
+    expect(actions.filter(has_text="PDF importieren")).to_be_visible()
+    expect(actions.filter(has_text="Serienplanung")).to_be_visible()
+    expect(actions.filter(has_text="Einstellungen")).to_be_visible()
+
+
+def test_app_bar_has_no_obsolete_beta_controls(page: Page):
+    """Der BETA-Hinweis und der Verweis „Zurück zu V1" sind entfernt."""
+    page.goto(BASE_URL)
+    app_bar = page.locator(".v-app-bar")
+    expect(app_bar.locator("[title='Zurück zu V1']")).to_have_count(0)
+    expect(app_bar.get_by_text("BETA")).to_have_count(0)
+
+
+def test_app_bar_contains_no_action_duplicates(page: Page):
+    """Aktionen hängen nicht zusätzlich in der Kopfzeile."""
+    page.goto(BASE_URL)
+    app_bar = page.locator(".v-app-bar")
+    for label in ("PDF", "Serien", "Einstellungen", "Zurück zu V1", "Aktionen öffnen"):
+        expect(app_bar.locator(f"[title*='{label}']")).to_have_count(0)
+
+
+def test_quick_action_menu_offers_every_action_once(page: Page):
+    """Das Aktionsmenü deckt Erfassung, Planung, Import, Export und Einstellungen ab."""
+    page.goto(BASE_URL)
+    actions = open_quick_actions(page)
+    for label in ("Tag erfassen", "Serienplanung", "PDF importieren", "JSON importieren", "JSON exportieren", "Einstellungen"):
+        expect(actions.filter(has_text=label)).to_be_visible()
+    # Jede Aktion genau einmal
+    expect(actions).to_have_count(6)
+
+
+def test_json_export_downloads_a_file(page: Page):
+    """Der Export ist aus der Oberfläche erreichbar und liefert eine Datei."""
+    page.goto(BASE_URL)
+    with page.expect_download() as download_info:
+        open_quick_actions(page).filter(has_text="JSON exportieren").click()
+    download = download_info.value
+    assert download.suggested_filename.startswith("ho-planer-export")
+    assert download.suggested_filename.endswith(".json")
+
+
+def test_theme_toggle_switches_and_persists(page: Page):
+    """Der Umschalter in der Kopfzeile wechselt das Farbschema dauerhaft."""
+    page.goto(BASE_URL)
+    initial_theme = page.evaluate("() => document.documentElement.dataset.theme")
+
+    page.locator(".v-app-bar button[aria-label*='Farbschema']").click()
+    toggled_theme = page.evaluate("() => document.documentElement.dataset.theme")
+    assert toggled_theme in ("light", "dark")
+    assert toggled_theme != initial_theme
+
+    expect(page.locator(".v-snackbar")).to_be_visible()
+    stored = page.evaluate("() => fetch('/api/settings').then(response => response.json())")
+    assert stored["theme"] == toggled_theme
 
 def test_standard_switch_views(page: Page):
     page.goto(BASE_URL)
@@ -101,7 +169,7 @@ def test_standard_edit_day_dialog_calendar(page: Page):
 
 def test_standard_series_planner_dialog(page: Page):
     page.goto(BASE_URL)
-    page.locator("button[title='Serien-Planer']").click()
+    open_quick_actions(page).filter(has_text="Serienplanung").click()
     
     dialog_title = page.locator(".v-card-title").filter(has_text="Serien-Planer")
     expect(dialog_title).to_be_visible()
@@ -120,7 +188,7 @@ def test_standard_custom_holiday_edit(page: Page):
     page.goto(BASE_URL)
     
     # Einstellungen öffnen
-    page.locator("button[title='Einstellungen']").click()
+    open_quick_actions(page).filter(has_text="Einstellungen").click()
     dialog = page.locator(".v-dialog .v-card").filter(has_text="Einstellungen")
     expect(dialog).to_be_visible()
     expect(dialog.get_by_label("Heiligabend und Silvester arbeitsfrei")).to_be_visible()
@@ -164,7 +232,7 @@ def test_standard_custom_holiday_save_error_is_visible(page: Page):
 
     page.route("**/api/custom-holidays", reject_custom_holiday_save)
     page.goto(BASE_URL)
-    page.locator("button[title='Einstellungen']").click()
+    open_quick_actions(page).filter(has_text="Einstellungen").click()
     dialog = page.locator(".v-dialog .v-card").filter(has_text="Einstellungen")
     expect(dialog).to_be_visible()
 
@@ -175,3 +243,49 @@ def test_standard_custom_holiday_save_error_is_visible(page: Page):
     dialog.locator(".mdi-content-save").locator("..").click()
 
     expect(page.locator(".v-snackbar").filter(has_text="Sondertag konnte nicht gespeichert werden.")).to_be_visible()
+
+# ==========================================
+# MOBILE TAGESKARTEN
+# ==========================================
+
+def test_mobile_timeline_has_no_repeated_action_buttons(page: Page):
+    """Unterhalb der Desktop-Breite gibt es keinen Button je Tag mehr."""
+    page.set_viewport_size({"width": 390, "height": 844})
+    page.goto(BASE_URL)
+
+    expect(page.locator(".tl-day-edit")).to_have_count(0)
+    expect(page.locator(".tl-day-card").first).to_be_visible()
+
+
+def test_mobile_day_card_opens_dialog_by_click(page: Page):
+    """Die Tageskarte selbst ist das Bedienelement."""
+    page.set_viewport_size({"width": 390, "height": 844})
+    page.goto(BASE_URL)
+
+    card = page.locator(".tl-day-card").first
+    expect(card).to_have_attribute("role", "button")
+    expect(card).to_have_attribute("tabindex", "0")
+
+    # Die Felder bleiben direkt bedienbar; getippt wird auf den Kopfbereich der Karte.
+    card.locator(".tl-date-cell").first.click()
+    expect(page.locator(".v-dialog .v-card").first).to_be_visible()
+
+
+def test_mobile_day_card_opens_dialog_by_keyboard(page: Page):
+    """Die Tageskarte ist auch per Tastatur bedienbar."""
+    page.set_viewport_size({"width": 390, "height": 844})
+    page.goto(BASE_URL)
+
+    card = page.locator(".tl-day-card").first
+    card.focus()
+    page.keyboard.press("Enter")
+    expect(page.locator(".v-dialog .v-card").first).to_be_visible()
+
+
+def test_desktop_rows_keep_direct_input(page: Page):
+    """Auf Desktop bleiben die Felder direkt bedienbar; die Karte ist kein Button."""
+    page.goto(BASE_URL)
+
+    card = page.locator(".tl-day-card").first
+    expect(card).not_to_have_attribute("role", "button")
+    expect(page.locator(".tl-row").first.locator("input").first).to_be_visible()
