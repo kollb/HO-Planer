@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HO-Planer – Die Wochenzeile neu gedacht</title>
+<style>
+  :root {
+    --bg: #0f172a; --surface: #1e293b; --surface2: #334155;
+    --primary: #3b82f6; --success: #10b981; --warning: #f59e0b; --error: #ef4448;
+    --text: #f8fafc; --muted: #94a3b8; --border: rgba(255,255,255,.10);
+    --radius: 12px; --mono: ui-monospace, "JetBrains Mono", Menlo, monospace;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 32px 20px 96px; background: var(--bg); color: var(--text);
+         font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; line-height: 1.6; }
+  .wrap { max-width: 1080px; margin: 0 auto; }
+  h1 { font-size: 1.7rem; margin: 0 0 6px; letter-spacing: -.5px; }
+  h2 { font-size: 1.15rem; margin: 44px 0 4px; letter-spacing: -.3px; }
+  h2 .num { color: var(--primary); font-family: var(--mono); margin-right: 10px; }
+  p { margin: 8px 0; color: #cbd5e1; }
+  .lead, .sub { color: var(--muted); }
+  .sub { font-size: .88rem; }
+  code { font-family: var(--mono); font-size: .85em; background: rgba(148,163,184,.14); padding: 1px 5px; border-radius: 4px; }
+  hr { border: 0; border-top: 1px solid var(--border); margin: 40px 0; }
+
+  .frame { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; margin-top: 12px; }
+  .frame > header { padding: 10px 14px; border-bottom: 1px solid var(--border); font-size: .85rem; display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .frame .body { padding: 14px; }
+  .cap { color: var(--muted); font-size: .84rem; padding: 0 14px 14px; margin: 0; }
+  .tag { font-size: .68rem; text-transform: uppercase; letter-spacing: .6px; padding: 2px 8px; border-radius: 999px; font-weight: 700; }
+  .tag.a { background: rgba(59,130,246,.18); color: #93c5fd; }
+  .tag.b { background: rgba(16,185,129,.18); color: #6ee7b7; }
+  .tag.c { background: rgba(245,158,11,.18); color: #fcd34d; }
+  .tag.ist { background: rgba(239,68,72,.16); color: #fca5a5; }
+
+  /* Mock-Zeilen */
+  .tl { font-size: .82rem; }
+  .d { display: flex; align-items: center; gap: 10px; padding: 6px 8px; border-radius: 6px; }
+  .d:nth-child(even) { background: rgba(255,255,255,.02); }
+  .d .dt { width: 7px; height: 7px; border-radius: 50%; background: var(--primary); flex: 0 0 auto; }
+  .d.off .dt { background: var(--surface2); }
+  .d .n { font-family: var(--mono); font-weight: 700; width: 26px; }
+  .d .w { color: var(--muted); width: 22px; }
+  .d .st { flex: 1; }
+  .d .t { font-family: var(--mono); color: var(--muted); width: 96px; text-align: right; }
+  .d .h { font-family: var(--mono); font-weight: 700; width: 58px; text-align: right; }
+  .d.off { opacity: .45; }
+
+  .kw { display: flex; align-items: center; gap: 10px; font-size: .76rem; color: var(--muted); }
+  .kw .label { font-weight: 700; letter-spacing: .09em; text-transform: uppercase; }
+  .kw .bar { width: 76px; height: 3px; border-radius: 999px; background: rgba(148,163,184,.22); overflow: hidden; }
+  .kw .bar i { display: block; height: 100%; background: var(--primary); }
+  .kw .val { font-family: var(--mono); color: var(--text); }
+  .kw .delta { font-family: var(--mono); font-weight: 700; }
+  .pos { color: var(--success); } .neg { color: var(--error); }
+
+  /* Variante A: Wochenkopf */
+  .a-head { display: flex; align-items: center; gap: 10px; margin: 6px 0 8px; padding: 7px 8px 8px; border-top: 1px solid var(--border); position: sticky; top: 0; background: var(--surface); z-index: 2; }
+  .a-head .pin { margin-left: auto; font-size: .68rem; color: var(--muted); border: 1px dashed rgba(148,163,184,.4); border-radius: 999px; padding: 1px 8px; }
+
+  /* Variante B: KW im Datumsfeld */
+  .b .d .kwchip { font-size: .62rem; letter-spacing: .06em; color: var(--muted); border: 1px solid var(--border); border-radius: 4px; padding: 0 4px; }
+  .b-week { display: flex; justify-content: flex-end; padding: 2px 8px 8px; }
+  .b-week span { font-size: .7rem; color: var(--muted); border: 1px solid var(--border); border-radius: 999px; padding: 2px 10px; font-family: var(--mono); }
+
+  /* Variante C: Wochenblock */
+  .c-block { border: 1px solid var(--border); border-radius: 10px; margin-bottom: 12px; overflow: hidden; background: rgba(255,255,255,.02); }
+  .c-block > .c-head { display: flex; align-items: center; gap: 10px; padding: 8px 12px; border-bottom: 1px solid var(--border); background: rgba(0,0,0,.18); }
+  .c-block > .c-body { padding: 4px 6px; }
+
+  table { width: 100%; border-collapse: collapse; margin: 14px 0; font-size: .88rem; }
+  th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  th { color: var(--muted); font-size: .74rem; text-transform: uppercase; letter-spacing: .5px; }
+  tbody tr:last-child td { border-bottom: 0; }
+  .gut { color: var(--success); font-weight: 600; }
+  .schlecht { color: var(--error); font-weight: 600; }
+  .note { background: rgba(245,158,11,.10); border: 1px solid rgba(245,158,11,.35); border-radius: var(--radius); padding: 12px 16px; margin: 16px 0; }
+  .note b { color: var(--warning); }
+  .note p { margin: 4px 0 0; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <h1>Die Wochenzeile neu gedacht</h1>
+  <p class="lead">Drei strukturell verschiedene Antworten auf dieselbe Frage · Daten: September 2026</p>
+
+  <div class="note" style="background: rgba(16,185,129,.10); border-color: rgba(16,185,129,.35);">
+    <b style="color: var(--success);">Umsetzungsstand: Variante A mit Sticky umgesetzt</b>
+    <p style="color:#cbd5e1">Die Zusammenfassung steht jetzt <em>vor</em> den Tagen ihrer Woche und bleibt beim Scrollen unter Spalten- und App-Kopf stehen. Die Einschubzeile zwischen den Tagen ist entfallen. Alle vier Daten bleiben erhalten: Kalenderwoche, Ist von Soll, Abweichung, Fortschrittsbalken — an den Berechnungen wurde nichts geändert.</p>
+    <p style="color:#cbd5e1">Dabei sind zwei Fehler aufgefallen, die das Kleben bisher verhinderten und mitbehoben wurden: <code>body { overflow-y: overlay }</code> machte den Body zum Scroll-Container und hob <code>position: sticky</code> im ganzen Dokument auf; der Spaltenkopf war zusätzlich unsichtbar, weil Vuetify die Klasse <code>d-md-grid</code> nicht kennt und <code>d-none</code> deshalb immer gewann.</p>
+  </div>
+
+  <h2><span class="num">00</span>Ausgangslage</h2>
+  <p>Die Timeline ist eine Liste von Tagen. Die Woche ist darin bisher ein <em>eigener Zeilentyp</em>, der nach jedem Sonntag eingeschoben wird — mit eigener Fläche, Rahmen oder Linie. Jede Gestaltung dieser Zeile bleibt ein Fremdkörper, weil sie zwischen gleichartige Elemente geschoben wird.</p>
+  <div class="frame">
+    <header><b>Heute</b><span class="tag ist">Ist</span></header>
+    <div class="body tl">
+      <div class="d"><span class="dt"></span><span class="n">1.</span><span class="w">Di</span><span class="st">Homeoffice</span><span class="t">08:00–16:30</span><span class="h">8,00 h</span></div>
+      <div class="d"><span class="dt"></span><span class="n">2.</span><span class="w">Mi</span><span class="st">Büro</span><span class="t">08:15–17:00</span><span class="h">8,25 h</span></div>
+      <div class="d"><span class="dt"></span><span class="n">3.</span><span class="w">Do</span><span class="st">Homeoffice</span><span class="t">07:45–16:15</span><span class="h">8,00 h</span></div>
+      <div class="d"><span class="dt"></span><span class="n">4.</span><span class="w">Fr</span><span class="st">Büro</span><span class="t">08:00–16:30</span><span class="h">8,00 h</span></div>
+      <div class="kw" style="margin:6px 0 8px;padding:7px 8px 8px;border-top:1px solid var(--border);">
+        <span class="label">KW 36</span><span class="bar"><i style="width:100%"></i></span>
+        <span class="val">32,25 von 31,20 h</span><span class="delta pos">+1,05 h</span>
+      </div>
+      <div class="d"><span class="dt"></span><span class="n">7.</span><span class="w">Mo</span><span class="st">Homeoffice</span><span class="t">08:00–16:30</span><span class="h">8,00 h</span></div>
+      <div class="d off"><span class="dt"></span><span class="n">8.</span><span class="w">Di</span><span class="st">—</span><span class="t"></span><span class="h"></span></div>
+    </div>
+    <p class="cap">Die Zeile gehört zu keiner Spalte, wiederholt sich viermal im Monat und unterbricht die Folge der Tage.</p>
+  </div>
+
+  <hr>
+
+  <h2><span class="num">A</span>Wochenkopf – die Woche als Abschnitt</h2>
+  <p>Die Zusammenfassung wandert <em>vor</em> ihre Woche und wird zum Abschnittskopf. Beim Scrollen bleibt sie stehen, bis die nächste Woche sie ablöst — die KW wird vom Einschub zum Orientierungspunkt.</p>
+  <div class="frame">
+    <header><b>Variante A</b><span class="tag a">Empfehlung</span></header>
+    <div class="body tl">
+      <div class="a-head">
+        <span class="label" style="font-weight:700;letter-spacing:.09em;text-transform:uppercase;">KW 36</span>
+        <span class="bar" style="width:76px;height:3px;border-radius:999px;background:rgba(148,163,184,.22);overflow:hidden;"><i style="display:block;height:100%;width:100%;background:var(--primary);"></i></span>
+        <span class="val" style="font-family:var(--mono);color:var(--text);">32,25 von 31,20 h</span>
+        <span class="delta pos" style="font-family:var(--mono);font-weight:700;">+1,05 h</span>
+        <span class="pin">bleibt beim Scrollen stehen</span>
+      </div>
+      <div class="d"><span class="dt"></span><span class="n">1.</span><span class="w">Di</span><span class="st">Homeoffice</span><span class="t">08:00–16:30</span><span class="h">8,00 h</span></div>
+      <div class="d"><span class="dt"></span><span class="n">2.</span><span class="w">Mi</span><span class="st">Büro</span><span class="t">08:15–17:00</span><span class="h">8,25 h</span></div>
+      <div class="d"><span class="dt"></span><span class="n">3.</span><span class="w">Do</span><span class="st">Homeoffice</span><span class="t">07:45–16:15</span><span class="h">8,00 h</span></div>
+      <div class="d"><span class="dt"></span><span class="n">4.</span><span class="w">Fr</span><span class="st">Büro</span><span class="t">08:00–16:30</span><span class="h">8,00 h</span></div>
+      <div class="a-head">
+        <span class="label" style="font-weight:700;letter-spacing:.09em;text-transform:uppercase;">KW 37</span>
+        <span class="bar" style="width:76px;height:3px;border-radius:999px;background:rgba(148,163,184,.22);overflow:hidden;"><i style="display:block;height:100%;width:62%;background:var(--primary);"></i></span>
+        <span class="val" style="font-family:var(--mono);color:var(--text);">24,25 von 39,00 h</span>
+        <span class="delta neg" style="font-family:var(--mono);font-weight:700;">−14,75 h</span>
+        <span class="pin">bleibt beim Scrollen stehen</span>
+      </div>
+      <div class="d"><span class="dt"></span><span class="n">7.</span><span class="w">Mo</span><span class="st">Homeoffice</span><span class="t">08:00–16:30</span><span class="h">8,00 h</span></div>
+      <div class="d off"><span class="dt"></span><span class="n">8.</span><span class="w">Di</span><span class="st">—</span><span class="t"></span><span class="h"></span></div>
+    </div>
+    <p class="cap">Der Kopf eröffnet einen Abschnitt statt ihn zu beenden. Nichts wird zwischen Tage geschoben, die Zusammenfassung steht über dem, was sie zusammenfasst.</p>
+  </div>
+
+  <h2><span class="num">B</span>KW am Tag – die Woche als Attribut</h2>
+  <p>Es gibt keine Wochenzeile mehr. Die KW steht einmalig am ersten Tag der Woche im Datumsfeld; die Bilanz erscheint als kleine Pille am Ende der Woche. Die Liste wird eine reine Tagesliste.</p>
+  <div class="frame">
+    <header><b>Variante B</b><span class="tag b">Maximaler Lesefluss</span></header>
+    <div class="body tl b">
+      <div class="d"><span class="dt"></span><span class="n">1.</span><span class="w">Di</span><span class="kwchip">KW 36</span><span class="st">Homeoffice</span><span class="t">08:00–16:30</span><span class="h">8,00 h</span></div>
+      <div class="d"><span class="dt"></span><span class="n">2.</span><span class="w">Mi</span><span class="st">Büro</span><span class="t">08:15–17:00</span><span class="h">8,25 h</span></div>
+      <div class="d"><span class="dt"></span><span class="n">3.</span><span class="w">Do</span><span class="st">Homeoffice</span><span class="t">07:45–16:15</span><span class="h">8,00 h</span></div>
+      <div class="d"><span class="dt"></span><span class="n">4.</span><span class="w">Fr</span><span class="st">Büro</span><span class="t">08:00–16:30</span><span class="h">8,00 h</span></div>
+      <div class="b-week"><span>Woche: 32,25 / 31,20 h · +1,05</span></div>
+      <div class="d"><span class="dt"></span><span class="n">7.</span><span class="w">Mo</span><span class="kwchip">KW 37</span><span class="st">Homeoffice</span><span class="t">08:00–16:30</span><span class="h">8,00 h</span></div>
+      <div class="d off"><span class="dt"></span><span class="n">8.</span><span class="w">Di</span><span class="st">—</span><span class="t"></span><span class="h"></span></div>
+    </div>
+    <p class="cap">Keine eigene Zeile mehr. Die Wochenbilanz wird zum Nebenaspekt — gut für den Fluss, schwächer, wenn die Wochenbilanz die Hauptfrage ist.</p>
+  </div>
+
+  <h2><span class="num">C</span>Wochenblock – die Woche als Karte</h2>
+  <p>Jede Woche wird ein eigener Block mit Kopf und Tagen darin. Die Gruppierung ist nicht mehr erklärungsbedürftig, weil man sie sieht.</p>
+  <div class="frame">
+    <header><b>Variante C</b><span class="tag c">Stärkste Gruppierung</span></header>
+    <div class="body tl">
+      <div class="c-block">
+        <div class="c-head">
+          <span class="label" style="font-weight:700;letter-spacing:.09em;text-transform:uppercase;font-size:.72rem;">KW 36</span>
+          <span class="bar" style="width:60px;height:3px;border-radius:999px;background:rgba(148,163,184,.22);overflow:hidden;"><i style="display:block;height:100%;width:100%;background:var(--primary);"></i></span>
+          <span class="val" style="font-family:var(--mono);color:var(--text);font-size:.72rem;">32,25 von 31,20 h</span>
+          <span class="delta pos" style="font-family:var(--mono);font-weight:700;font-size:.72rem;margin-left:auto;">+1,05 h</span>
+        </div>
+        <div class="c-body">
+          <div class="d"><span class="dt"></span><span class="n">1.</span><span class="w">Di</span><span class="st">Homeoffice</span><span class="t">08:00–16:30</span><span class="h">8,00 h</span></div>
+          <div class="d"><span class="dt"></span><span class="n">2.</span><span class="w">Mi</span><span class="st">Büro</span><span class="t">08:15–17:00</span><span class="h">8,25 h</span></div>
+          <div class="d"><span class="dt"></span><span class="n">3.</span><span class="w">Do</span><span class="st">Homeoffice</span><span class="t">07:45–16:15</span><span class="h">8,00 h</span></div>
+        </div>
+      </div>
+      <div class="c-block">
+        <div class="c-head">
+          <span class="label" style="font-weight:700;letter-spacing:.09em;text-transform:uppercase;font-size:.72rem;">KW 37</span>
+          <span class="bar" style="width:60px;height:3px;border-radius:999px;background:rgba(148,163,184,.22);overflow:hidden;"><i style="display:block;height:100%;width:62%;background:var(--primary);"></i></span>
+          <span class="val" style="font-family:var(--mono);color:var(--text);font-size:.72rem;">24,25 von 39,00 h</span>
+          <span class="delta neg" style="font-family:var(--mono);font-weight:700;font-size:.72rem;margin-left:auto;">−14,75 h</span>
+        </div>
+        <div class="c-body">
+          <div class="d"><span class="dt"></span><span class="n">7.</span><span class="w">Mo</span><span class="st">Homeoffice</span><span class="t">08:00–16:30</span><span class="h">8,00 h</span></div>
+          <div class="d off"><span class="dt"></span><span class="n">8.</span><span class="w">Di</span><span class="st">—</span><span class="t"></span><span class="h"></span></div>
+        </div>
+      </div>
+    </div>
+    <p class="cap">Eindeutigste Struktur, aber mehr Fläche und Linien pro Monat — eher gewichtiger als dezenter.</p>
+  </div>
+
+  <hr>
+
+  <h2><span class="num">04</span>Bewertung</h2>
+  <table>
+    <thead><tr><th>Kriterium</th><th>A – Wochenkopf</th><th>B – KW am Tag</th><th>C – Wochenblock</th></tr></thead>
+    <tbody>
+      <tr><td>Lesefluss</td><td class="gut">gut – nichts zwischen den Tagen</td><td class="gut">sehr gut – reine Tagesliste</td><td>befriedigend – Blöcke trennen</td></tr>
+      <tr><td>Woche als Einheit</td><td class="gut">stark – eigener Abschnitt</td><td class="schlecht">schwach – nur ein Attribut</td><td class="gut">sehr stark – sichtbarer Block</td></tr>
+      <tr><td>Wochenbilanz auffindbar</td><td class="gut">sofort, am Kopf der Woche</td><td>befriedigend – kleine Pille</td><td class="gut">sofort, im Blockkopf</td></tr>
+      <tr><td>Orientierung beim Scrollen</td><td class="gut">sehr gut – Kopf bleibt stehen</td><td class="schlecht">gering – KW scrollt weg</td><td>befriedigend – Blockkopf scrollt mit</td></tr>
+      <tr><td>Visuelle Ruhe</td><td>gut – eine Linie pro Woche</td><td class="gut">sehr gut – keine Zusatzelemente</td><td class="schlecht">mehr Flächen und Rahmen</td></tr>
+      <tr><td>Fachlichkeit</td><td class="gut">vollständig erhalten</td><td class="gut">erhalten, aber dezenter</td><td class="gut">vollständig erhalten</td></tr>
+      <tr><td>Aufwand</td><td>mittel – Reihenfolge in der API dreht sich</td><td class="gut">gering – nur Darstellung</td><td>mittel – Gruppierung im Template</td></tr>
+    </tbody>
+  </table>
+
+  <div class="note">
+    <b>Was jede Variante gemeinsam hat</b>
+    <p>Alle drei entfernen die eingeschobene Zeile zwischen den Tagen. KW-Nummer, Ist-von-Soll und Abweichung bleiben in allen drei erhalten — inklusive Farbcodierung der Abweichung. Keine Variante ändert eine Berechnung.</p>
+  </div>
+
+  <h2><span class="num">05</span>Hinweis zu Variante A</h2>
+  <p>Der Kopf steht über der Woche, fasst also etwas zusammen, das erst danach kommt. Bei vergangenen Wochen ist das unproblematisch — es ist ein Bericht über einen abgeschlossenen Zeitraum. Bei der laufenden Woche zeigt der Kopf den Zwischenstand; das ist im Monatsverlauf üblich und durch den Fortschrittsbalken erkennbar.</p>
+  <p class="sub">Technisch dreht sich bei A und C die Reihenfolge der Einträge in <code>/api/month/&lt;jahr&gt;/&lt;monat&gt;</code>: die Zusammenfassung kommt vor die Tage ihrer Woche. Das Frontend rendert beide Reihenfolgen gleich; betroffen sind nur Tests, die eine feste Position erwarten.</p>
+
+</div>
+</body>
+</html>

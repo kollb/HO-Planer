@@ -539,6 +539,11 @@ def get_month_data(year, month):
     current_week_target = 0.0
     total_target_hours_month = 0.0 
     response_items = []
+    # Die Wochenzusammenfassung steht als Abschnittskopf VOR den Tagen ihrer Woche.
+    # Gesammelt werden die Tage deshalb bis zum Wochenende und dann nach dem Kopf
+    # ausgegeben.
+    week_days = []
+    week_iso = None
     
     running_glz = get_glz_carryover(year, month, settings, custom_map)
     num_days = calendar.monthrange(year, month)[1]
@@ -627,7 +632,9 @@ def get_month_data(year, month):
         running_glz += day_delta
         if day_override is not None: running_glz = day_override
         
-        response_items.append({
+        if not week_days:
+            week_iso = iso_week
+        week_days.append({
             "row_type": "day", "date": date_str, "day_num": day, "weekday_index": date_obj.weekday(),
             "iso_week": iso_week, "is_holiday": (info["holiday_name"] != "" and not info["is_workday"]),
             "holiday_name": info["holiday_name"], "is_short_day": info["is_short_day"], 
@@ -641,9 +648,12 @@ def get_month_data(year, month):
         if date_obj.weekday() == 6 or day == num_days:
             if current_week_target > 0 or current_week_sum > 0:
                 response_items.append({
-                    "row_type": "summary", "iso_week": iso_week, 
+                    "row_type": "summary", "iso_week": week_iso if week_iso is not None else iso_week,
                     "sum": round(current_week_sum, 2), "target": round(current_week_target, 2)
                 })
+            response_items.extend(week_days)
+            week_days = []
+            week_iso = None
             current_week_sum = 0.0
             current_week_target = 0.0
 

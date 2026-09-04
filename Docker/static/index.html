@@ -35,6 +35,9 @@
       --ho-radius-lg: 20px;
       --ho-shadow-sm: 0 2px 4px rgba(0, 0, 0, 0.2);
       --ho-shadow-md: 0 10px 25px -5px rgba(0, 0, 0, 0.3);
+      /* Höhe der App-Bar: ab lg baut Vuetify sie 58px hoch, darunter 50px.
+         Alle klebenden Köpfe rechnen damit, statt feste Werte zu raten. */
+      --ho-appbar: 50px;
       --ho-shadow: var(--ho-shadow-md);
       --ho-space-1: 4px;
       --ho-space-2: 8px;
@@ -43,6 +46,11 @@
       --ho-space-5: 24px;
       --ho-space-6: 32px;
     }
+    /* Ab lg (1280px) baut Vuetify die App-Bar höher. */
+    @media (min-width: 1280px) {
+        :root { --ho-appbar: 58px; }
+    }
+
     :root[data-theme="light"] {
       --ho-background: #f8fafc;
       --ho-surface: #ffffff;
@@ -61,7 +69,11 @@
     [v-cloak] { display: none !important; }
     #runtime-error { max-width: 680px; margin: 4rem auto; padding: 1.5rem; color: var(--ho-text); background: var(--ho-surface); border: 1px solid var(--ho-error); border-radius: var(--ho-radius-md); }
 
-    body { font-family: 'Inter', sans-serif; background-color: var(--ho-background); color: var(--ho-text); overflow-y: overlay;}
+    body { font-family: 'Inter', sans-serif; background-color: var(--ho-background); color: var(--ho-text);
+        /* Nicht overflow-y: overlay - das macht den Body zum Scroll-Container und
+           hebt position: sticky im gesamten Dokument auf. Der Viewport scrollt
+           über html, damit Spalten- und Wochenkopf stehen bleiben können. */
+        overflow-y: visible;}
     .quick-action-fab { position: fixed; right: 24px; bottom: 88px; z-index: 20; box-shadow: var(--ho-shadow); }
     .budget-warning { color: var(--ho-error); font-weight: 700; margin-top: 6px; }
     @media (min-width: 960px) { .quick-action-fab { bottom: 28px; } }
@@ -122,7 +134,7 @@
         color: var(--ho-muted);
         border-bottom: 1px solid var(--ho-border);
         position: sticky;
-        top: 64px;
+        top: var(--ho-appbar);
         z-index: 5;
         background: color-mix(in srgb, var(--ho-surface) 96%, transparent);
         box-shadow: 0 1px 0 var(--ho-border), 0 8px 12px color-mix(in srgb, var(--ho-background) 35%, transparent);
@@ -197,19 +209,28 @@
         white-space: nowrap;
     }
 
-    /* Wochenabschluss als Haarlinie statt eigener Fläche: die Tageszeilen
-       bleiben eine durchgehende Folge, die Woche wird nur noch markiert. */
+    /* Wochenkopf: die Zusammenfassung eröffnet ihre Woche als Abschnitt und
+       bleibt beim Scrollen stehen, statt zwischen den Tagen zu liegen. Der
+       Abstand öffnet nach oben (neue Woche) und schließt nach unten (Tage). */
     .tl-week-sum {
         display: flex;
         align-items: center;
         gap: var(--ho-space-3);
-        margin: var(--ho-space-2) 0 var(--ho-space-4) 48px;
-        padding: var(--ho-space-2) 0 0;
+        margin: var(--ho-space-5) 0 var(--ho-space-2) 48px;
+        padding: var(--ho-space-2) 0;
         border-top: 1px solid var(--ho-border);
         color: var(--ho-muted);
         font-size: 0.72rem;
-        position: relative;
-        z-index: 2;
+        position: sticky;
+        top: calc(var(--ho-appbar) + 28px);
+        z-index: 4;
+        background: color-mix(in srgb, var(--ho-surface) 96%, transparent);
+        backdrop-filter: blur(8px);
+        -webkit-backdrop-filter: blur(8px);
+    }
+    /* Ohne Spaltenkopf sitzt der Wochenkopf direkt unter der App-Bar. */
+    @media (max-width: 768px) {
+        .tl-week-sum { top: var(--ho-appbar); margin-left: 0; }
     }
     .tl-week-sum__week {
         color: var(--ho-muted);
@@ -516,7 +537,8 @@
                         <div class="tl-panel glass-effect">
                             <div class="tl-spine d-none d-md-block"></div>
 
-                            <div class="tl-header d-none d-md-grid">
+                            <div class="tl-header"><!-- kein d-none/d-md-grid: Vuetify kennt d-md-grid nicht,
+                                 die Sichtbarkeit steuert ausschließlich unser CSS -->
                                 <div>Datum</div>
                                 <div>Status</div>
                                 <div class="text-center">Start</div>

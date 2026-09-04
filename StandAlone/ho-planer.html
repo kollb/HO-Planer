@@ -42,6 +42,9 @@
       --ho-radius-lg: 20px;
       --ho-shadow-sm: 0 2px 4px rgba(0, 0, 0, 0.2);
       --ho-shadow-md: 0 10px 25px -5px rgba(0, 0, 0, 0.3);
+      /* Höhe der App-Bar: ab lg baut Vuetify sie 58px hoch, darunter 50px.
+         Alle klebenden Köpfe rechnen damit, statt feste Werte zu raten. */
+      --ho-appbar: 50px;
       --ho-shadow: var(--ho-shadow-md);
       --ho-space-1: 4px;
       --ho-space-2: 8px;
@@ -50,6 +53,11 @@
       --ho-space-5: 24px;
       --ho-space-6: 32px;
     }
+    /* Ab lg (1280px) baut Vuetify die App-Bar höher. */
+    @media (min-width: 1280px) {
+        :root { --ho-appbar: 58px; }
+    }
+
     :root[data-theme="light"] {
       --ho-background: #f8fafc;
       --ho-surface: #ffffff;
@@ -73,7 +81,11 @@
     #runtime-error h1 { margin-top: 0; font-size: 1.3rem; }
     #runtime-error code { color: #fbbf24; }
     
-    body { font-family: 'Inter', sans-serif; background-color: var(--ho-background); color: var(--ho-text); overflow-y: overlay;}
+    body { font-family: 'Inter', sans-serif; background-color: var(--ho-background); color: var(--ho-text);
+        /* Nicht overflow-y: overlay - das macht den Body zum Scroll-Container und
+           hebt position: sticky im gesamten Dokument auf. Der Viewport scrollt
+           über html, damit Spalten- und Wochenkopf stehen bleiben können. */
+        overflow-y: visible;}
     .mono-num { font-family: 'JetBrains Mono', monospace; letter-spacing: -0.5px; }
     .glass-effect { background: color-mix(in srgb, var(--ho-surface) 82%, transparent) !important; backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); border: 1px solid var(--ho-border) !important; }
 
@@ -131,7 +143,7 @@
         color: var(--ho-muted);
         border-bottom: 1px solid var(--ho-border);
         position: sticky;
-        top: 64px;
+        top: var(--ho-appbar);
         z-index: 5;
         background: color-mix(in srgb, var(--ho-surface) 96%, transparent);
         box-shadow: 0 1px 0 var(--ho-border), 0 8px 12px color-mix(in srgb, var(--ho-background) 35%, transparent);
@@ -206,19 +218,28 @@
         white-space: nowrap;
     }
     
-    /* Wochenabschluss als Haarlinie statt eigener Fläche: die Tageszeilen
-       bleiben eine durchgehende Folge, die Woche wird nur noch markiert. */
+    /* Wochenkopf: die Zusammenfassung eröffnet ihre Woche als Abschnitt und
+       bleibt beim Scrollen stehen, statt zwischen den Tagen zu liegen. Der
+       Abstand öffnet nach oben (neue Woche) und schließt nach unten (Tage). */
     .tl-week-sum {
         display: flex;
         align-items: center;
         gap: var(--ho-space-3);
-        margin: var(--ho-space-2) 0 var(--ho-space-4) 48px;
-        padding: var(--ho-space-2) 0 0;
+        margin: var(--ho-space-5) 0 var(--ho-space-2) 48px;
+        padding: var(--ho-space-2) 0;
         border-top: 1px solid var(--ho-border);
         color: var(--ho-muted);
         font-size: 0.72rem;
-        position: relative;
-        z-index: 2;
+        position: sticky;
+        top: calc(var(--ho-appbar) + 28px);
+        z-index: 4;
+        background: color-mix(in srgb, var(--ho-surface) 96%, transparent);
+        backdrop-filter: blur(8px);
+        -webkit-backdrop-filter: blur(8px);
+    }
+    /* Ohne Spaltenkopf sitzt der Wochenkopf direkt unter der App-Bar. */
+    @media (max-width: 768px) {
+        .tl-week-sum { top: var(--ho-appbar); margin-left: 0; }
     }
     .tl-week-sum__week {
         color: var(--ho-muted);
@@ -557,7 +578,8 @@
                         <div class="tl-panel glass-effect">
                             <div class="tl-spine d-none d-md-block"></div>
 
-                            <div class="tl-header d-none d-md-grid">
+                            <div class="tl-header"><!-- kein d-none/d-md-grid: Vuetify kennt d-md-grid nicht,
+                                 die Sichtbarkeit steuert ausschließlich unser CSS -->
                                 <div>Datum</div>
                                 <div>Status</div>
                                 <div class="text-center">Start</div>
@@ -1915,6 +1937,10 @@
             let total_ho=0, total_office=0, workdays=0;
             let current_week_sum = 0.0;
             let current_week_target = 0.0;
+            // Tage der laufenden Woche werden gesammelt und nach dem Wochenkopf
+            // ausgegeben: die Zusammenfassung eröffnet den Abschnitt.
+            let week_days = [];
+            let week_iso = null;
             let total_target_hours_month = 0.0;
             
             let running_glz = this.getGlzCarryover(year, month);
@@ -2004,7 +2030,8 @@
 
                 if(dayEntries.length === 0) dayEntries.push({type:'', start:'', end:'', comment:'', glz_override: null, glz_override_source: null});
 
-                this.items.push({ 
+                if (week_days.length === 0) week_iso = getISOWeek(dateObj);
+                week_days.push({ 
                     row_type: 'day', date: dateStr, day_num: d, weekday_index: (dateObj.getDay()+6)%7, iso_week: getISOWeek(dateObj), 
                     is_holiday: (info.holiday_name && !info.is_workday), holiday_name: info.holiday_name, is_short_day: info.is_short_day, is_off_day: info.is_off_day,
                     daily_target: info.target, entries: dayEntries, total_net: dayNet, main_type: mainType, glz_saldo: running_glz, 
@@ -2016,11 +2043,14 @@
                     if (current_week_target > 0 || current_week_sum > 0) {
                         this.items.push({ 
                             row_type: 'summary', 
-                            iso_week: getISOWeek(dateObj), 
+                            iso_week: week_iso !== null ? week_iso : getISOWeek(dateObj), 
                             sum: parseFloat(current_week_sum.toFixed(2)), 
                             target: parseFloat(current_week_target.toFixed(2)) 
                         });
                     }
+                    this.items.push(...week_days);
+                    week_days = [];
+                    week_iso = null;
                     current_week_sum = 0.0;
                     current_week_target = 0.0;
                 }
