@@ -4,17 +4,46 @@
 CodeQL wertet .html nicht aus. Die Skriptblöcke werden deshalb vor der Analyse
 in codeql-inline-js/ geschrieben, damit auch das JavaScript der Oberflächen
 geprüft wird. Das Verzeichnis ist generiert und liegt in der .gitignore.
+
+Bewusst kein regulärer Ausdruck: HTML lässt sich damit nicht korrekt erkennen
+(CodeQL-Meldung "Bad HTML filtering regexp"). Der Parser aus der
+Standardbibliothek behandelt Groß-/Kleinschreibung und Zeichendaten in
+<script> korrekt - dort dürfen Zeichenreferenzen nicht aufgelöst werden.
 """
 
-import re
 import sys
+from html.parser import HTMLParser
 from pathlib import Path
 
 QUELLEN = ("Docker/static/index.html", "StandAlone/ho-planer.html")
 ZIEL = Path("codeql-inline-js")
 
-# Blöcke ohne src-Attribut: nur die stehen wirklich inline im Dokument.
-MUSTER = re.compile(r"<script(?![^>]*\bsrc=)[^>]*>(.*?)</script>", re.S)
+
+class SkriptSammler(HTMLParser):
+    """Sammelt den Inhalt aller <script>-Blöcke ohne src-Attribut."""
+
+    def __init__(self) -> None:
+        super().__init__(convert_charrefs=True)
+        self.bloecke: list[str] = []
+        self._puffer: list[str] | None = None
+
+    def handle_starttag(self, tag, attrs):
+        if tag.lower() != "script":
+            return
+        # Nur inline stehender Code interessiert, externe Dateien nicht.
+        if any(name.lower() == "src" for name, _ in attrs):
+            return
+        self._puffer = []
+
+    def handle_endtag(self, tag):
+        if tag.lower() != "script" or self._puffer is None:
+            return
+        self.bloecke.append("".join(self._puffer))
+        self._puffer = None
+
+    def handle_data(self, data):
+        if self._puffer is not None:
+            self._puffer.append(data)
 
 
 def main() -> int:
@@ -27,7 +56,11 @@ def main() -> int:
             print(f"übersprungen (fehlt): {quelle}")
             continue
 
-        bloecke = [block for block in MUSTER.findall(pfad.read_text(encoding="utf-8")) if block.strip()]
+        sammler = SkriptSammler()
+        sammler.feed(pfad.read_text(encoding="utf-8"))
+        sammler.close()
+
+        bloecke = [block for block in sammler.bloecke if block.strip()]
         if not bloecke:
             print(f"kein Inline-Skript in {quelle}")
             continue
