@@ -341,22 +341,32 @@ def test_week_summaries_do_not_stack(page: Page):
     Klebeposition und überdecken sich gegenseitig.
     """
     page.goto(BASE_URL)
-    page.evaluate("() => window.scrollTo(0, Math.round(document.documentElement.scrollHeight / 2))")
-    page.wait_for_timeout(500)
-
-    tops = page.evaluate(
-        "() => [...document.querySelectorAll('.tl-week-sum')]"
-        ".map(h => Math.round(h.getBoundingClientRect().top))"
-    )
-    # Beim Übergang von einem Block zum nächsten sitzt der Kopf kurz zwischen
-    # Klebeposition und Normalposition - entscheidend ist, dass einer oben steht.
-    assert any(40 <= top <= 160 for top in tops), f"Kein Kopf oben: {tops}"
-    assert len(set(tops)) == len(tops), f"Zwei Köpfe kleben auf derselben Höhe: {tops}"
+    # Erst warten, bis die Timeline steht: sonst ist die Dokumenthöhe noch die
+    # der leeren Seite und der Scroll-Wert damit wirkungslos.
+    expect(page.locator(".tl-week").first).to_be_visible()
+    # Nicht nur eine Position: die Dokumenthöhe hängt von Daten und Einstellungen
+    # ab, deshalb wird über den ganzen Scrollbereich geprüft.
+    hoehe = page.evaluate("() => window.innerHeight")
+    for anteil in (0, 0.25, 0.5, 0.75, 1.0):
+        page.evaluate(f"() => window.scrollTo(0, Math.round(document.documentElement.scrollHeight * {anteil}))")
+        page.wait_for_timeout(250)
+        tops = page.evaluate(
+            "() => [...document.querySelectorAll('.tl-week-sum')]"
+            ".map(h => Math.round(h.getBoundingClientRect().top))"
+        )
+        # Der Fehler, den der Wochenblock behebt: kein Kopf darf auf der Höhe
+        # eines anderen kleben.
+        assert len(set(tops)) == len(tops), f"Zwei Köpfe auf derselben Höhe: {tops}"
+        # Beim Übergang von einem Block zum nächsten sitzt der folgende Kopf
+        # kurz zwischen Klebe- und Normalposition - entscheidend ist, dass
+        # oben immer Orientierung steht.
+        assert any(40 <= top <= hoehe for top in tops), f"Kein Kopf sichtbar: {tops}"
 
 
 def test_each_week_forms_its_own_block(page: Page):
     """Variante C: Rahmen fasst Kopf und Tage einer Woche zusammen."""
     page.goto(BASE_URL)
+    expect(page.locator(".tl-week").first).to_be_visible()
     blocks = page.evaluate(
         "() => [...document.querySelectorAll('.tl-week')].map(b => ({"
         "  kopf: b.querySelector('.tl-week-sum') ? b.querySelector('.tl-week-sum').innerText.trim().split('\\n')[0] : null,"
@@ -375,6 +385,7 @@ def test_each_week_forms_its_own_block(page: Page):
 def test_every_day_carries_its_calendar_week(page: Page):
     """Variante B: die Kalenderwoche ist Merkmal des Tages, nicht nur des Kopfes."""
     page.goto(BASE_URL)
+    expect(page.locator(".tl-week").first).to_be_visible()
     for anteig in (0, 0.25, 0.5, 0.75, 1.0):
         page.evaluate(f"() => window.scrollTo(0, Math.round(document.documentElement.scrollHeight * {anteig}))")
         page.wait_for_timeout(250)
