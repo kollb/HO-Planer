@@ -754,11 +754,17 @@ def test_shared_json_import_cases(client):
                         end_time=existing["end"], comment=existing["comment"],
                         glz_override=existing["glz_override"], glz_override_source=existing["glz_override_source"],
                     ))
+                for existing in case.get("existing_custom_holidays", []):
+                    db.session.add(CustomHoliday(
+                        date=existing["date"], name=existing["name"], hours=existing.get("hours", 0.0),
+                    ))
                 db.session.commit()
 
             payload = {
                 "format": "ho-planer-export", "version": 1, "exported_at": "2098-01-01T00:00:00+00:00",
-                "settings": {}, "custom_holidays": [], "entries": case["incoming_entries"],
+                "settings": {},
+                "custom_holidays": case.get("incoming_custom_holidays", []),
+                "entries": case["incoming_entries"],
             }
             response = client.post(
                 "/api/import/json",
@@ -771,10 +777,19 @@ def test_shared_json_import_cases(client):
             assert result["skipped_entries"] == case["expected"]["skipped_entries"], case["id"]
             if "invalid_entries" in case["expected"]:
                 assert result["invalid_entries"] == case["expected"]["invalid_entries"], case["id"]
+            # Sondertage: derselbe Zählername in beiden Varianten.
+            if "imported_custom_holidays" in case["expected"]:
+                assert result["imported_custom_holidays"] == case["expected"]["imported_custom_holidays"], case["id"]
+            if "holiday_conflicts" in case["expected"]:
+                assert result["holiday_conflicts"] == case["expected"]["holiday_conflicts"], case["id"]
+            if "details" in case["expected"]:
                 assert result["details"] == case["expected"]["details"], case["id"]
     finally:
         with app.app_context():
             WorkEntry.query.filter(WorkEntry.date.in_(unique_dates)).delete(synchronize_session=False)
+            holiday_dates = {holiday["date"] for case in cases for holiday in case.get("incoming_custom_holidays", [])}
+            if holiday_dates:
+                CustomHoliday.query.filter(CustomHoliday.date.in_(holiday_dates)).delete(synchronize_session=False)
             db.session.commit()
 
 

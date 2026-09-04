@@ -1,6 +1,6 @@
 {
   "contract_version": 1,
-  "description": "Referenzfälle für den additiven, partiellen Import des gemeinsamen Austauschformats.",
+  "description": "Referenzfälle für den additiven, partiellen Import des gemeinsamen Austauschformats. Sondertage werden über incoming_custom_holidays/existing_custom_holidays geprüft; die Fehlercodes sind zwischen Docker und Standalone abgestimmt. Der Zähler imported_custom_holidays heißt in der Docker-API valid_custom_holidays, in der Standalone-Variante imported_custom_holidays - die Tests bilden ihn jeweils um.",
   "duplicate_identity": [
     "date",
     "type",
@@ -106,6 +106,148 @@
           "entries[2]: invalid_glz_override",
           "entries[3]: invalid_glz_override_source"
         ]
+      }
+    },
+    {
+      "id": "import-valid-custom-holiday",
+      "description": "Ein plausibler Sondertag wird ergänzt.",
+      "existing_entries": [],
+      "existing_custom_holidays": [],
+      "incoming_entries": [],
+      "incoming_custom_holidays": [
+        {
+          "date": "2098-05-04",
+          "name": "Brückentag",
+          "hours": 4
+        }
+      ],
+      "expected": {
+        "imported_entries": 0,
+        "skipped_entries": 0,
+        "invalid_entries": 0,
+        "imported_custom_holidays": 1,
+        "holiday_conflicts": 0,
+        "details": []
+      }
+    },
+    {
+      "id": "reject-invalid-special-hours",
+      "description": "Negative und nicht endliche Sonderstunden werden abgelehnt (business-rules.md: Sonderstunden dürfen nicht negativ sein).",
+      "existing_entries": [],
+      "existing_custom_holidays": [],
+      "incoming_entries": [],
+      "incoming_custom_holidays": [
+        {
+          "date": "2098-05-02",
+          "name": "Negative Sonderstunden",
+          "hours": -8
+        },
+        {
+          "date": "2098-05-03",
+          "name": "Unendliche Sonderstunden",
+          "hours": "Infinity"
+        },
+        {
+          "date": "2098-05-04",
+          "name": "Keine Zahl",
+          "hours": "acht"
+        },
+        {
+          "date": "2098-05-05",
+          "name": "Freier Tag",
+          "hours": 0
+        }
+      ],
+      "expected": {
+        "imported_entries": 0,
+        "skipped_entries": 0,
+        "invalid_entries": 0,
+        "imported_custom_holidays": 1,
+        "holiday_conflicts": 3,
+        "details": [
+          "custom_holidays[0]: invalid_hours",
+          "custom_holidays[1]: invalid_hours",
+          "custom_holidays[2]: invalid_hours"
+        ]
+      }
+    },
+    {
+      "id": "reject-invalid-custom-holidays-with-detail-codes",
+      "description": "Ungültige Sondertage werden einzeln mit Fehlercode gemeldet; gültige Nachbarn bleiben davon unberührt.",
+      "existing_entries": [],
+      "existing_custom_holidays": [],
+      "incoming_entries": [
+        {
+          "date": "2098-05-06",
+          "type": "home",
+          "start": "08:00",
+          "end": "16:30",
+          "comment": "Nachbar bleibt gültig",
+          "glz_override": null,
+          "glz_override_source": null
+        }
+      ],
+      "incoming_custom_holidays": [
+        {
+          "date": "2098-02-30",
+          "name": "Unmögliches Datum",
+          "hours": 0
+        },
+        {
+          "date": "2098-05-08",
+          "name": "   ",
+          "hours": 2
+        },
+        {
+          "date": "2098-05-09",
+          "name": "Negativ",
+          "hours": -1
+        },
+        {
+          "date": "2098-05-10",
+          "name": "Gültiger Sondertag",
+          "hours": 5.5
+        }
+      ],
+      "expected": {
+        "imported_entries": 1,
+        "skipped_entries": 0,
+        "invalid_entries": 0,
+        "imported_custom_holidays": 1,
+        "holiday_conflicts": 3,
+        "details": [
+          "custom_holidays[0]: invalid_date",
+          "custom_holidays[1]: invalid_name",
+          "custom_holidays[2]: invalid_hours"
+        ]
+      }
+    },
+    {
+      "id": "skip-identical-custom-holiday",
+      "description": "Ein bereits vorhandener, unveränderter Sondertag gilt nicht als Konflikt und wird nicht doppelt angelegt.",
+      "existing_entries": [],
+      "existing_custom_holidays": [
+        {
+          "date": "2098-05-11",
+          "name": "Betriebsausflug",
+          "hours": 0
+        }
+      ],
+      "incoming_entries": [],
+      "incoming_custom_holidays": [
+        {
+          "date": "2098-05-11",
+          "name": "Betriebsausflug",
+          "hours": 0
+        }
+      ],
+      "expected": {
+        "imported_entries": 0,
+        "skipped_entries": 0,
+        "invalid_entries": 0,
+        "imported_custom_holidays": 0,
+        "holiday_conflicts": 0,
+        "details": []
       }
     }
   ]

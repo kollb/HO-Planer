@@ -1129,6 +1129,24 @@ def normalized_import_entry(raw_entry):
             "glz_override_source": source}, None
 
 
+def normalized_import_holiday(raw_holiday):
+    """Validiert genau einen Sondertag und liefert einen neutralen Fehlercode.
+
+    Vorschau und Import teilen diese Prüfung: zwei getrennte Implementierungen
+    haben unterschiedliche Fehlercodes und Zähler erzeugt.
+    """
+    if not isinstance(raw_holiday, dict):
+        return None, 'invalid_object'
+    if not is_valid_date(raw_holiday.get('date')):
+        return None, 'invalid_date'
+    if not str(raw_holiday.get('name') or '').strip():
+        return None, 'invalid_name'
+    hours = finite_number(raw_holiday.get('hours', 0))
+    if hours is None or hours < 0:
+        return None, 'invalid_hours'
+    return {"date": raw_holiday['date'], "name": str(raw_holiday['name']).strip(), "hours": hours}, None
+
+
 def json_import_preview(payload):
     """Analysiert einen Export ohne Datenbankänderungen für die Importbestätigung."""
     if not isinstance(payload, dict) or payload.get('format') != 'ho-planer-export' or payload.get('version') != 1:
@@ -1169,17 +1187,14 @@ def json_import_preview(payload):
         result['valid_entries'] += 1
 
     for index, raw_holiday in enumerate(payload['custom_holidays']):
-        if not isinstance(raw_holiday, dict) or not is_valid_date(raw_holiday.get('date')) or not str(raw_holiday.get('name') or '').strip():
+        holiday, error_code = normalized_import_holiday(raw_holiday)
+        if error_code:
             result['holiday_conflicts'] += 1
-            result['details'].append(f'custom_holidays[{index}]: invalid_object')
+            result['details'].append(f'custom_holidays[{index}]: {error_code}')
             continue
-        hours = finite_number(raw_holiday.get('hours', 0))
-        if hours is None or hours < 0:
-            result['holiday_conflicts'] += 1
-            result['details'].append(f'custom_holidays[{index}]: invalid_hours')
-            continue
-        existing = CustomHoliday.query.filter_by(date=raw_holiday['date']).first()
-        if existing and (existing.name != str(raw_holiday['name']).strip() or (existing.hours or 0.0) != hours):
+        hours = holiday['hours']
+        existing = CustomHoliday.query.filter_by(date=holiday['date']).first()
+        if existing and (existing.name != holiday['name'] or (existing.hours or 0.0) != hours):
             result['holiday_conflicts'] += 1
         elif existing:
             result['skipped_custom_holidays'] += 1
@@ -1280,23 +1295,21 @@ def import_json():
                                      glz_override=entry_data['glz_override'], glz_override_source=entry_data['glz_override_source']))
             result['imported_entries'] += 1
 
-        for raw_holiday in payload['custom_holidays']:
-            if not isinstance(raw_holiday, dict) or not is_valid_date(raw_holiday.get('date')) or not str(raw_holiday.get('name') or '').strip():
+        for index, raw_holiday in enumerate(payload['custom_holidays']):
+            holiday, error_code = normalized_import_holiday(raw_holiday)
+            if error_code:
                 result['holiday_conflicts'] += 1
+                result['details'].append(f'custom_holidays[{index}]: {error_code}')
                 continue
-            hours = finite_number(raw_holiday.get('hours', 0))
-            if hours is None or hours < 0:
-                result['holiday_conflicts'] += 1
-                continue
-            existing = CustomHoliday.query.filter_by(date=raw_holiday['date']).first()
+            existing = CustomHoliday.query.filter_by(date=holiday['date']).first()
             if not existing:
-                db.session.add(CustomHoliday(date=raw_holiday['date'], name=str(raw_holiday['name']).strip(), hours=hours))
+                db.session.add(CustomHoliday(date=holiday['date'], name=holiday['name'], hours=holiday['hours']))
                 result['imported_custom_holidays'] += 1
-            elif existing.name == str(raw_holiday['name']).strip() and (existing.hours or 0.0) == hours:
+            elif existing.name == holiday['name'] and (existing.hours or 0.0) == holiday['hours']:
                 result['skipped_custom_holidays'] += 1
             elif overwrite:
-                existing.name = str(raw_holiday['name']).strip()
-                existing.hours = hours
+                existing.name = holiday['name']
+                existing.hours = holiday['hours']
             else:
                 result['holiday_conflicts'] += 1
 
