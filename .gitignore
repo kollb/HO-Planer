@@ -5,3 +5,6 @@ Docker/tests/testfiles/
 # Lokale virtuelle Umgebungen
 .venv/
 venv/
+
+# Von der CodeQL-Analyse generiert (siehe .github/scripts/extract-inline-js.py)
+.codeql-inline-js/

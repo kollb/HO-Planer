@@ -1,0 +1,66 @@
+name: Security-Scan
+
+# Ergänzt CodeQL um die Abhängigkeitsseite: bekannte Schwachstellen in den
+# Python-Paketen und ein Abhängigkeits-Review für Pull Requests.
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    - cron: '43 3 * * 2'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  python-abhaengigkeiten:
+    name: Python-Abhängigkeiten prüfen
+    runs-on: ubuntu-latest
+    steps:
+      - name: Repository auschecken
+        uses: actions/checkout@v4
+
+      - name: Python einrichten
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.14'
+
+      - name: Abhängigkeiten installieren
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install pip-audit
+          python -m pip install -r Docker/requirements.txt -r StandAlone/requirements-test.txt
+
+      # Ohne --strict: gefunden Schwachstellen lassen den Lauf scheitern,
+      # nicht prüfbare Abhängigkeiten dagegen nicht.
+      - name: pip-audit ausführen
+        run: pip-audit --skip-editable --progress-spinner off
+
+  dependency-review:
+    name: Abhängigkeits-Review
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - name: Repository auschecken
+        uses: actions/checkout@v4
+
+      - name: Abhängigkeiten des Pull Requests prüfen
+        uses: actions/dependency-review-action@v4
+        with:
+          fail-on-severity: moderate
+          comment-summary-in-pr: on
+
+  workflow-pruefung:
+    name: Workflows prüfen
+    runs-on: ubuntu-latest
+    steps:
+      - name: Repository auschecken
+        uses: actions/checkout@v4
+
+      - name: actionlint ausführen
+        uses: raven-actions/actionlint@v2
