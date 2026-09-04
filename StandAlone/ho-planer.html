@@ -206,31 +206,33 @@
         white-space: nowrap;
     }
     
+    /* Wochenabschluss als Haarlinie statt eigener Fläche: die Tageszeilen
+       bleiben eine durchgehende Folge, die Woche wird nur noch markiert. */
     .tl-week-sum {
-        display: inline-flex;
+        display: flex;
         align-items: center;
         gap: var(--ho-space-3);
         margin: var(--ho-space-2) 0 var(--ho-space-4) 48px;
-        padding: var(--ho-space-2) var(--ho-space-4);
-        background: color-mix(in srgb, var(--ho-surface) 76%, transparent);
-        border: 1px solid var(--ho-border);
-        border-radius: var(--ho-radius-sm);
+        padding: var(--ho-space-2) 0 0;
+        border-top: 1px solid var(--ho-border);
         color: var(--ho-muted);
+        font-size: 0.72rem;
         position: relative;
         z-index: 2;
     }
     .tl-week-sum__week {
-        color: var(--ho-text);
-        font-size: 0.75rem;
+        color: var(--ho-muted);
+        font-size: 0.68rem;
         font-weight: 700;
-        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        letter-spacing: 0.09em;
         white-space: nowrap;
     }
     .tl-week-sum__progress {
-        width: 112px;
-        height: 6px;
+        width: 88px;
+        height: 3px;
         overflow: hidden;
-        background: color-mix(in srgb, var(--ho-muted) 20%, transparent);
+        background: color-mix(in srgb, var(--ho-muted) 22%, transparent);
         border-radius: 999px;
     }
     .tl-week-sum__progress-bar {
@@ -242,8 +244,8 @@
     }
     .tl-week-sum__hours,
     .tl-week-sum__delta {
-        font-size: 0.78rem;
-        font-weight: 700;
+        font-size: 0.74rem;
+        font-weight: 600;
         white-space: nowrap;
     }
     .tl-week-sum__hours { color: var(--ho-text); }
