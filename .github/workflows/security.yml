@@ -20,7 +20,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Repository auschecken
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
 
       - name: Python einrichten
         uses: actions/setup-python@v5
@@ -47,7 +47,7 @@ jobs:
       pull-requests: write
     steps:
       - name: Repository auschecken
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
 
       - name: Abhängigkeiten des Pull Requests prüfen
         uses: actions/dependency-review-action@v4
@@ -60,7 +60,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Repository auschecken
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
 
       - name: actionlint ausführen
         uses: raven-actions/actionlint@v2

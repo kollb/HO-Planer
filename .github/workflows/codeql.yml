@@ -43,7 +43,7 @@ jobs:
         language: [python, actions]
     steps:
       - name: Repository auschecken
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
 
       - name: CodeQL initialisieren
         uses: github/codeql-action/init@v4
@@ -67,7 +67,7 @@ jobs:
       contents: read
     steps:
       - name: Repository auschecken
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
 
       # Das JavaScript der beiden Oberflächen steht inline in HTML-Dateien.
       # CodeQL wertet .html nicht aus, deshalb werden die Skriptblöcke vor der
