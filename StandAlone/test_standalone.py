@@ -767,5 +767,43 @@ def test_wochenköpfe_stapeln_sicht_nicht(page: Page):
         "() => [...document.querySelectorAll('.tl-week-sum')]"
         ".map(h => Math.round(h.getBoundingClientRect().top))"
     )
-    assert any(50 <= top <= 100 for top in tops), f"Kein Kopf klebt: {tops}"
+    # Beim Übergang von einem Block zum nächsten sitzt der Kopf kurz zwischen
+    # Klebeposition und Normalposition - entscheidend ist, dass einer oben steht.
+    assert any(40 <= top <= 160 for top in tops), f"Kein Kopf oben: {tops}"
     assert len(set(tops)) == len(tops), f"Zwei Köpfe kleben auf derselben Höhe: {tops}"
+
+
+def test_jede_woche_bildet_einen_block(page: Page):
+    """Variante C: Rahmen fasst Kopf und Tage einer Woche zusammen."""
+    page.evaluate("() => { window.vm.loadData(); }")
+    page.wait_for_timeout(400)
+    blocks = page.evaluate(
+        "() => [...document.querySelectorAll('.tl-week')].map(b => ({"
+        "  kopf: b.querySelector('.tl-week-sum') ? b.querySelector('.tl-week-sum').innerText.trim().split('\\n')[0] : null,"
+        "  tage: [...b.querySelectorAll('.tl-day-card')].map(c => c.dataset.kw),"
+        "}))"
+    )
+    assert len(blocks) >= 4, "Der Monat muss mehrere Wochenblöcke enthalten."
+    for block in blocks:
+        assert block["kopf"] and block["kopf"].startswith("KW ")
+        woche = block["kopf"].split()[1]
+        assert block["tage"], f"{block['kopf']} enthält keine Tage"
+        assert set(block["tage"]) == {woche}, f"Block {woche} enthält fremde Tage: {block['tage']}"
+
+
+def test_jeder_tag_trägt_seine_kalenderwoche(page: Page):
+    """Variante B: die Kalenderwoche ist Merkmal des Tages, nicht nur des Kopfes."""
+    page.evaluate("() => { window.vm.loadData(); }")
+    page.wait_for_timeout(400)
+    for anteil in (0, 0.25, 0.5, 0.75, 1.0):
+        page.evaluate(f"() => window.scrollTo(0, Math.round(document.documentElement.scrollHeight * {anteil}))")
+        page.wait_for_timeout(250)
+        zeilen = page.evaluate(
+            "() => [...document.querySelectorAll('.tl-day-card')]"
+            ".filter(c => { const r = c.getBoundingClientRect(); return r.bottom > 130 && r.top < window.innerHeight - 60; })"
+            ".map(c => c.dataset.kw + '|' + (c.querySelector('.tl-date-kw') ? c.querySelector('.tl-date-kw').textContent.trim() : ''))"
+        )
+        assert zeilen, f"Keine Tageszeile sichtbar bei Scroll-Anteil {anteil}"
+        for zeile in zeilen:
+            woche, text = zeile.split("|")
+            assert text == f"KW {woche}", f"KW-Merkmal falsch oder fehlend: {zeile!r}"
