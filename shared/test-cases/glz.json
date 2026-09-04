@@ -1,42 +1,128 @@
 {
   "contract_version": 1,
-  "description": "Referenzszenarien für GLZ-Fortschreibung und Anker. Die konkreten Salden ergeben sich aus den Vertragsregeln für Sollzeit und Tagesnettozeit.",
+  "description": "Referenzszenarien fuer GLZ-Fortschreibung und Anker. Alle Faelle werden mit evaluation_settings ausgewertet. carryover_target nennt den Monat, fuer den der Saldo berechnet wird; expected_carryover ist der dabei erwartete Wert. Docker und Standalone muessen jeden Fall gleich weit auswerten.",
   "cases": [
     {
       "id": "pdf-anchor-starts-follow-up-calculation",
       "entries": [
-        {"date": "2025-01-02", "type": "home", "start": "08:00", "end": "16:30", "glz_override": 12.5, "glz_override_source": "pdf"},
-        {"date": "2025-01-03", "type": "office", "start": "08:00", "end": "16:30", "glz_override": null, "glz_override_source": null}
+        {
+          "date": "2025-01-02",
+          "type": "home",
+          "start": "08:00",
+          "end": "16:30",
+          "glz_override": 12.5,
+          "glz_override_source": "pdf"
+        },
+        {
+          "date": "2025-01-03",
+          "type": "office",
+          "start": "08:00",
+          "end": "16:30",
+          "glz_override": null,
+          "glz_override_source": null
+        }
       ],
-      "expected_anchor": {"date": "2025-01-02", "value": 12.5, "source": "pdf"}
+      "expected_anchor": {
+        "date": "2025-01-02",
+        "value": 12.5,
+        "source": "pdf"
+      },
+      "carryover_target": {
+        "year": 2025,
+        "month": 2
+      },
+      "expected_carryover": -143.3
     },
     {
       "id": "manual-anchor-is-preserved-in-portable-format",
       "entries": [
-        {"date": "2025-02-03", "type": "home", "start": "08:00", "end": "16:30", "glz_override": -3.25, "glz_override_source": "manual"}
+        {
+          "date": "2025-02-03",
+          "type": "home",
+          "start": "08:00",
+          "end": "16:30",
+          "glz_override": -3.25,
+          "glz_override_source": "manual"
+        }
       ],
-      "expected_anchor": {"date": "2025-02-03", "value": -3.25, "source": "manual"}
+      "expected_anchor": {
+        "date": "2025-02-03",
+        "value": -3.25,
+        "source": "manual"
+      },
+      "carryover_target": {
+        "year": 2025,
+        "month": 3
+      },
+      "expected_carryover": -151.45
     },
     {
       "id": "multiple-anchors-on-same-day-use-last-stored-entry",
       "entries": [
-        {"date": "2025-03-03", "type": "home", "start": "08:00", "end": "16:30", "glz_override": 1.5, "glz_override_source": "manual"},
-        {"date": "2025-03-03", "type": "office", "start": "08:00", "end": "16:30", "glz_override": 4.0, "glz_override_source": "pdf"}
+        {
+          "date": "2025-03-03",
+          "type": "home",
+          "start": "08:00",
+          "end": "16:30",
+          "glz_override": 1.5,
+          "glz_override_source": "manual"
+        },
+        {
+          "date": "2025-03-03",
+          "type": "office",
+          "start": "08:00",
+          "end": "16:30",
+          "glz_override": 4.0,
+          "glz_override_source": "pdf"
+        }
       ],
-      "expected_anchor": {"date": "2025-03-03", "value": 4.0, "source": "pdf"}
+      "expected_anchor": {
+        "date": "2025-03-03",
+        "value": 4.0,
+        "source": "pdf"
+      },
+      "carryover_target": {
+        "year": 2025,
+        "month": 4
+      },
+      "expected_carryover": -152.0
     },
     {
       "id": "no-anchor-starts-at-first-entry-in-target-year",
       "entries": [
-        {"date": "2025-05-03", "type": "home", "start": "08:00", "end": "16:30"}
+        {
+          "date": "2025-05-03",
+          "type": "home",
+          "start": "08:00",
+          "end": "16:30"
+        }
       ],
-      "target": {"year": 2025, "month": 6},
-      "expected_first_calculation_date": "2025-05-03"
+      "expected_first_calculation_date": "2025-05-03",
+      "carryover_target": {
+        "year": 2025,
+        "month": 6
+      },
+      "expected_carryover": -140.2
     },
     {
       "id": "no-anchor-and-no-entry-is-zero",
       "entries": [],
-      "expected_carryover": 0.0
+      "expected_carryover": 0.0,
+      "carryover_target": {
+        "year": 2025,
+        "month": 2
+      }
     }
-  ]
+  ],
+  "evaluation_settings": {
+    "weekly_hours": 39,
+    "active_weekdays": [
+      0,
+      1,
+      2,
+      3,
+      4
+    ],
+    "christmas_eve_and_new_years_eve_off": true
+  }
 }

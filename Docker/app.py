@@ -196,8 +196,26 @@ VALID_TYPES = ['home', 'office', 'dr', 'planned', 'sick', 'vacation', 'glz', '']
 VALID_GLZ_OVERRIDE_SOURCES = {'manual', 'pdf', None}
 
 
+# Die Feiertagsbibliothek benennt drei Tage anders als die Standalone-Variante.
+# Beide Oberflächen müssen denselben Namen anzeigen, deshalb werden sie auf die
+# im Sprachgebrauch übliche Schreibweise normalisiert. Verbindlich ist der
+# gemeinsame Kalender in shared/test-cases/holidays-calendar.json.
+CANONICAL_HOLIDAY_NAMES = {
+    'Erster Mai': 'Tag der Arbeit',
+    'Erster Weihnachtstag': '1. Weihnachtstag',
+    'Zweiter Weihnachtstag': '2. Weihnachtstag',
+}
+
+
 def hessen_holidays(settings, years):
-    holiday_map = holidays.DE(subdiv='HE', years=years)
+    """Liefert die hessischen Feiertage inklusive optionaler Jahresendregel."""
+    # Ein einfaches dict statt der HolidayBase: Letztere hängt bei einer
+    # Zuweisung auf ein belegtes Datum den neuen Namen an den bestehenden an
+    # ("Erster Mai; Tag der Arbeit"), statt ihn zu ersetzen.
+    holiday_map = {
+        day: CANONICAL_HOLIDAY_NAMES.get(name, name)
+        for day, name in holidays.DE(subdiv='HE', years=years).items()
+    }
     if getattr(settings, 'christmas_eve_and_new_years_eve_off', True):
         for year in (years if isinstance(years, (list, tuple, range, set)) else [years]):
             holiday_map[date(year, 12, 24)] = 'Heiligabend'
@@ -303,6 +321,22 @@ PDF_GLZ_PATTERN = re.compile(r'-?\d{1,3}[.,]\d{2}\b')
 PDF_GLZ_CONTEXT_PATTERN = re.compile(r'\b(zeitkonto|gleitzeit|glz|saldo)\b', re.IGNORECASE)
 
 
+def pdf_times_from_row(row_text):
+    """Liest die Uhrzeiten einer PDF-Zeile und erhält dabei Nachtschichten.
+
+    In den Zeitnachweisen steht ``00:00`` in zwei Bedeutungen: als leerer
+    Platzhalter einer unbebuchten Spalte und als echte Mitternachtsgrenze einer
+    Nachtschicht. Ein pauschaler Filter verwarf bisher beides und ließ damit von
+    ``22:00 00:00`` nur einen einzelnen Wert übrig, der anschließend als ungerade
+    Zeitfolge komplett entfiel. Verworfen werden deshalb nur Zeilen, die
+    ausschließlich aus Platzhaltern bestehen.
+    """
+    times = [f"{hour}:{minute}" for hour, minute in PDF_TIME_PATTERN.findall(row_text)]
+    if all(value == '00:00' for value in times):
+        return []
+    return times
+
+
 def _pdf_type_for_text(text):
     return next((entry_type for pattern, entry_type in PDF_TYPE_RULES if re.search(pattern, text, re.IGNORECASE)), None)
 
@@ -367,7 +401,7 @@ def parse_pdf_content(file_obj, include_report=False):
                     continue
                 blocks = daily_data.setdefault(current_day, [])
                 found_type = _pdf_type_for_text(row_text)
-                times = [f"{hour}:{minute}" for hour, minute in PDF_TIME_PATTERN.findall(row_text) if f"{hour}:{minute}" != '00:00']
+                times = pdf_times_from_row(row_text)
                 glz_override = _pdf_glz_for_row(row_text, bool(PDF_GLZ_CONTEXT_PATTERN.search(page_text)), report, current_day) if date_match else None
                 if found_type == 'missing':
                     blocks.append({'type': '', 'times': [], 'glz_override': None, 'comment': '⚠️ Buchung fehlt'})

@@ -7,8 +7,8 @@ Diese Liste enthält ausschließlich noch offene Arbeiten. Ein Punkt wird erst n
 - [X] **Standalone-Teststarter unter Windows reparieren:** Der aktuelle Lauf mit `py StandAlone/run_tests.py` bricht vor dem Serverstart mit `UnicodeEncodeError` an Emoji-Konsolenausgaben ab. Ausgabe ASCII-/codepage-sicher machen und danach die vollständige Suite ausführen.
 - [X] **Standalone-Testumgebung reproduzierbar machen:** Im aktuell verwendeten `py`-Interpreter fehlt zudem `pytest`; Teststarter müssen fehlende Testpakete und Browser-Binaries eindeutig vor dem Start melden.
 - [X] **Fachliche Fehler zuerst absichern:** echte Kalenderdaten validieren, Austauschzeiten strikt validieren und nicht-endliche Zahlen, negative Sonderstunden sowie ungültige GLZ-Quellen beim JSON-Import ablehnen – in Docker und Standalone identisch.
-- [ ] **Datenverlust beim PDF-Import verhindern:** Nachtschichten akzeptieren und PDF-Import blockweise/additiv mergen, statt durch Tageslogik gültige Daten zu verwerfen oder bestehende Einträge zu überschreiben.
-- [ ] **Parität herstellen:** Jahresendoption, Feiertagshelper, Serienplanung und GLZ-Ankerverhalten in beiden Varianten über gemeinsame Referenzfälle absichern.
+- [X] **Datenverlust beim PDF-Import verhindern:** Nachtschichten akzeptieren und PDF-Import blockweise/additiv mergen, statt durch Tageslogik gültige Daten zu verwerfen oder bestehende Einträge zu überschreiben.
+- [X] **Parität herstellen:** Jahresendoption, Feiertagshelper, Serienplanung und GLZ-Ankerverhalten in beiden Varianten über gemeinsame Referenzfälle absichern.
 
 ## [ ] GUI-Modernisierung und Bedienkomfort
 
@@ -104,6 +104,12 @@ Diese Liste enthält ausschließlich noch offene Arbeiten. Ein Punkt wird erst n
 - [X] Shared-JSON-Importfälle für ungültige Einzelobjekte und erwartete Detailcodes ergänzen.
 - [X] Gemeinsame Referenzfälle für Serienplanung an aktiven Wochenenden, Feiertagen und Sondertagen ergänzen.
 - [X] Gemeinsame Referenzfälle für PDF-Merge, Kommentarergänzung und GLZ-Override-Konflikte ergänzen, sofern in beiden Testarchitekturen nutzbar.
+- [X] `shared/test-cases/holidays-calendar.json` als vollständigen Feiertagskalender 2020–2040 ergänzen; beide Varianten prüfen Datum und Namen gegen dieselbe Datei.
+- [X] Feiertagsnamen der Docker-Bibliothek auf die Standalone-Schreibweise normalisieren, damit beide Oberflächen denselben Namen anzeigen.
+- [X] Jahresendoption im Docker-Test über den Produktivhelper auswerten, statt Heiligabend und Silvester im Test selbst einzutragen.
+- [X] Docker-Auswerter der Serienplanung auf die Standalone-Zusicherungen ziehen: Sollzeit, Startzeit, abgeleitete Endzeit und wirkungsfreie Vorschau.
+- [X] `shared/test-cases/glz.json` um `evaluation_settings`, `carryover_target` und `expected_carryover` erweitern; beide Varianten rechnen jeden Fall auf denselben Saldo.
+- [X] `shared/test-cases/pdf-night-shifts.json` für die Mitternachtsgrenze ergänzen und in beiden Varianten auswerten.
 
 ## Docker: Einstellungen, Feiertage und Migration
 

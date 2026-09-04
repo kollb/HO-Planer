@@ -1,7 +1,7 @@
 import json
-import json
 import os
 import re
+from datetime import date
 from pathlib import Path
 
 import pytest
@@ -9,11 +9,13 @@ from playwright.sync_api import Page, expect
 
 SHARED_BREAK_CASES = Path(__file__).resolve().parents[1] / "shared" / "test-cases" / "breaks.json"
 SHARED_HOLIDAY_CASES = Path(__file__).resolve().parents[1] / "shared" / "test-cases" / "holidays.json"
+SHARED_HOLIDAY_CALENDAR = Path(__file__).resolve().parents[1] / "shared" / "test-cases" / "holidays-calendar.json"
 SHARED_IMPORT_CASES = Path(__file__).resolve().parents[1] / "shared" / "test-cases" / "json-import.json"
 SHARED_INCOMPLETE_ENTRY_CASES = Path(__file__).resolve().parents[1] / "shared" / "test-cases" / "incomplete-entries.json"
 SHARED_GLZ_CASES = Path(__file__).resolve().parents[1] / "shared" / "test-cases" / "glz.json"
 SHARED_SERIES_CASES = Path(__file__).resolve().parents[1] / "shared" / "test-cases" / "series-planning.json"
 SHARED_PDF_MERGE_CASES = Path(__file__).resolve().parents[1] / "shared" / "test-cases" / "pdf-merge.json"
+SHARED_NIGHT_SHIFT_CASES = Path(__file__).resolve().parents[1] / "shared" / "test-cases" / "pdf-night-shifts.json"
 
 BASE_URL = "http://localhost:8000/ho-planer.html"
 PRIVATE_DIR = "testfiles"
@@ -100,6 +102,66 @@ def test_shared_holiday_cases(page: Page):
         }""", case)
         for field, expected in case["expected"].items():
             assert result[field] == expected, case["id"]
+
+
+def test_shared_holiday_calendar_matches_reference(page: Page):
+    """Der Feiertagshelper trifft den gemeinsamen Kalender über 21 Jahre."""
+    calendar_doc = json.loads(SHARED_HOLIDAY_CALENDAR.read_text(encoding="utf-8"))
+    expected_statutory = calendar_doc["statutory_holidays"]
+    expected_year_end = calendar_doc["year_end_option"]["days_when_enabled"]
+
+    found = page.evaluate("""({ from, to }) => {
+        const withOption = {};
+        const withoutOption = {};
+        for (let year = from; year <= to; year++) {
+            for (let month = 0; month < 12; month++) {
+                const days = new Date(year, month + 1, 0).getDate();
+                for (let day = 1; day <= days; day++) {
+                    const dateObj = new Date(year, month, day);
+                    const iso = toLocalIsoDate(dateObj);
+                    const enabled = getHolidayName(dateObj, true);
+                    if (enabled) withOption[iso] = enabled;
+                    const disabled = getHolidayName(dateObj, false);
+                    if (disabled) withoutOption[iso] = disabled;
+                }
+            }
+        }
+        return { withOption, withoutOption };
+    }""", calendar_doc["years"])
+
+    assert found["withOption"] == {**expected_statutory, **expected_year_end}
+    assert found["withoutOption"] == expected_statutory
+
+
+def test_year_end_option_switches_workday_and_target(page: Page):
+    """Heiligabend und Silvester sind nur bei aktiver Jahresendoption arbeitsfrei."""
+    calendar_doc = json.loads(SHARED_HOLIDAY_CALENDAR.read_text(encoding="utf-8"))
+
+    for iso_date, expected_name in calendar_doc["year_end_option"]["days_when_enabled"].items():
+        weekday = date.fromisoformat(iso_date).weekday()
+        if weekday > 4:
+            continue  # Am Wochenende trägt bereits der inaktive Wochentag die Freistellung.
+
+        result = page.evaluate("""isoDate => {
+            const dateObj = new Date(`${isoDate}T12:00:00`);
+            const read = yearEndOff => {
+                window.vm.settings = {
+                    ...window.vm.settings,
+                    weekly_hours: 39,
+                    active_weekdays: [0, 1, 2, 3, 4],
+                    christmas_eve_and_new_years_eve_off: yearEndOff,
+                };
+                window.vm.customHolidays = {};
+                return window.vm.getDayInfo(dateObj);
+            };
+            return { enabled: read(true), disabled: read(false) };
+        }""", iso_date)
+
+        assert result["enabled"]["is_workday"] is False, iso_date
+        assert result["enabled"]["target"] == 0.0, iso_date
+        assert result["enabled"]["holiday_name"] == expected_name, iso_date
+        assert result["disabled"]["is_workday"] is True, iso_date
+        assert result["disabled"]["target"] == pytest.approx(39.0 / 5), iso_date
 
 
 def test_standalone_settings_validation(page: Page):
@@ -320,11 +382,54 @@ def test_glz_carryover_without_anchor_starts_at_first_target_year_entry(page: Pa
             calculatedDates.push(toLocalIsoDate(date));
             return originalGetDayInfo.call(window.vm, date);
         };
-        window.vm.getGlzCarryover(testCase.target.year, testCase.target.month);
+        window.vm.getGlzCarryover(testCase.carryover_target.year, testCase.carryover_target.month);
         window.vm.getDayInfo = originalGetDayInfo;
         return calculatedDates[0];
     }""", case)
     assert result == case["expected_first_calculation_date"]
+
+
+def test_shared_glz_carryover_cases(page: Page):
+    """Standalone rechnet jeden gemeinsamen GLZ-Fall auf den erwarteten Saldo."""
+    document = json.loads(SHARED_GLZ_CASES.read_text(encoding="utf-8"))
+
+    for case in document["cases"]:
+        result = page.evaluate("""({ testCase, evaluation }) => {
+            const entries = {};
+            for (const entry of testCase.entries) {
+                (entries[entry.date] = entries[entry.date] || []).push(entry);
+            }
+            Store.set({
+                settings: {
+                    weekly_hours: evaluation.weekly_hours,
+                    active_weekdays: evaluation.active_weekdays,
+                    christmas_eve_and_new_years_eve_off: evaluation.christmas_eve_and_new_years_eve_off,
+                },
+                entries,
+                customHolidays: {},
+            });
+            window.vm.loadData();
+            const carryover = window.vm.getGlzCarryover(
+                testCase.carryover_target.year, testCase.carryover_target.month);
+
+            // Der Anker ist der Startwert der Fortschreibung und muss als solcher
+            // gespeichert bleiben; sonst begaenne die Berechnung an anderer Stelle.
+            let anchor = null;
+            if (testCase.expected_anchor) {
+                const stored = Store.getEntries()[testCase.expected_anchor.date] || [];
+                const match = [...stored].reverse().find(entry => entry.glz_override != null);
+                if (match) {
+                    anchor = { value: match.glz_override, source: match.glz_override_source };
+                }
+            }
+            return { carryover, anchor };
+        }""", {"testCase": case, "evaluation": document["evaluation_settings"]})
+
+        assert round(result["carryover"], 2) == case["expected_carryover"], case["id"]
+        if "expected_anchor" in case:
+            assert result["anchor"] is not None, case["id"]
+            assert result["anchor"]["value"] == case["expected_anchor"]["value"], case["id"]
+            assert result["anchor"]["source"] == case["expected_anchor"]["source"], case["id"]
 
 
 def test_glz_carryover_uses_last_anchor_stored_on_same_day(page: Page):
@@ -439,6 +544,14 @@ def test_shared_pdf_merge_cases(page: Page):
         ], case["id"]
         if "existing_comments" in expected:
             assert [entry["comment"] for entry in result["entries"][:len(case["existing_entries"])]] == expected["existing_comments"], case["id"]
+
+
+def test_shared_pdf_night_shift_cases(page: Page):
+    """Standalone erhält Uhrzeiten an der Mitternachtsgrenze nach den gemeinsamen Fällen."""
+    cases = json.loads(SHARED_NIGHT_SHIFT_CASES.read_text(encoding="utf-8"))["cases"]
+    for case in cases:
+        result = page.evaluate("rowText => pdfTimesFromRow(rowText)", case["row_text"])
+        assert result == case["expected_times"], case["id"]
 
 
 def test_shared_glz_anchor_round_trip(page: Page):
