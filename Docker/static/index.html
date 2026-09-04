@@ -352,7 +352,19 @@
         .tl-day-summary { margin: var(--ho-space-2) 0 0; gap: var(--ho-space-1) var(--ho-space-2); }
         .tl-summary-item { padding-right: var(--ho-space-2); border-right: 1px solid var(--ho-border); }
         .tl-summary-item:last-child { border-right: 0; }
-        .tl-day-edit { width: 100%; min-height: 44px; margin-top: var(--ho-space-2); }
+        .tl-day-card { cursor: pointer; }
+        /* Unterhalb der Desktop-Breite ist die Tageskarte selbst das Bedienelement. */
+        .tl-day-card::after {
+            content: "›";
+            position: absolute;
+            right: 10px;
+            top: 12px;
+            color: var(--ho-muted);
+            font-size: 1.25rem;
+            line-height: 1;
+            pointer-events: none;
+        }
+        .tl-day-card:focus-visible { outline: 2px solid var(--ho-primary); outline-offset: 2px; }
         .tl-spine { display: none; }
 
         .tl-row {
@@ -391,11 +403,18 @@
           <v-list-item prepend-icon="mdi-calendar-month" title="Kalender" :active="viewMode === 'calendar'" @click="selectView('calendar')"></v-list-item>
           <v-list-item prepend-icon="mdi-calendar-range" title="Jahresübersicht" :active="viewMode === 'year'" @click="selectView('year')"></v-list-item>
           <v-divider class="my-3"></v-divider>
-          <v-list-subheader>Schnellaktionen</v-list-subheader>
+          <v-list-subheader>Erfassen &amp; planen</v-list-subheader>
           <v-list-item prepend-icon="mdi-calendar-plus" title="Heutigen Tag erfassen" @click="navDrawer = false; openTodayEntry()"></v-list-item>
           <v-list-item prepend-icon="mdi-calendar-multiple" title="Serienplanung" @click="navDrawer = false; openSeriesDialog()"></v-list-item>
+
+          <v-divider class="my-3"></v-divider>
+          <v-list-subheader>Daten</v-list-subheader>
           <v-list-item prepend-icon="mdi-file-pdf-box" title="PDF importieren" @click="navDrawer = false; triggerPdfImport()"></v-list-item>
           <v-list-item prepend-icon="mdi-file-code-outline" title="JSON importieren" @click="navDrawer = false; triggerJsonImport()"></v-list-item>
+          <v-list-item prepend-icon="mdi-tray-arrow-down" title="JSON exportieren" @click="navDrawer = false; exportJson()"></v-list-item>
+
+          <v-divider class="my-3"></v-divider>
+          <v-list-subheader>Darstellung &amp; System</v-list-subheader>
           <v-list-item prepend-icon="mdi-cog" title="Einstellungen" @click="navDrawer = false; dialogSettings = true"></v-list-item>
         </v-list>
       </v-navigation-drawer>
@@ -409,7 +428,6 @@
                 </v-avatar>
                 <div class="font-weight-bold text-subtitle-1 text-bright" style="letter-spacing: -0.5px;">
                     <span class="d-none d-sm-inline">HO Planer</span>
-                    <v-chip size="x-small" color="primary" variant="flat" class="ml-1 font-weight-bold" style="font-size: 0.6rem; height: 18px;">BETA</v-chip>
                 </div>
             </div>
 
@@ -423,16 +441,7 @@
 
             <v-spacer></v-spacer>
 
-            <div class="d-flex align-center gap-1">
-                <v-btn icon="mdi-dots-vertical" variant="text" size="small" class="d-flex d-md-none" aria-label="Aktionen öffnen" @click="actionSheet = true"></v-btn>
-                <div class="d-none d-md-flex align-center gap-1">
-                <v-btn icon="mdi-file-pdf-box" variant="text" color="#94a3b8" size="small" @click="triggerPdfImport" title="PDF Import"></v-btn>
-                <v-btn icon="mdi-calendar-multiple" variant="text" color="#94a3b8" size="small" @click="openSeriesDialog()" title="Serien-Planer"></v-btn>
-                <v-btn icon="mdi-cog" variant="text" color="#94a3b8" size="small" @click="dialogSettings = true" title="Einstellungen"></v-btn>
-                <v-btn variant="tonal" size="small" color="#64748b" class="ml-2 d-none d-sm-flex" style="font-size: 0.75rem; height: 32px;" href="/" title="Zurück zu V1">Exit Beta</v-btn>
-                <v-btn variant="tonal" size="small" color="#64748b" class="ml-1 d-flex d-sm-none" style="min-width: 32px; padding: 0;" href="/" title="Zurück zu V1"><v-icon size="small">mdi-exit-to-app</v-icon></v-btn>
-                </div>
-            </div>
+            <v-btn :icon="themeIcon" variant="text" size="small" :aria-label="themeLabel" :title="themeLabel" @click="toggleTheme"></v-btn>
         </v-container>
       </v-app-bar>
 
@@ -519,7 +528,15 @@
 
                             <template v-for="(item, idx) in items" :key="item.date ? 'tl-day-'+item.date : 'tl-sum-'+idx">
 
-                                <div v-if="item && item.row_type === 'day' && (!settings.hide_weekends || !isWeekend(item))" class="position-relative tl-day-card" :class="{'is-today': isToday(item.date)}">
+                                <div v-if="item && item.row_type === 'day' && (!settings.hide_weekends || !isWeekend(item))"
+                                     class="position-relative tl-day-card"
+                                     :class="{'is-today': isToday(item.date)}"
+                                     :role="isCompact ? 'button' : null"
+                                     :tabindex="isCompact ? 0 : null"
+                                     :aria-label="isCompact ? 'Tag ' + item.day_num + ' bearbeiten' : null"
+                                     @click="onDayCardActivate(item, $event)"
+                                     @keydown.enter.prevent="isCompact && openEditDialog(item)"
+                                     @keydown.space.prevent="isCompact && openEditDialog(item)">
 
                                     <div v-for="(entry, index) in item.entries" :key="index"
                                          class="tl-row" :class="['type-' + entry.type, {'is-off-day': item.is_off_day, 'has-holiday': item.is_holiday}]">
@@ -596,7 +613,6 @@
                                             <i v-else class="mdi mdi-close action-icon" title="Löschen" @click="deleteEntry(item, index)"></i>
                                         </div>
                                     </div>
-                                    <v-btn class="tl-day-edit d-md-none" variant="tonal" color="primary" prepend-icon="mdi-pencil" @click="openEditDialog(item)">Tag bearbeiten</v-btn>
                                 </div>
 
                                 <div v-else-if="item && item.row_type === 'summary'" class="tl-week-sum">
@@ -751,6 +767,7 @@
           <v-list-item prepend-icon="mdi-calendar-multiple" title="Serienplanung" @click="openSeriesDialog()"></v-list-item>
           <v-list-item prepend-icon="mdi-file-pdf-box" title="PDF importieren" @click="triggerPdfImport"></v-list-item>
           <v-list-item prepend-icon="mdi-file-code-outline" title="JSON importieren" @click="triggerJsonImport"></v-list-item>
+          <v-list-item prepend-icon="mdi-tray-arrow-down" title="JSON exportieren" @click="exportJson"></v-list-item>
           <v-list-item prepend-icon="mdi-cog" title="Einstellungen" @click="dialogSettings = true"></v-list-item>
         </v-list>
       </v-menu>
@@ -978,18 +995,7 @@
         <v-btn value="calendar" @click="selectView('calendar')"><v-icon>mdi-calendar-month</v-icon><span>Kalender</span></v-btn>
         <v-btn value="year" @click="selectView('year')"><v-icon>mdi-calendar-range</v-icon><span>Jahr</span></v-btn>
       </v-bottom-navigation>
-      <v-bottom-sheet v-model="actionSheet">
-        <v-card class="glass-effect" rounded="t-xl">
-          <v-card-title class="text-body-1">Schnellaktionen</v-card-title>
-          <v-list class="bg-transparent">
-            <v-list-item prepend-icon="mdi-calendar-plus" title="Heutigen Tag erfassen" @click="actionSheet = false; openTodayEntry()"></v-list-item>
-            <v-list-item prepend-icon="mdi-calendar-multiple" title="Serienplanung" @click="actionSheet = false; openSeriesDialog()"></v-list-item>
-            <v-list-item prepend-icon="mdi-file-pdf-box" title="PDF importieren" @click="actionSheet = false; triggerPdfImport()"></v-list-item>
-            <v-list-item prepend-icon="mdi-file-code-outline" title="JSON importieren" @click="actionSheet = false; triggerJsonImport()"></v-list-item>
-            <v-list-item prepend-icon="mdi-cog" title="Einstellungen" @click="actionSheet = false; dialogSettings = true"></v-list-item>
-          </v-list>
-        </v-card>
-      </v-bottom-sheet>
+
 
     </v-app>
   </div>
@@ -1050,7 +1056,8 @@
           stats: { total_ho_made: 0, total_ho_allowed: 1, total_office_made: 0, total_work_made: 0, work_hours_target: 0, avg_per_week: 0, workdays_month: 0, current_glz: 0 },
           settings: { weekly_hours: 39, active_weekdays: [0,1,2,3,4], ho_quota_percent: 60, hide_weekends: false, default_start_time: '08:00', auto_convert_planned: true, christmas_eve_and_new_years_eve_off: true, theme: 'dark' },
           dialogSettings: false, dialogEditDay: false, editingDay: null,
-          navDrawer: false, actionSheet: false,
+          navDrawer: false,
+          windowWidth: window.innerWidth,
           importDialog: { show: false, overwrite: false, file: null },
           jsonImport: { show: false, file: null, preview: null },
           seriesDialog: { show: false, start: '', end: '', weekdays: [4], type: 'home', overwrite: false },
@@ -1090,6 +1097,10 @@
         yearTotalOpenWorkdays() { return this.yearData && this.yearData.length ? this.yearData.reduce((sum, item) => sum + item.open_workdays, 0) : 0; },
         yearQuotaPercentage() { return this.yearTotalHoAllowed ? (this.yearTotalHoHours / this.yearTotalHoAllowed) * 100 : 0; },
         seriesTypes() { return this.baseTypes.filter(type => type.value !== ''); },
+        // Unter 960 px (Vuetify-md) sind die Tageszeilen Karten statt Direkteingaben.
+        isCompact() { return this.windowWidth < 960; },
+        themeIcon() { return this.settings.theme === 'light' ? 'mdi-weather-night' : 'mdi-weather-sunny'; },
+        themeLabel() { return this.settings.theme === 'light' ? 'Zu dunklem Farbschema wechseln' : 'Zu hellem Farbschema wechseln'; },
         seriesValidationErrors() {
             const errors = {};
             const isCalendarDate = value => {
@@ -1114,6 +1125,7 @@
       },
       mounted() {
           this.loadSettings(); this.loadCustomHolidays(); this.loadMonthData();
+          window.addEventListener('resize', this.updateWindowWidth);
           window.addEventListener('keydown', (e) => {
               if(e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT' || e.target.tagName === 'TEXTAREA') return;
               if(this.dialogEditDay || this.dialogSettings || this.importDialog.show || this.seriesDialog.show || this.seriesPreview.show || this.transferConflict.show) return;
@@ -1142,6 +1154,55 @@
 
         triggerPdfImport() { this.$refs.pdfInput.click(); },
         triggerJsonImport() { this.$refs.jsonInput.click(); },
+
+        async exportJson() {
+            try {
+                const response = await fetch('/api/export/json');
+                if (!response.ok) throw new Error('Export konnte nicht erstellt werden.');
+                const text = await response.text();
+                const disposition = response.headers.get('Content-Disposition') || '';
+                const filenameMatch = /filename=([^;]+)/.exec(disposition);
+                const url = URL.createObjectURL(new Blob([text], { type: 'application/json' }));
+                const link = document.createElement('a');
+                link.href = url;
+                link.download = filenameMatch
+                    ? filenameMatch[1].replace(/["']/g, '').trim()
+                    : `ho-planer-export-${new Date().toISOString().slice(0, 10)}.json`;
+                document.body.appendChild(link);
+                link.click();
+                link.remove();
+                URL.revokeObjectURL(url);
+                this.showMsg('JSON-Export heruntergeladen.', 'success');
+            } catch (error) {
+                this.showMsg(error.message, 'error');
+            }
+        },
+
+        toggleTheme() {
+            const previous = this.settings.theme;
+            const next = previous === 'light' ? 'dark' : 'light';
+            this.settings.theme = next;
+            this.applyTheme(next);
+            this.writeJson('/api/settings', this.settings).then(
+                () => this.showMsg(next === 'light' ? 'Farbschema: Hell.' : 'Farbschema: Dunkel.', 'success'),
+                (error) => {
+                    this.settings.theme = previous;
+                    this.applyTheme(previous);
+                    this.showMsg(error.message, 'error');
+                }
+            );
+        },
+
+        updateWindowWidth() { this.windowWidth = window.innerWidth; },
+
+        onDayCardActivate(item, event) {
+            // Unterhalb der Desktop-Breite öffnet die Tageskarte selbst den Dialog; dort
+            // sind die Felder nicht direkt bedienbar. Direkte Eingaben haben Vorrang.
+            if (!this.isCompact) return;
+            const target = event && event.target;
+            if (target && target.closest && target.closest('input, select, textarea, button, a, .action-icon')) return;
+            this.openEditDialog(item);
+        },
         uploadPdf(event) { const file = event.target.files[0]; if (!file) return; this.importDialog.file = file; this.importDialog.show = true; event.target.value = ''; },
         async previewJsonImport(event) {
             const file = event.target.files[0];
