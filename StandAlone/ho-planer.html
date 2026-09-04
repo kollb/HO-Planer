@@ -589,9 +589,18 @@
                                 <div></div>
                             </div>
 
-                            <template v-for="(item, idx) in items" :key="item.date ? 'tl-day-'+item.date : 'tl-sum-'+idx">
-                                
-                                <div v-if="item && item.row_type === 'day' && (!settings.hide_weekends || !isWeekend(item))"
+                            <div v-for="(block, blockIdx) in weekBlocks" :key="'tl-week-'+blockIdx" class="tl-week">
+
+                                <div v-if="block.summary" class="tl-week-sum">
+                                    <span class="tl-week-sum__week">KW [[ block.summary.iso_week ]]</span>
+                                    <span class="tl-week-sum__progress" :aria-label="`Fortschritt: ${formatNum(block.summary.sum)} von ${formatNum(block.summary.target)} Stunden`">
+                                        <span class="tl-week-sum__progress-bar" :style="{ width: `${block.summary.target > 0 ? Math.min(100, Math.max(0, block.summary.sum / block.summary.target * 100)) : 0}%` }"></span>
+                                    </span>
+                                    <span class="tl-week-sum__hours mono-num">[[ formatNum(block.summary.sum) ]] von [[ formatNum(block.summary.target) ]] h</span>
+                                    <span class="tl-week-sum__delta mono-num" :class="getWeeklyColor(block.summary)">[[ block.summary.sum - block.summary.target > 0 ? '+' : '' ]][[ formatNum(block.summary.sum - block.summary.target) ]] h</span>
+                                </div>
+
+                                <div v-for="item in block.days" :key="'tl-day-'+item.date"
                                      class="position-relative tl-day-card"
                                      :class="{'is-today': isToday(item.date)}"
                                      :role="isCompact ? 'button' : null"
@@ -677,16 +686,8 @@
                                     </div>
                                 </div>
                                 
-                                <div v-else-if="item && item.row_type === 'summary'" class="tl-week-sum">
-                                    <span class="tl-week-sum__week">KW [[ item.iso_week ]]</span>
-                                    <span class="tl-week-sum__progress" :aria-label="`Fortschritt: ${formatNum(item.sum)} von ${formatNum(item.target)} Stunden`">
-                                        <span class="tl-week-sum__progress-bar" :style="{ width: `${item.target > 0 ? Math.min(100, Math.max(0, item.sum / item.target * 100)) : 0}%` }"></span>
-                                    </span>
-                                    <span class="tl-week-sum__hours mono-num">[[ formatNum(item.sum) ]] von [[ formatNum(item.target) ]] h</span>
-                                    <span class="tl-week-sum__delta mono-num" :class="getWeeklyColor(item)">[[ item.sum - item.target > 0 ? '+' : '' ]][[ formatNum(item.sum - item.target) ]] h</span>
-                                </div>
 
-                            </template>
+                            </div>
                         </div>
                     </div>
 
@@ -1498,6 +1499,26 @@
         currentMonth() { return this.currentDate.getMonth() + 1 }, 
         currentMonthName() { return this.currentDate.toLocaleString('de-DE', { month: 'long' }) },
         quotaPercentage() { if(!this.stats.total_ho_allowed) return 0; return (this.stats.total_ho_made / this.stats.total_ho_allowed) * 100; },
+        /* Jede Woche ist ein eigener Abschnitt: nur so klebt ihr Kopf genau so
+           lange, wie die Woche selbst zu sehen ist, statt sich mit den Köpfen
+           der anderen Wochen auf dieselbe Höhe zu stapeln. */
+        weekBlocks() {
+            const blocks = [];
+            const hideWeekends = !!(this.settings && this.settings.hide_weekends);
+            let current = null;
+            for (const item of (this.items || [])) {
+                if (!item) continue;
+                if (item.row_type === 'summary') {
+                    current = { summary: item, days: [] };
+                    blocks.push(current);
+                } else if (item.row_type === 'day') {
+                    if (hideWeekends && this.isWeekend(item)) continue;
+                    if (!current) { current = { summary: null, days: [] }; blocks.push(current); }
+                    current.days.push(item);
+                }
+            }
+            return blocks.filter(block => block.days.length > 0);
+        },
         paddingDays() { if(!this.items || this.items.length === 0) return 0; const firstDay = this.items.find(i => i.row_type === 'day'); return firstDay ? firstDay.weekday_index : 0; },
         calcDailyTarget() { const activeCount = this.settings.active_weekdays ? this.settings.active_weekdays.length : 5; if (activeCount === 0) return 0; return this.settings.weekly_hours / activeCount; },
         budgetRemainingHours() { return this.stats.total_ho_allowed - this.stats.total_ho_made; },

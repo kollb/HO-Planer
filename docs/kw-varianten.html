@@ -88,7 +88,7 @@
 
   <div class="note" style="background: rgba(16,185,129,.10); border-color: rgba(16,185,129,.35);">
     <b style="color: var(--success);">Umsetzungsstand: Variante A mit Sticky umgesetzt</b>
-    <p style="color:#cbd5e1">Die Zusammenfassung steht jetzt <em>vor</em> den Tagen ihrer Woche und bleibt beim Scrollen unter Spalten- und App-Kopf stehen. Die Einschubzeile zwischen den Tagen ist entfallen. Alle vier Daten bleiben erhalten: Kalenderwoche, Ist von Soll, Abweichung, Fortschrittsbalken — an den Berechnungen wurde nichts geändert.</p>
+    <p style="color:#cbd5e1">Die Zusammenfassung steht jetzt <em>vor</em> den Tagen ihrer Woche und bleibt beim Scrollen unter Spalten- und App-Kopf stehen. Die Einschubzeile zwischen den Tagen ist entfallen. Jede Woche ist dafür ein eigener Abschnitt — sonst sammeln sich alle Köpfe an derselben Klebeposition und überdecken sich. Alle vier Daten bleiben erhalten: Kalenderwoche, Ist von Soll, Abweichung, Fortschrittsbalken — an den Berechnungen wurde nichts geändert.</p>
     <p style="color:#cbd5e1">Dabei sind zwei Fehler aufgefallen, die das Kleben bisher verhinderten und mitbehoben wurden: <code>body { overflow-y: overlay }</code> machte den Body zum Scroll-Container und hob <code>position: sticky</code> im ganzen Dokument auf; der Spaltenkopf war zusätzlich unsichtbar, weil Vuetify die Klasse <code>d-md-grid</code> nicht kennt und <code>d-none</code> deshalb immer gewann.</p>
   </div>
 
