@@ -843,12 +843,28 @@ def test_json_import_preview_accepts_multiple_new_glz_anchors_on_same_day(client
     assert imported.get_json()["imported_entries"] == 2
 
     anchor = case["expected_anchor"]
+    anchor_values = [entry["glz_override"] for entry in case["entries"]]
+    expected_difference = round(anchor_values[-1] - anchor_values[0], 2)
+
     with app.app_context():
         entries = WorkEntry.query.filter_by(date=anchor["date"]).order_by(WorkEntry.id).all()
         assert [(entry.glz_override, entry.glz_override_source) for entry in entries] == [
             (1.5, "manual"), (4.0, "pdf"),
         ]
-        assert get_glz_carryover(2025, 4, Settings.query.first(), {}) == anchor["value"]
+        carryover_with_last_anchor = get_glz_carryover(2025, 4, Settings.query.first(), {})
+
+    # Der Anker ist der Startwert der Fortschreibung, nicht deren Ergebnis: ab dem Tag
+    # nach dem Anker läuft der Saldo mit Soll- und Istzeiten weiter. Der absolute Saldo
+    # hängt daher an Kalender, Feiertagen und Einstellungen und taugt nicht als
+    # Erwartungswert. Maßgeblich ist allein, welcher Anker fortgeschrieben wird.
+    # Entfällt der zuletzt gespeicherte Anker, muss sich der Saldo genau um die
+    # Differenz der beiden Anker desselben Tages verschieben.
+    with app.app_context():
+        WorkEntry.query.filter_by(date=anchor["date"], glz_override=anchor_values[-1]).delete()
+        db.session.commit()
+        carryover_with_first_anchor = get_glz_carryover(2025, 4, Settings.query.first(), {})
+
+    assert round(carryover_with_last_anchor - carryover_with_first_anchor, 2) == expected_difference
 
 
 def test_shared_glz_anchor_round_trip(client):
@@ -871,10 +887,59 @@ def test_shared_glz_anchor_round_trip(client):
         exported = client.get("/api/export/json")
         assert exported.status_code == 200
         entries = exported.get_json()["entries"]
-        for case in cases:
+
+        # Zwei Referenzfälle enthalten bewusst keinen Anker: ohne Anker beginnt die
+        # Berechnung beim ersten Eintrag des Zieljahres. Geprüft wird das in
+        # test_shared_glz_cases_without_anchor; hier zählen nur die Ankerfälle.
+        anchor_cases = [case for case in cases if "expected_anchor" in case]
+        assert len(anchor_cases) == 3, "Die Ankerfälle der gemeinsamen Referenzdatei fehlen."
+
+        for case in anchor_cases:
             anchor = case["expected_anchor"]
             exported_anchor = next(entry for entry in entries if entry["date"] == anchor["date"] and entry["glz_override"] == anchor["value"])
             assert exported_anchor["glz_override_source"] == anchor["source"], case["id"]
+    finally:
+        with app.app_context():
+            WorkEntry.query.filter(WorkEntry.date.in_(dates)).delete(synchronize_session=False)
+            db.session.commit()
+
+
+def test_shared_glz_cases_without_anchor(client):
+    """Ohne Anker beginnt die Fortschreibung beim ersten Eintrag des Zieljahres."""
+    cases = {
+        case["id"]: case
+        for case in json.loads(SHARED_GLZ_CASES.read_text(encoding="utf-8"))["cases"]
+    }
+    case = cases["no-anchor-starts-at-first-entry-in-target-year"]
+    target = case["target"]
+    dates = {entry["date"] for entry in case["entries"]}
+
+    payload = {
+        "format": "ho-planer-export", "version": 1, "exported_at": "2098-01-01T00:00:00+00:00",
+        "settings": {}, "custom_holidays": [], "entries": case["entries"],
+    }
+    response = client.post(
+        "/api/import/json",
+        data={"file": (io.BytesIO(json.dumps(payload).encode("utf-8")), "export.json")},
+        content_type="multipart/form-data",
+    )
+    assert response.status_code == 200
+
+    try:
+        with app.app_context():
+            settings = Settings.query.first()
+            # Vor dem ersten Eintrag des Zieljahres wird nichts fortgeschrieben; sonst
+            # würden die Sollzeiten ab Januar in den Saldo einfließen.
+            assert get_glz_carryover(target["year"], 5, settings, {}) == 0.0
+            # Ab dem ersten Eintrag des Zieljahres läuft die Berechnung.
+            assert get_glz_carryover(target["year"], target["month"], settings, {}) != 0.0
+
+        # Ohne Eintrag und ohne Anker bleibt der Saldo bei 0.0.
+        assert cases["no-anchor-and-no-entry-is-zero"]["expected_carryover"] == 0.0
+        with app.app_context():
+            WorkEntry.query.delete()
+            db.session.commit()
+            assert get_glz_carryover(target["year"], target["month"], Settings.query.first(), {}) == 0.0
     finally:
         with app.app_context():
             WorkEntry.query.filter(WorkEntry.date.in_(dates)).delete(synchronize_session=False)
