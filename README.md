@@ -54,4 +54,6 @@ Folgendes lässt sich nicht über Dateien im Repository einschalten, sondern **e
 - **Secret scanning** und **Push protection**: findet Geheimnisse im Code und blockiert das Pushen neuer Geheimnisse
 - **Private vulnerability reporting**: vertrauliche Meldung von Schwachstellen, siehe [`SECURITY.md`](SECURITY.md)
 
+**Stand dieses Repositories:** Code Scanning läuft über das *Standard-Setup* und deckt damit Python und Actions bereits ab. Der Workflow `.github/workflows/codeql.yml` ist die erweiterte Konfiguration (zusätzlich das JavaScript der Oberflächen) und bleibt so lange in Bereitschaft, bis unter _Settings → Code security → Code scanning_ auf _Advanced_ umgestellt und die Repository-Variable `CODEQL_ADVANCED` auf `true` gesetzt wird. Beides gleichzeitig ist nicht möglich: GitHub lehnt SARIF aus einer erweiterten Konfiguration ab, solange das Standard-Setup aktiv ist.
+
 Sobald CodeQL einmal Ergebnisse geliefert hat, erscheinen sie unter _Security → Code scanning_.
