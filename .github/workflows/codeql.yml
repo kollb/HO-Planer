@@ -4,17 +4,23 @@ name: CodeQL
 # JavaScript der beiden Oberflächen. Für ein öffentliches Repository ist Code
 # Scanning kostenlos.
 #
-# WICHTIG: Dieses Repository nutzt derzeit das Standard-Setup für Code
-# Scanning. Beides gleichzeitig geht nicht - GitHub lehnt SARIF aus einer
-# erweiterten Konfiguration ab, solange das Standard-Setup aktiv ist
-# ("CodeQL analyses from advanced configurations cannot be processed when the
-# default setup is enabled"). Die Aufträge sind deshalb an die Repository-
-# Variable CODEQL_ADVANCED gekoppelt und laufen erst, wenn
-#   1. unter Settings -> Code security -> Code scanning auf "Advanced"
-#      umgestellt (also das Standard-Setup abgeschaltet) wird und
-#   2. die Variable CODEQL_ADVANCED auf "true" gesetzt wird
-#      (Settings -> Secrets and variables -> Actions -> Variables).
-# Solange das Standard-Setup aktiv ist, deckt es Python und Actions bereits ab.
+# Aufteilung:
+# - Python und Actions laufen nur, wenn die Repository-Variable
+#   CODEQL_ADVANCED auf "true" steht. Solange das Standard-Setup aktiv ist,
+#   deckt es Python und Actions bereits ab - beides gleichzeitig geht nicht.
+# - Das Inline-JavaScript der Oberflächen läuft IMMER. Solange das
+#   Standard-Setup aktiv ist, kann GitHub die SARIF einer Advanced-Konfiguration
+#   nicht übernehmen; die Ergebnisse werden dann als Workflow-Artefakt, als
+#   Lauf-Zusammenfassung und als Annotationen sichtbar gemacht
+#   (siehe .github/scripts/sarif-summary.py). Erst nach Umstellung auf
+#   Advanced (CODEQL_ADVANCED=true) werden sie nach "Security → Code scanning"
+#   hochgeladen.
+#
+# Umstellung auf Advanced (einmalig, Admin):
+#   1. Settings → Code security and analysis → Code scanning → "Advanced"
+#      (damit wird das Standard-Setup abgeschaltet).
+#   2. Settings → Secrets and variables → Actions → Variables:
+#      CODEQL_ADVANCED = true.
 on:
   push:
     branches: [main]
@@ -28,6 +34,59 @@ permissions:
   contents: read
 
 jobs:
+  status:
+    name: Status der Security-Scans
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: read
+    steps:
+      - name: Repository auschecken
+        uses: actions/checkout@v7
+
+      # Dieser Schritt läuft immer und macht sichtbar, was gescannt wird und
+      # was (noch) nicht - damit ein "übersprungen" nie wieder still bleibt.
+      - name: Zustand ermitteln und dokumentieren
+        shell: bash
+        env:
+          CODEQL_ADVANCED: ${{ vars.CODEQL_ADVANCED }}
+        run: |
+          advanced="${CODEQL_ADVANCED:-}"
+          setup_status="unbekannt"
+          if state="$(gh api "repos/$GITHUB_REPOSITORY/code-scanning/default-setup" --jq '.state' 2>/dev/null)"; then
+            setup_status="$state"
+          fi
+
+          {
+            echo "## Security-Scans – Zustand"
+            echo
+            echo "| Baustein | Status |"
+            echo "| --- | --- |"
+            if [[ "$advanced" == "true" ]]; then
+              echo "| CodeQL Advanced (Python, Actions, Inline-JS) | :white_check_mark: aktiv, Upload nach Code Scanning |"
+              if [[ "$setup_status" == "configured" ]]; then
+                echo "| Standard-Setup | :warning: noch aktiv - Upload schlägt fehl, bis auf Advanced umgestellt wird |"
+              else
+                echo "| Standard-Setup | deaktiviert |"
+              fi
+            else
+              echo "| CodeQL Advanced (Python, Actions) | :ballot_box_with_check: übersprungen (Variable \`CODEQL_ADVANCED\` nicht \`true\`) |"
+              echo "| CodeQL Standard-Setup | läuft unabhängig von diesem Workflow (Python + Actions) |"
+            fi
+            echo "| CodeQL Inline-JavaScript | :white_check_mark: läuft immer (Artefakt + Zusammenfassung, bei Advanced zusätzlich Code Scanning) |"
+            echo "| pip-audit, actionlint, Dependency-Review | :white_check_mark: Workflow \`Security-Scan\` |"
+            echo
+            echo "- \`CODEQL_ADVANCED\` = \`${advanced:-<nicht gesetzt>}\`"
+            echo "- Standard-Setup (Code Scanning): \`${setup_status}\`"
+            if [[ "$advanced" != "true" ]]; then
+              echo
+              echo "> **Hinweis:** Die Inline-JavaScript-Ergebnisse erscheinen als Workflow-Artefakt, Lauf-Zusammenfassung und Annotationen. Der Upload nach *Security → Code scanning* ist erst nach Umstellung auf Advanced möglich: *Settings → Code security and analysis → Code scanning → Advanced* und Variable \`CODEQL_ADVANCED=true\`."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          echo "CODEQL_ADVANCED=${advanced:-<nicht gesetzt>}"
+          echo "Default-Setup: ${setup_status}"
+
   analyse:
     name: CodeQL ${{ matrix.language }}
     if: vars.CODEQL_ADVANCED == 'true'
@@ -57,8 +116,7 @@ jobs:
           category: "/language:${{ matrix.language }}"
 
   javascript:
-    name: CodeQL javascript (Inline-Skripte)
-    if: vars.CODEQL_ADVANCED == 'true'
+    name: CodeQL JavaScript (Inline-Skripte)
     runs-on: ubuntu-latest
     permissions:
       security-events: write
@@ -81,7 +139,33 @@ jobs:
           languages: javascript-typescript
           queries: security-extended
 
-      - name: CodeQL-Analyse ausführen
+      # Advanced aktiv: Ergebnisse direkt nach Code Scanning hochladen.
+      - name: CodeQL-Analyse ausführen (Code Scanning)
+        if: vars.CODEQL_ADVANCED == 'true'
         uses: github/codeql-action/analyze@v4
         with:
           category: "/language:javascript-inline"
+
+      # Standard-Setup aktiv: SARIF lokal erzeugen, NICHT hochladen - GitHub
+      # lehnt SARIF aus Advanced ab, solange das Standard-Setup läuft. Die
+      # Ergebnisse werden stattdessen unten zusammengefasst und als Artefakt
+      # bereitgestellt.
+      - name: CodeQL-Analyse ausführen (Artefakt-Modus)
+        if: vars.CODEQL_ADVANCED != 'true'
+        uses: github/codeql-action/analyze@v4
+        with:
+          category: "/language:javascript-inline"
+          upload: never
+          output: ${{ runner.temp }}/codeql-sarif
+
+      - name: Ergebnisse zusammenfassen
+        if: vars.CODEQL_ADVANCED != 'true'
+        run: python3 .github/scripts/sarif-summary.py "${{ runner.temp }}/codeql-sarif"
+
+      - name: SARIF als Artefakt bereitstellen
+        if: vars.CODEQL_ADVANCED != 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: codeql-javascript-sarif
+          path: ${{ runner.temp }}/codeql-sarif/
+          if-no-files-found: error

@@ -1,10 +1,30 @@
 name: Standalone-Release erstellen
 
+# Erzeugt das Standalone-Paket (HTML, ZIP, Prüfsummen) und legt ein
+# GitHub-Release an.
+#
+# Zwei Wege führen zum Release:
+# - Push eines Tags `v*`: das Release nutzt diesen Tag.
+# - Manueller Start (workflow_dispatch): das Release erhält den im Feld
+#   `version` angegebenen Namen, z. B. `v1.2`. Ohne Eingabe wird ein
+#   Datumsname `v<JJJJ.MM.TT>` verwendet und bei Bedarf hochgezählt.
+#
+# Das Paket wird zusätzlich immer als Workflow-Artefakt bereitgestellt.
 on:
   push:
     tags:
       - 'v*'
   workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version/Tag für das Release (z. B. v1.2). Leer = automatisch aus dem Datum.'
+        required: false
+        type: string
+      make_latest:
+        description: 'Release als neuestes Release markieren'
+        required: false
+        default: true
+        type: boolean
 
 permissions:
   contents: write
@@ -15,6 +35,29 @@ jobs:
     steps:
       - name: Repository auschecken
         uses: actions/checkout@v7
+
+      - name: Release-Tag bestimmen
+        id: tag
+        shell: bash
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
+        run: |
+          if [[ "$GITHUB_REF_TYPE" == "tag" ]]; then
+            TAG="${GITHUB_REF_NAME}"
+          elif [[ -n "${INPUT_VERSION:-}" ]]; then
+            TAG="${INPUT_VERSION}"
+          else
+            BASE="v$(date +%Y.%m.%d)"
+            TAG="$BASE"
+            N=1
+            while gh api "repos/$GITHUB_REPOSITORY/git/refs/tags/$TAG" >/dev/null 2>&1; do
+              TAG="${BASE}.${N}"
+              N=$((N+1))
+            done
+          fi
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+          echo "Release-Tag: ${TAG}"
+
       - name: Release-Paket erzeugen
         shell: bash
         run: |
@@ -29,6 +72,7 @@ jobs:
             zip -r ho-planer-standalone.zip ho-planer-standalone
             sha256sum ho-planer-standalone.html ho-planer-standalone.zip > SHA256SUMS.txt
           )
+
       - name: Paket als Workflow-Artefakt hochladen
         uses: actions/upload-artifact@v4
         with:
@@ -38,11 +82,13 @@ jobs:
             dist/ho-planer-standalone.zip
             dist/SHA256SUMS.txt
           if-no-files-found: error
+
       - name: GitHub-Release veröffentlichen
-        if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v3
         with:
+          tag_name: ${{ steps.tag.outputs.tag }}
           generate_release_notes: true
+          make_latest: ${{ inputs.make_latest || true }}
           files: |
             dist/ho-planer-standalone.html
             dist/ho-planer-standalone.zip
