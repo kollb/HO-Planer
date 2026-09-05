@@ -69,7 +69,7 @@ jobs:
           comment-summary-in-pr: always
           # Explizit GITHUB_TOKEN setzen, damit der Kommentar im Pull Request
           # geschrieben werden darf (permissions.pull-requests: write).
-          github-token: ${{ secrets.GITHUB_TOKEN }}
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
 
   workflow-pruefung:
     name: Workflows prüfen
