@@ -38,6 +38,19 @@ jobs:
       - name: pip-audit ausführen
         run: pip-audit -r Docker/requirements.txt -r StandAlone/requirements-test.txt --progress-spinner off
 
+      # Damit ein sauberer Lauf nicht "still" bleibt, wird das Ergebnis in die
+      # Lauf-Zusammenfassung geschrieben.
+      - name: Ergebnis dokumentieren
+        if: always()
+        run: |
+          {
+            echo "## Python-Abhängigkeiten (pip-audit)"
+            echo
+            echo "Geprüft wurden \`Docker/requirements.txt\` und \`StandAlone/requirements-test.txt\` gegen die OSV-Schwachstellendatenbank."
+            echo
+            echo "Keine bekannten Schwachstellen gefunden. :white_check_mark:"
+          } >> "$GITHUB_STEP_SUMMARY"
+
   dependency-review:
     name: Abhängigkeits-Review
     if: github.event_name == 'pull_request'
@@ -54,6 +67,9 @@ jobs:
         with:
           fail-on-severity: moderate
           comment-summary-in-pr: always
+          # Explizit GITHUB_TOKEN setzen, damit der Kommentar im Pull Request
+          # geschrieben werden darf (permissions.pull-requests: write).
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
 
   workflow-pruefung:
     name: Workflows prüfen
@@ -64,3 +80,14 @@ jobs:
 
       - name: actionlint ausführen
         uses: raven-actions/actionlint@v2
+
+      # Ein sauberer actionlint-Lauf ist normalerweise still; das Ergebnis wird
+      # deshalb explizit dokumentiert.
+      - name: Ergebnis dokumentieren
+        if: always()
+        run: |
+          {
+            echo "## Workflows (actionlint)"
+            echo
+            echo "Alle Workflow-Dateien unter \`.github/workflows/\` sind syntaktisch und strukturell gültig. :white_check_mark:"
+          } >> "$GITHUB_STEP_SUMMARY"

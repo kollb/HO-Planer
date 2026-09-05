@@ -54,6 +54,8 @@ Folgendes lässt sich nicht über Dateien im Repository einschalten, sondern **e
 - **Secret scanning** und **Push protection**: findet Geheimnisse im Code und blockiert das Pushen neuer Geheimnisse
 - **Private vulnerability reporting**: vertrauliche Meldung von Schwachstellen, siehe [`SECURITY.md`](SECURITY.md)
 
-**Stand dieses Repositories:** Code Scanning läuft über das *Standard-Setup* und deckt damit Python und Actions bereits ab. Der Workflow `.github/workflows/codeql.yml` ist die erweiterte Konfiguration (zusätzlich das JavaScript der Oberflächen) und bleibt so lange in Bereitschaft, bis unter _Settings → Code security → Code scanning_ auf _Advanced_ umgestellt und die Repository-Variable `CODEQL_ADVANCED` auf `true` gesetzt wird. Beides gleichzeitig ist nicht möglich: GitHub lehnt SARIF aus einer erweiterten Konfiguration ab, solange das Standard-Setup aktiv ist.
+**Stand dieses Repositories:** Code Scanning läuft über das *Standard-Setup* und deckt damit Python und Actions bereits ab. Der Workflow `.github/workflows/codeql.yml` prüft das Inline-JavaScript der Oberflächen **immer**; solange das Standard-Setup aktiv ist, landen diese Ergebnisse als Workflow-Artefakt `codeql-javascript-sarif`, als Lauf-Zusammenfassung und als Annotationen im Lauf. Jeder Lauf beginnt zudem mit einer Übersicht „Security-Scans – Zustand“, damit nie wieder unklar bleibt, was geprüft wurde und was nicht.
+
+Der Upload nach _Security → Code scanning_ (Advanced) erfordert einmalig: unter _Settings → Code security → Code scanning_ auf _Advanced_ umstellen **und** die Repository-Variable `CODEQL_ADVANCED` auf `true` setzen. Beides gleichzeitig (Standard- und Advanced-Setup) ist nicht möglich: GitHub lehnt SARIF aus einer erweiterten Konfiguration ab, solange das Standard-Setup aktiv ist.
 
 Sobald CodeQL einmal Ergebnisse geliefert hat, erscheinen sie unter _Security → Code scanning_.
