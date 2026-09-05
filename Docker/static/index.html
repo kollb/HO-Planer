@@ -76,6 +76,7 @@
         overflow-y: visible;}
     .quick-action-fab { position: fixed; right: 24px; bottom: 88px; z-index: 20; box-shadow: var(--ho-shadow); }
     .budget-warning { color: var(--ho-error); font-weight: 700; margin-top: 6px; }
+    .budget-over { color: var(--ho-error); }
     @media (min-width: 960px) { .quick-action-fab { bottom: 28px; } }
     .mono-num { font-family: 'JetBrains Mono', monospace; letter-spacing: -0.5px; }
     .glass-effect { background: color-mix(in srgb, var(--ho-surface) 82%, transparent) !important; backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); border: 1px solid var(--ho-border) !important; }
@@ -103,7 +104,9 @@
 
     /* BENTO GRID */
     .bento-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--ho-space-4); margin-bottom: var(--ho-space-5); }
-    .bento-card { border-radius: var(--ho-radius-lg); padding: var(--ho-space-4) 20px; transition: transform 0.2s, box-shadow 0.2s; display: flex; flex-direction: column; justify-content: space-between; position: relative; overflow: hidden; height: 110px;}
+    /* min-height statt fester Höhe: Karten dürfen mitwachsen, damit Inhalte
+       (z. B. der Überbudget-Hinweis) nie abgeschnitten werden. */
+    .bento-card { border-radius: var(--ho-radius-lg); padding: var(--ho-space-4) 20px; transition: transform 0.2s, box-shadow 0.2s; display: flex; flex-direction: column; justify-content: space-between; position: relative; overflow: hidden; min-height: 110px;}
     .bento-card:hover { transform: translateY(-2px); box-shadow: var(--ho-shadow-md); }
     .bento-card.budget-card { grid-column: 1 / -1; }
 
@@ -375,13 +378,13 @@
 
     @media (max-width: 1200px) {
         .bento-grid { grid-template-columns: repeat(2, 1fr); }
-        .bento-card { height: 120px; }
+        .bento-card { min-height: 120px; }
     }
 
     /* MOBILE LAYOUT OPTIMIERUNGEN */
     @media (max-width: 768px) {
         .bento-grid { grid-template-columns: repeat(2, 1fr); gap: 12px; margin-bottom: 16px;}
-        .bento-card { height: auto; }
+        .bento-card { min-height: 0; }
         .bento-card.budget-card { grid-column: span 2; }
 
         .tl-header { display: none; }
@@ -521,22 +524,28 @@
                 </div>
 
                 <div class="bento-card budget-card glass-effect" style="border-top: 2px solid #0ea5e9 !important;">
-                    <div class="d-flex justify-space-between align-center mb-1">
+                    <!-- Überbudget oben zeigen (Chip + roter Wert), nicht als Zeile am
+                         Kartenende: Dort wurde der Hinweis von der Kartenhöhe abgeschnitten. -->
+                    <div class="d-flex justify-space-between align-center flex-wrap mb-1" style="gap: 8px;">
                         <div class="bento-label mb-0"><v-icon size="small" class="mr-2" color="#0ea5e9">mdi-laptop</v-icon> Home Office Budget</div>
-                        <span class="text-caption text-slate mono-num">[[ Math.round(quotaPercentage) ]]% genutzt</span>
+                        <div class="d-flex align-center" style="gap: 8px;">
+                            <v-chip v-if="quotaPercentage > 100" size="x-small" color="error" variant="tonal"><v-icon start size="x-small">mdi-alert</v-icon>Überbudget</v-chip>
+                            <span class="text-caption text-slate mono-num">[[ Math.round(quotaPercentage) ]]% genutzt</span>
+                        </div>
                     </div>
 
                     <div>
-                        <div class="d-flex justify-space-between align-end">
-                            <div class="bento-value mono-num">
-                                [[ formatOneDecimal(budgetRemainingDays) ]] <span style="font-size: 0.9rem; opacity: 0.5; font-family: 'Inter', sans-serif;">Tage übrig</span>
-                                <span class="text-caption text-slate mono-num ml-1" style="font-size: 0.8rem !important; opacity: 0.6;">([[ formatNum(budgetRemainingHours) ]] h)</span>
-                            </div>
+                        <div v-if="quotaPercentage > 100" class="bento-value mono-num budget-over">
+                            −[[ formatNum(Math.abs(budgetRemainingHours)) ]] h
+                            <span style="font-size: 0.9rem; opacity: 0.5; font-family: 'Inter', sans-serif;">über Budget</span>
+                        </div>
+                        <div v-else class="bento-value mono-num">
+                            [[ formatOneDecimal(budgetRemainingDays) ]] <span style="font-size: 0.9rem; opacity: 0.5; font-family: 'Inter', sans-serif;">Tage übrig</span>
+                            <span class="text-caption text-slate mono-num ml-1" style="font-size: 0.8rem !important; opacity: 0.6;">([[ formatNum(budgetRemainingHours) ]] h)</span>
                         </div>
                         <div class="progress-track">
                             <div class="progress-fill" :style="{width: Math.min(quotaPercentage, 100) + '%', background: quotaPercentage > 100 ? '#ef4444' : ''}"></div>
                         </div>
-                        <div v-if="quotaPercentage > 100" class="text-caption budget-warning">Budget um [[ formatNum(Math.abs(budgetRemainingHours)) ]] h überschritten.</div>
                     </div>
                 </div>
             </div>
