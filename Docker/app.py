@@ -13,6 +13,7 @@ from datetime import datetime, date, timedelta
 import holidays
 import calendar
 from sqlalchemy import text, inspect
+from sqlalchemy.exc import OperationalError
 import pdfplumber
 import re
 import logging
@@ -222,12 +223,62 @@ def hessen_holidays(settings, years):
             holiday_map[date(year, 12, 31)] = 'Silvester'
     return holiday_map
 
-with app.app_context():
+# --- SCHEMA-SELBSTHEILUNG BEIM START ---
+# db.create_all() legt nur fehlende Tabellen an, ergänzt aber keine Spalten in
+# bestehenden Tabellen. Ohne die folgende Absicherung bricht jede ORM-Abfrage auf
+# einer älteren Datenbank mit „no such column“ ab – noch bevor migrate.py laufen
+# kann, denn migrate.py importiert dieses Modul (Henne-Ei-Problem beim Import).
+# Deshalb werden hier vor dem ersten ORM-Zugriff alle rein additiven,
+# datenverlustfreien Spalten idempotent ergänzt. migrate.py bleibt für
+# versionierte, strukturelle Eingriffe (Tabellenumbau, Dublettenbereinigung,
+# Indexe) mit vorherigem Backup zuständig und nutzt dieselben Spaltendefinitionen.
+# Alle Namen sind fest verdrahtete Konstanten, keine Nutzereingaben.
+ADDITIVE_SCHEMA_COLUMNS = {
+    "settings": (
+        ("christmas_eve_and_new_years_eve_off", "BOOLEAN NOT NULL DEFAULT 1"),
+        ("theme", "VARCHAR(10) NOT NULL DEFAULT 'dark'"),
+    ),
+    "work_entry": (
+        ("glz_override", "FLOAT"),
+        ("glz_override_source", "VARCHAR(20)"),
+    ),
+}
+
+
+def ensure_additive_schema_columns(engine=None):
+    """Ergänzt fehlende Spalten bestehender Tabellen, ohne Daten zu verändern."""
+    engine = engine if engine is not None else db.engine
+    with engine.begin() as conn:
+        for table, columns in ADDITIVE_SCHEMA_COLUMNS.items():
+            if not inspect(conn).has_table(table):
+                continue
+            existing = {row[1] for row in conn.execute(text(f"PRAGMA table_info({table})")).fetchall()}
+            for column, ddl in columns:
+                if column in existing:
+                    continue
+                try:
+                    conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {column} {ddl}"))
+                except OperationalError as error:
+                    # Mehrere Gunicorn-Worker starten gleichzeitig: Hat ein anderer
+                    # Worker die Spalte soeben ergänzt, ist das kein Fehler.
+                    if "duplicate column" not in str(error).lower():
+                        raise
+                    continue
+                app.logger.info("[Init] Spalte ergänzt: %s.%s", table, column)
+
+
+def init_db():
+    """Legt Schema und Standarddatensatz an; verträgt auch alte Datenbanken."""
     db.create_all()
+    ensure_additive_schema_columns()
     if not db.session.query(Settings).first():
         db.session.add(Settings())
         db.session.commit()
     migrate_x_to_planned()
+
+
+with app.app_context():
+    init_db()
 
 # --- GLZ CARRYOVER LOGIK ---
 def get_glz_carryover(year, month, settings, custom_map):
