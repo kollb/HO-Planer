@@ -14,6 +14,8 @@ Der Ordner `/app/data` muss außerhalb des Containers als Docker-Volume persisti
 
 Beim Containerstart führt [`../entrypoint.sh`](../entrypoint.sh) vor Gunicorn `python migrate.py` aus. Das bestehende leichtgewichtige Migrationssystem erkennt bekannte ältere Schemata und führt nur erforderliche Änderungen aus.
 
+Zusätzlich heilt sich die Anwendung beim Start selbst: `app.py` ergänzt vor dem ersten Datenbankzugriff alle rein additiven, datenverlustfreien Spalten (`settings.christmas_eve_and_new_years_eve_off`, `settings.theme`, `work_entry.glz_override`, `work_entry.glz_override_source`). Das ist notwendig, weil `db.create_all()` keine Spalten in bestehenden Tabellen ergänzt und ein alter Datenstand sonst jede Abfrage – auch den Import von `migrate.py` – mit `no such column` abbrechen ließe. Für diese Spalten ist kein Backup erforderlich; strukturelle Eingriffe laufen weiterhin ausschließlich über `migrate.py` mit vorherigem Backup. Beide Stellen nutzen dieselben Spaltendefinitionen aus `app.py`, damit sie nicht auseinanderlaufen können.
+
 Vor jeder tatsächlichen strukturellen Schemaänderung erstellt `migrate.py` ein Backup:
 
 ```text
@@ -29,6 +31,7 @@ Die derzeit bekannten Schemaänderungen sind:
 - **V3:** ergänzt `work_entry.glz_override_source`.
 - **V4:** ergänzt `settings.christmas_eve_and_new_years_eve_off` mit dem rückwärtskompatiblen Standardwert `true`.
 - **V5:** begrenzt eigene Sondertage auf einen Datensatz je Datum und bereinigt ältere Dubletten vor dem eindeutigen Index.
+- **V6:** ergänzt `settings.theme` mit dem Standardwert `dark`.
 
 Jede erfolgreich angewendete Version wird in `schema_migrations` erfasst. Eine Migration erzeugt nur dann ein Backup, wenn sie tatsächlich eine Schemaänderung ausführt.
 

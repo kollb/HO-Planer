@@ -1,10 +1,8 @@
 import os
 
-import os
-
 from sqlalchemy import inspect, text
 
-from app import app, backup_dir, create_sqlite_backup, db, db_path, get_local_now
+from app import ADDITIVE_SCHEMA_COLUMNS, app, backup_dir, create_sqlite_backup, db, db_path, get_local_now
 
 
 MIGRATION_TABLE = "schema_migrations"
@@ -12,6 +10,11 @@ CURRENT_COLUMNS = [
     "id", "date", "type", "start_time", "end_time", "comment",
     "glz_override", "glz_override_source",
 ]
+# Die Spaltendefinitionen stammen aus app.py, damit Start-Selbstheilung und
+# versionierte Migration niemals auseinanderlaufen können.
+ADDITIVE_COLUMN_DDL = {
+    table: dict(columns) for table, columns in ADDITIVE_SCHEMA_COLUMNS.items()
+}
 
 
 def create_migration_backup():
@@ -114,23 +117,23 @@ def migrate():
 
                     columns = {row[1] for row in conn.execute(text("PRAGMA table_info(work_entry)")).fetchall()}
                     if "glz_override" not in columns:
-                        conn.execute(text("ALTER TABLE work_entry ADD COLUMN glz_override FLOAT"))
+                        conn.execute(text(f"ALTER TABLE work_entry ADD COLUMN glz_override {ADDITIVE_COLUMN_DDL['work_entry']['glz_override']}"))
                     record_migration(conn, 2)
 
                     columns = {row[1] for row in conn.execute(text("PRAGMA table_info(work_entry)")).fetchall()}
                     if "glz_override_source" not in columns:
-                        conn.execute(text("ALTER TABLE work_entry ADD COLUMN glz_override_source VARCHAR(20)"))
+                        conn.execute(text(f"ALTER TABLE work_entry ADD COLUMN glz_override_source {ADDITIVE_COLUMN_DDL['work_entry']['glz_override_source']}"))
                     record_migration(conn, 3)
 
                 if has_settings:
                     columns = {row[1] for row in conn.execute(text("PRAGMA table_info(settings)")).fetchall()}
                     if "christmas_eve_and_new_years_eve_off" not in columns:
-                        conn.execute(text("ALTER TABLE settings ADD COLUMN christmas_eve_and_new_years_eve_off BOOLEAN NOT NULL DEFAULT 1"))
+                        conn.execute(text(f"ALTER TABLE settings ADD COLUMN christmas_eve_and_new_years_eve_off {ADDITIVE_COLUMN_DDL['settings']['christmas_eve_and_new_years_eve_off']}"))
                     record_migration(conn, 4)
 
                     columns = {row[1] for row in conn.execute(text("PRAGMA table_info(settings)")).fetchall()}
                     if "theme" not in columns:
-                        conn.execute(text("ALTER TABLE settings ADD COLUMN theme VARCHAR(10) NOT NULL DEFAULT 'dark'"))
+                        conn.execute(text(f"ALTER TABLE settings ADD COLUMN theme {ADDITIVE_COLUMN_DDL['settings']['theme']}"))
                     record_migration(conn, 6)
 
                 if inspect(conn).has_table("custom_holiday"):
