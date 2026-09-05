@@ -4,9 +4,11 @@ from pathlib import Path
 import pytest
 from datetime import date
 from logic import calculate_daily_net_hours, normalize_time_str, calculate_net_hours, calculate_gross_time_needed, get_day_info
+from app import hessen_holidays
 
 SHARED_BREAK_CASES = Path(__file__).resolve().parents[2] / "shared" / "test-cases" / "breaks.json"
 SHARED_HOLIDAY_CASES = Path(__file__).resolve().parents[2] / "shared" / "test-cases" / "holidays.json"
+SHARED_HOLIDAY_CALENDAR = Path(__file__).resolve().parents[2] / "shared" / "test-cases" / "holidays-calendar.json"
 
 # --- Mocks & Helper Classes ---
 # Wir simulieren die Datenbank-Klassen, damit wir keine echte DB brauchen
@@ -117,18 +119,62 @@ def test_shared_holiday_cases():
     cases = json.loads(SHARED_HOLIDAY_CASES.read_text(encoding="utf-8"))["cases"]
     for case in cases:
         day = date.fromisoformat(case["date"])
+        year_end_off = case.get("christmas_eve_and_new_years_eve_off", True)
         settings = MockSettings(
             weekly_hours=case["weekly_hours"],
             active_weekdays=",".join(str(value) for value in case["active_weekdays"]),
+            christmas_eve_and_new_years_eve_off=year_end_off,
         )
-        statutory = {day: case["statutory_holiday"]} if "statutory_holiday" in case else {}
-        if case.get("christmas_eve_and_new_years_eve_off", True) and day.month == 12 and day.day in (24, 31):
-            statutory[day] = "Heiligabend" if day.day == 24 else "Silvester"
+        # Die Jahresendregel wird bewusst nicht im Test nachgebildet, sondern vom
+        # Produktivhelper erzeugt. Andernfalls prüfte der Fall nur die Testlogik.
+        statutory = hessen_holidays(settings, [day.year])
+        if "statutory_holiday" in case:
+            statutory[day] = case["statutory_holiday"]
         custom = case.get("custom_holiday")
         custom_map = {day: MockCustomHoliday(custom["name"], custom["hours"])} if custom else {}
         result = get_day_info(day, settings, statutory, custom_map)
         for field, expected in case["expected"].items():
             assert result[field] == expected, case["id"]
+
+
+def test_shared_holiday_calendar_matches_reference():
+    """Der zentrale Feiertagshelper trifft den gemeinsamen Kalender über 21 Jahre."""
+    calendar_doc = json.loads(SHARED_HOLIDAY_CALENDAR.read_text(encoding="utf-8"))
+    years = list(range(calendar_doc["years"]["from"], calendar_doc["years"]["to"] + 1))
+    expected_statutory = calendar_doc["statutory_holidays"]
+    expected_year_end = calendar_doc["year_end_option"]["days_when_enabled"]
+
+    # Mit aktiver Jahresendoption: gesetzliche Feiertage plus Heiligabend und Silvester.
+    enabled = hessen_holidays(MockSettings(christmas_eve_and_new_years_eve_off=True), years)
+    assert {day.isoformat(): name for day, name in enabled.items()} == {
+        **expected_statutory, **expected_year_end
+    }
+
+    # Ohne Jahresendoption bleiben ausschließlich die gesetzlichen Feiertage übrig.
+    disabled = hessen_holidays(MockSettings(christmas_eve_and_new_years_eve_off=False), years)
+    assert {day.isoformat(): name for day, name in disabled.items()} == expected_statutory
+
+
+def test_year_end_option_switches_workday_and_target():
+    """Heiligabend und Silvester sind nur bei aktiver Jahresendoption arbeitsfrei."""
+    calendar_doc = json.loads(SHARED_HOLIDAY_CALENDAR.read_text(encoding="utf-8"))
+    year_end_days = calendar_doc["year_end_option"]["days_when_enabled"]
+
+    for iso_date, expected_name in year_end_days.items():
+        day = date.fromisoformat(iso_date)
+        if day.weekday() > 4:
+            continue  # Am Wochenende trägt bereits der inaktive Wochentag die Freistellung.
+
+        enabled_settings = MockSettings(christmas_eve_and_new_years_eve_off=True)
+        enabled = get_day_info(day, enabled_settings, hessen_holidays(enabled_settings, [day.year]), {})
+        assert enabled["is_workday"] is False, iso_date
+        assert enabled["target"] == 0.0, iso_date
+        assert enabled["holiday_name"] == expected_name, iso_date
+
+        disabled_settings = MockSettings(christmas_eve_and_new_years_eve_off=False)
+        disabled = get_day_info(day, disabled_settings, hessen_holidays(disabled_settings, [day.year]), {})
+        assert disabled["is_workday"] is True, iso_date
+        assert disabled["target"] == pytest.approx(39.0 / 5), iso_date
 
 
 # --- 3. Tests für calculate_gross_time_needed ---

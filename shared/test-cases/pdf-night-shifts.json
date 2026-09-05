@@ -1,0 +1,48 @@
+{
+  "contract_version": 1,
+  "description": "Referenzfälle für Uhrzeiten an der Mitternachtsgrenze im PDF-Import. Im Zeitnachweis bedeutet 00:00 zweierlei: eine unbebuchte Spalte oder die Mitternachtsgrenze einer Nachtschicht. Nur Zeilen, die ausschließlich aus Platzhaltern bestehen, dürfen verworfen werden; jede andere Uhrzeit bleibt erhalten.",
+  "cases": [
+    {
+      "id": "night-shift-ending-at-midnight-is-kept",
+      "description": "Ende exakt um Mitternacht: früher entfiel die Endzeit und der Block ging als ungerade Zeitfolge vollständig verloren.",
+      "row_text": "03 DI Mobil 22:00 00:00",
+      "expected_times": ["22:00", "00:00"]
+    },
+    {
+      "id": "night-shift-starting-at-midnight-is-kept",
+      "description": "Beginn exakt um Mitternacht.",
+      "row_text": "05 DO Mobil 00:00 08:00",
+      "expected_times": ["00:00", "08:00"]
+    },
+    {
+      "id": "night-shift-across-midnight-is-kept",
+      "description": "Nachtschicht über die Tagesgrenze ohne 00:00-Wert.",
+      "row_text": "04 MI Mobil 22:00 06:00",
+      "expected_times": ["22:00", "06:00"]
+    },
+    {
+      "id": "split-booking-touching-midnight-is-kept",
+      "description": "Split-Buchung, die die Mitternachtsgrenze berührt; beide Blöcke bleiben erhalten.",
+      "row_text": "11 MI Mobil 20:00 00:00 00:00 04:00",
+      "expected_times": ["20:00", "00:00", "00:00", "04:00"]
+    },
+    {
+      "id": "placeholder-only-row-is-discarded",
+      "description": "Eine Zeile aus reinen Platzhaltern ist keine Buchung und wird verworfen.",
+      "row_text": "09 MO Mobil 00:00 00:00",
+      "expected_times": []
+    },
+    {
+      "id": "single-placeholder-is-discarded",
+      "description": "Auch ein einzelner Platzhalter ohne Gegenstück ist keine Buchung.",
+      "row_text": "12 DO Mobil 00:00",
+      "expected_times": []
+    },
+    {
+      "id": "regular-day-shift-is-unchanged",
+      "description": "Regelfall ohne Mitternachtsbezug bleibt unverändert.",
+      "row_text": "06 FR Mobil 08:00 16:00",
+      "expected_times": ["08:00", "16:00"]
+    }
+  ]
+}

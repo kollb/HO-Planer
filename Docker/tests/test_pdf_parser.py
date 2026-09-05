@@ -1,8 +1,12 @@
+import json
 import pytest
 import os
 from datetime import date
+from pathlib import Path
 from types import SimpleNamespace
-from app import MAX_PDF_PAGES, merge_pdf_entries, parse_pdf_content
+from app import MAX_PDF_PAGES, merge_pdf_entries, parse_pdf_content, pdf_times_from_row
+
+SHARED_NIGHT_SHIFT_CASES = Path(__file__).resolve().parents[2] / "shared" / "test-cases" / "pdf-night-shifts.json"
 
 
 class FakePdf:
@@ -203,3 +207,41 @@ def test_pdf_import_error_handling():
     
     assert entry_13_feb is not None
     assert "fehlt" in (entry_13_feb.get('comment') or "").lower()
+
+def test_shared_pdf_night_shift_cases():
+    """Docker erhält Uhrzeiten an der Mitternachtsgrenze nach den gemeinsamen Fällen."""
+    cases = json.loads(SHARED_NIGHT_SHIFT_CASES.read_text(encoding="utf-8"))["cases"]
+    for case in cases:
+        assert pdf_times_from_row(case["row_text"]) == case["expected_times"], case["id"]
+
+
+def test_pdf_night_shift_blocks_survive_parsing(monkeypatch):
+    """Ein an Mitternacht endender Block bleibt bis in den Importdatensatz erhalten."""
+    cases = {
+        case["id"]: case
+        for case in json.loads(SHARED_NIGHT_SHIFT_CASES.read_text(encoding="utf-8"))["cases"]
+    }
+    case = cases["night-shift-ending-at-midnight-is-kept"]
+    page = FakePage('Monat: Februar 2026', [[[case["row_text"]]]])
+    monkeypatch.setattr('app.pdfplumber.open', lambda _file: FakeContentPdf([page]))
+
+    entries, report = parse_pdf_content(object(), include_report=True)
+
+    assert len(entries) == 1
+    assert (entries[0]['start'], entries[0]['end']) == tuple(case["expected_times"])
+    assert not any('ungerade' in warning for warning in report['warnings'])
+
+
+def test_pdf_placeholder_row_stays_discarded(monkeypatch):
+    """Eine Zeile aus reinen Platzhaltern erzeugt weiterhin keinen Zeitblock."""
+    cases = {
+        case["id"]: case
+        for case in json.loads(SHARED_NIGHT_SHIFT_CASES.read_text(encoding="utf-8"))["cases"]
+    }
+    case = cases["placeholder-only-row-is-discarded"]
+    page = FakePage('Monat: Februar 2026', [[[case["row_text"]]]])
+    monkeypatch.setattr('app.pdfplumber.open', lambda _file: FakeContentPdf([page]))
+
+    entries, _report = parse_pdf_content(object(), include_report=True)
+
+    assert [entry for entry in entries if entry['start'] or entry['end']] == []

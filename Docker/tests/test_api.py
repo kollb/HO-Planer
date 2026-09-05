@@ -1,14 +1,15 @@
 import pytest
 import json
 from pathlib import Path
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from types import SimpleNamespace
 import io
 
 from app import (
     app, db, Settings, WorkEntry, CustomHoliday, get_glz_carryover,
-    get_local_now, merge_pdf_entries, parse_pdf_content,
+    get_local_now, hessen_holidays, merge_pdf_entries, parse_pdf_content,
 )
+from logic import calculate_gross_time_needed, get_day_info
 
 SHARED_IMPORT_CASES = Path(__file__).resolve().parents[2] / "shared" / "test-cases" / "json-import.json"
 SHARED_INCOMPLETE_ENTRY_CASES = Path(__file__).resolve().parents[2] / "shared" / "test-cases" / "incomplete-entries.json"
@@ -274,16 +275,47 @@ def test_shared_series_planning_cases(client):
                 })
                 assert holiday_response.status_code == 200, case["id"]
 
+            # Die Vorschau darf noch nichts speichern; erst der Serienplan schreibt.
+            preview = client.post('/api/plan/series/preview', json={
+                "start": case["start"], "end": case["end"], "weekdays": case["weekdays"],
+                "type": case["type"], "overwrite": False,
+            })
+            assert preview.status_code == 200, case["id"]
+            assert preview.get_json()["created_dates"] == case["expected"]["planned_dates"], case["id"]
+            with app.app_context():
+                assert WorkEntry.query.filter(
+                    WorkEntry.date >= case["start"], WorkEntry.date <= case["end"]
+                ).count() == 0, case["id"]
+
             response = client.post('/api/plan/series', json={
                 "start": case["start"], "end": case["end"], "weekdays": case["weekdays"],
                 "type": case["type"], "overwrite": False,
             })
             assert response.status_code == 200, case["id"]
             with app.app_context():
-                planned_dates = [entry.date for entry in WorkEntry.query.filter(
+                entries = WorkEntry.query.filter(
                     WorkEntry.date >= case["start"], WorkEntry.date <= case["end"]
-                ).all()]
-            assert planned_dates == case["expected"]["planned_dates"], case["id"]
+                ).order_by(WorkEntry.date, WorkEntry.id).all()
+                planned_dates = [entry.date for entry in entries]
+                assert planned_dates == case["expected"]["planned_dates"], case["id"]
+
+                # Wie die Standalone-Suite: Sollzeit, Startzeit und die aus
+                # calculate_gross_time_needed abgeleitete Endzeit gehören zum Fall.
+                if "target" in case["expected"]:
+                    settings = Settings.query.first()
+                    day = datetime.strptime(case["start"], "%Y-%m-%d").date()
+                    custom_map = {
+                        datetime.strptime(item.date, "%Y-%m-%d").date(): item
+                        for item in CustomHoliday.query.all()
+                    }
+                    day_info = get_day_info(day, settings, hessen_holidays(settings, [day.year]), custom_map)
+                    assert day_info["target"] == case["expected"]["target"], case["id"]
+
+                    entry = entries[0]
+                    assert entry.start_time == "08:00", case["id"]
+                    end_minutes = 8 * 60 + calculate_gross_time_needed(case["expected"]["target"]) * 60
+                    expected_end = f"{int(end_minutes // 60):02d}:{int(round(end_minutes % 60)):02d}"
+                    assert entry.end_time == expected_end, case["id"]
     finally:
         with app.app_context():
             WorkEntry.query.filter(WorkEntry.date.in_(dates)).delete(synchronize_session=False)
@@ -926,7 +958,7 @@ def test_shared_glz_cases_without_anchor(client):
         for case in json.loads(SHARED_GLZ_CASES.read_text(encoding="utf-8"))["cases"]
     }
     case = cases["no-anchor-starts-at-first-entry-in-target-year"]
-    target = case["target"]
+    target = case["carryover_target"]
     dates = {entry["date"] for entry in case["entries"]}
 
     payload = {
@@ -959,6 +991,54 @@ def test_shared_glz_cases_without_anchor(client):
         with app.app_context():
             WorkEntry.query.filter(WorkEntry.date.in_(dates)).delete(synchronize_session=False)
             db.session.commit()
+
+
+def test_shared_glz_carryover_cases(client):
+    """Docker rechnet jeden gemeinsamen GLZ-Fall auf den erwarteten Saldo."""
+    document = json.loads(SHARED_GLZ_CASES.read_text(encoding="utf-8"))
+    evaluation = document["evaluation_settings"]
+
+    for case in document["cases"]:
+        with app.app_context():
+            WorkEntry.query.delete()
+            Settings.query.delete()
+            db.session.add(Settings(
+                weekly_hours=evaluation["weekly_hours"],
+                active_weekdays=",".join(str(day) for day in evaluation["active_weekdays"]),
+                christmas_eve_and_new_years_eve_off=evaluation["christmas_eve_and_new_years_eve_off"],
+            ))
+            db.session.commit()
+
+            for entry in case["entries"]:
+                db.session.add(WorkEntry(
+                    date=entry["date"], type=entry["type"],
+                    start_time=entry.get("start", ""), end_time=entry.get("end", ""),
+                    glz_override=entry.get("glz_override"),
+                    glz_override_source=entry.get("glz_override_source"),
+                ))
+            db.session.commit()
+
+            target = case["carryover_target"]
+            carryover = get_glz_carryover(target["year"], target["month"], Settings.query.first(), {})
+            assert round(carryover, 2) == case["expected_carryover"], case["id"]
+
+            # Der Anker ist der Startwert der Fortschreibung und muss als solcher
+            # gespeichert bleiben; sonst begänne die Berechnung an anderer Stelle.
+            if "expected_anchor" in case:
+                anchor = case["expected_anchor"]
+                stored = WorkEntry.query.filter(
+                    WorkEntry.date == anchor["date"],
+                    WorkEntry.glz_override.isnot(None),
+                ).order_by(WorkEntry.date.desc(), WorkEntry.id.desc()).first()
+                assert stored is not None, case["id"]
+                assert stored.glz_override == anchor["value"], case["id"]
+                assert stored.glz_override_source == anchor["source"], case["id"]
+
+    with app.app_context():
+        WorkEntry.query.delete()
+        Settings.query.delete()
+        db.session.add(Settings())
+        db.session.commit()
 
 
 def test_edit_custom_holiday(client):

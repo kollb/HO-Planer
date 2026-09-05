@@ -1456,6 +1456,15 @@
         else if (targetNet <= 9.0) return targetNet + 0.5; 
         else return targetNet + 0.75; 
     }
+
+    // "00:00" steht im Zeitnachweis sowohl fuer eine unbebuchte Spalte als auch fuer
+    // die Mitternachtsgrenze einer Nachtschicht. Ein pauschaler Filter loeschte die
+    // Endzeit von "22:00 00:00" und verwarf den Block anschliessend als ungerade
+    // Zeitfolge. Verworfen werden deshalb nur Zeilen aus reinen Platzhaltern.
+    function pdfTimesFromRow(rowText) {
+        const times = [...String(rowText).matchAll(/\b([01]\d|2[0-3]):[0-5]\d\b/g)].map(m => m[0]);
+        return times.every(value => value === "00:00") ? [] : times;
+    }
     
     function calculateTotalDailyNet(entries, infoTarget = 0, isFuture = false) {
         const timed = calculateTimedNetAllocations(entries);
@@ -1748,8 +1757,7 @@
                         if(cleanText.includes("BUCHUNG FEHLT")) foundType = 'missing';
                     }
 
-                    const times = [...cleanText.matchAll(/\b([01]\d|2[0-3]):[0-5]\d\b/g)].map(m=>m[0]);
-                    let validTimes = times.filter(t => t !== "00:00");
+                    let validTimes = pdfTimesFromRow(cleanText);
                     if (validTimes.length % 2 !== 0) {
                         validTimes = validTimes.slice(0, -1);
                     }

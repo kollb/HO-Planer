@@ -78,6 +78,15 @@ Die fachliche Gleichheit wird durch versionierte Verträge und Referenzfälle ab
 
 Besonders vor einem Release müssen die Referenzfälle für Pausen, Hessen-Feiertage, unvollständige Einträge, GLZ und JSON-Import in beiden Varianten erfolgreich sein.
 
+Für die fachliche Parität gilt zusätzlich: Ein gemeinsamer Referenzfall zählt erst dann als abgesichert, wenn **beide** Suiten ihn gleich weit auswerten. Prüfe bei Änderungen an `shared/test-cases/` deshalb, ob Docker und Standalone dieselben Felder auswerten, und nicht nur, ob beide grün sind. Diese Dateien decken die Parität zusätzlich ab:
+
+- `holidays-calendar.json`: vollständiger Feiertagskalender 2020–2040. Beide Varianten berechnen Feiertage unabhängig (Bibliothek gegen eigene Osterformel) und müssen für jedes Datum denselben Namen liefern.
+- `series-planning.json`: geplante Datumswerte, Sollzeit, Startzeit und die daraus abgeleitete Endzeit; zusätzlich die wirkungsfreie Vorschau.
+- `glz.json`: `evaluation_settings`, `carryover_target` und `expected_carryover` je Fall; beide Varianten müssen denselben Saldo errechnen.
+- `pdf-night-shifts.json`: Uhrzeiten an der Mitternachtsgrenze; nur Zeilen aus reinen `00:00`-Platzhaltern dürfen entfallen.
+
+Eine Regel gilt erst als abgesichert, wenn ihre gezielte Schwächung **beide** Suiten rot werden lässt. Diese Mutationsprobe gehört zu jeder Änderung an gemeinsamen Fachregeln.
+
 ## PDF-Testdaten und übersprungene Tests
 
 Private PDF-Testdateien und lokale Erwartungen werden nicht versioniert; der Repository-Stamm ignoriert `pdf/` und `Docker/tests/testfiles/`. Die Dateien dürfen weder in Commits noch in Release-Artefakte gelangen.
