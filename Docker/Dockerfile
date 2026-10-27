@@ -1,4 +1,4 @@
-FROM python:3.14.5-slim-trixie
+FROM python:3.15.0-slim-trixie
 
 
 ENV TZ=Europe/Berlin
